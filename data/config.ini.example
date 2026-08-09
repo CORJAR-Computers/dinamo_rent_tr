@@ -1,0 +1,71 @@
+# COPIA este archivo a config.ini y rellena con tus valores reales. NUNCA commitees config.ini.
+
+[application]
+author = Dinamo Rent a Car
+language = es
+name = Dinamo Rent ERP
+production_mode = false
+setup_completed = false
+timezone = America/Bogota
+version = 3.2.0
+
+[backup]
+check_interval_ms = 60000
+directory = Backups
+encryption_enabled = false
+encryption_password = 
+max_copies = 10
+schedule_times = 09:00, 13:00, 19:00, 23:00
+
+[business]
+alert_extintor_days = 15
+alert_soat_days = 15
+alert_tecno_mecanica_days = 15
+estados_auto = Disponible, Rentado, Mantenimiento, Vendido, Baja
+estados_cliente = Activo, Inactivo, Lista Negra, VIP
+estados_reserva = Pendiente, Confirmada, Cancelada, Completada
+km_alert_aceite = 500
+nivel_tanque = Lleno, 3/4, 1/2, 1/4, Reserva
+roles_con_informes = Administrador, Supervisor
+roles_con_usuarios = Administrador
+roles_usuarios = Administrador, Supervisor, Operador
+tipos_adquisicion = Propio, Leasing, Subarrendado
+tipos_auto = Automóvil, Camioneta, Van, Lujo, Moto
+tipos_combustible = Gasolina, Diesel, Híbrido, Eléctrico, Gas
+tipos_doc = Cédula, Pasaporte, Cédula Extranjería, NIT, Licencia USA
+tipos_mantenimiento = Cambio Aceite, Frenos, Llantas, Batería, Tecno-Mecánica, Lavado General, Reparación Mecánica, Otro
+tipos_transmision = Automática, Mecánica
+
+[database]
+database = dinamo_rent
+engine = firebird
+host = localhost
+password = CAMBIAR_PASSWORD_SYSDBA
+path = dinamo_rent_v3.fdb
+pool_max_overflow = 20
+pool_size = 10
+port = 3050
+timeout = 10
+user = sysdba
+
+[logging]
+audit_enabled = true
+audit_retention_days = 30
+backup_count = 5
+directory = logs
+level = INFO
+max_size_mb = 5
+
+[security]
+account_lockout_duration = 1800
+db_encryption_key = GENERAR_CLAVE_BASE64_32_BYTES_CON_openssl_rand_base64_32
+hash_algorithm = sha256
+hash_iterations = 100000
+login_rate_limit_window = 300
+max_login_attempts = 5
+max_login_attempts_in_window = 10
+session_timeout = 3600
+
+[ui]
+color_fondo = #f8fafc
+color_primario = #1e40af

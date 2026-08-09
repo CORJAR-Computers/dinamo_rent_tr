@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
+  "description": "Permisos mínimos para la ventana main de DinamoRent (G-C4: auditado — solo core:default, NO se exponen fs:allow-*/shell:allow-execute). core:default incluye events, window, webview, app, image, menu, tray y path (todas APIs seguras de UI). Los plugins (fs, dialog, shell, http) NO se exponen por defecto.",
   "windows": [
     "main"
   ],

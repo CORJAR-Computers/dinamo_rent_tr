@@ -343,8 +343,19 @@ impl RentaRepository {
     /// Ejecuta las dos consultas (A: 26 columnas, B: 15) con los mismos filtros
     /// y une los resultados por id.
     fn consultar(conn: &mut PooledConnection, where_sql: &str, params: &ParamsType) -> Result<Vec<Renta>, AppError> {
+        // Soft delete: siempre filtra rentas NO borradas. Si where_sql viene
+        // vacío (obtener_todos), se inyecta WHERE r.deleted_at IS NULL. Si
+        // viene con WHERE ..., se envuelve en paréntesis para no romper la
+        // precedencia de AND/OR (ej. buscar() usa OR entre 3 condiciones).
+        let where_deleted = if where_sql.trim().is_empty() {
+            "WHERE r.deleted_at IS NULL".to_string()
+        } else {
+            let s = where_sql.trim();
+            let after = s.strip_prefix("WHERE").unwrap_or(s);
+            format!("WHERE r.deleted_at IS NULL AND ({after})")
+        };
         let base = format!(
-            "FROM rentas r LEFT JOIN autos a ON a.placa = r.placa {where_sql} "
+            "FROM rentas r LEFT JOIN autos a ON a.placa = r.placa {where_deleted} "
         );
         let sql_a = format!(
             "SELECT {SELECT_COLS_A} {base} ORDER BY r.fecha_recogida DESC, r.id DESC"
@@ -428,7 +439,7 @@ impl RentaRepository {
             conn.query(
                 "SELECT id, id_renta, CAST(fecha AS VARCHAR(30)), CAST(monto AS VARCHAR(12)), \
                         metodo_pago, concepto, CAST(observaciones AS VARCHAR(2000)), COALESCE(usuario, '') \
-                 FROM pagos WHERE id_renta = ? ORDER BY fecha, id",
+                 FROM pagos WHERE id_renta = ? AND deleted_at IS NULL ORDER BY fecha, id",
                 ParamsType::Positional(vec![id_renta.into_param()]),
             )?;
         Ok(rows
@@ -650,9 +661,24 @@ impl RentaRepository {
         Ok(())
     }
 
-    /// Elimina una renta (pagos e inspecciones caen por CASCADE)
+    /// Soft-delete: marca la renta como borrada (deleted_at) y, en cascada
+    /// lógica, sus pagos. Las inspecciones no tienen deleted_at (queda como
+    /// TODO si se requiere trazabilidad total) pero dejan de ser accesibles
+    /// porque la renta no aparece en los SELECTs (filtrados por deleted_at).
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("DELETE FROM rentas WHERE id = ?", (id,)).map_err(map_fb_error)?;
+        conn.execute(
+            "UPDATE rentas SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (id,),
+        )
+        .map_err(map_fb_error)?;
+        // Soft-delete en cascada de los pagos asociados (la FK original era
+        // ON DELETE CASCADE; con soft-delete hay que hacerlo a mano).
+        conn.execute(
+            "UPDATE pagos SET deleted_at = CURRENT_TIMESTAMP \
+             WHERE id_renta = ? AND deleted_at IS NULL",
+            (id,),
+        )
+        .map_err(map_fb_error)?;
         Ok(())
     }
 
@@ -726,14 +752,15 @@ impl RentaRepository {
 
     /// Total de rentas
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM rentas", ())?;
+        let count: Option<(i64,)> =
+            conn.query_first("SELECT COUNT(*) FROM rentas WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
     /// Conteo por estado
     pub fn contar_por_estado(conn: &mut PooledConnection) -> Result<Vec<(String, i64)>, AppError> {
         let rows: Vec<(String, i64)> = conn.query(
-            "SELECT estado, COUNT(*) FROM rentas GROUP BY estado ORDER BY estado",
+            "SELECT estado, COUNT(*) FROM rentas WHERE deleted_at IS NULL GROUP BY estado ORDER BY estado",
             (),
         )?;
         Ok(rows)

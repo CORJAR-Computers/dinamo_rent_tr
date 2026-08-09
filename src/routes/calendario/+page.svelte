@@ -6,7 +6,7 @@
 		type Renta,
 		type Reserva
 	} from '$lib/api';
-	import { session } from '$lib/stores/session.svelte';
+	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { guardSesion } from '$lib/utils/guards';
 	import {
@@ -19,7 +19,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
-	const sid = () => session.token ?? '';
+	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
 
 	let rentas = $state<Renta[]>([]);
 	let reservas = $state<Reserva[]>([]);
@@ -56,16 +56,34 @@
 		new Set(solapamientos.flatMap((s) => [s.a, s.b]))
 	);
 
+	// Rango visible actual (mes ± 6 meses). Se usa para recortar en cliente
+	// las rentas/reservas demasiado antiguas o futuras, ya que la API todavía
+	// no soporta filtro por fecha.
+	// TODO: añadir parámetros `fecha_inicio`/`fecha_fin` al comando `listar_rentas`
+	// y `listar_reservas` en Rust (src-tauri/src/commands/renta.rs y reserva.rs)
+	// y propagarlos en `rentaApi.listar` / `reservaApi.listar` de src/lib/api.ts
+	// para filtrar en backend y no cargar TODAS las rentas históricas en cada
+	// navegación de mes.
+	function limiteInferiorIso(): string {
+		const base = mesActual;
+		const d = new Date(base.getFullYear(), base.getMonth() - 6, 1);
+		return d.toISOString().slice(0, 10);
+	}
+
 	async function cargar() {
 		if (!guardSesion()) return;
 		loading = true;
 		try {
+			// TODO: pasar `fecha_inicio`/`fecha_fin` del mes visible cuando el
+			// backend los soporte. Por ahora la API carga todo y recortamos en
+			// cliente al rango visible (mes actual ± 6 meses) para acotar memoria.
+			const limiteInf = limiteInferiorIso();
 			const [r, rs] = await Promise.all([
 				rentaApi.listar(sid()),
 				reservaApi.listar(sid())
 			]);
-			rentas = r;
-			reservas = rs;
+			rentas = r.filter((x) => x.fechaRetorno >= limiteInf);
+			reservas = rs.filter((x) => x.fechaRetorno >= limiteInf);
 		} catch (e) {
 			toast.error('No se pudieron cargar los datos del calendario.');
 		} finally {
@@ -74,6 +92,18 @@
 	}
 
 	onMount(cargar);
+
+	// Refresca al navegar meses: la API no filtra por fecha todavía, así que
+	// recargamos todo y recortamos en cliente al nuevo rango visible.
+	let primerCiclo = true;
+	$effect(() => {
+		const _mes = mesActual; // suscripción
+		if (primerCiclo) {
+			primerCiclo = false;
+			return; // onMount ya disparó la primera carga
+		}
+		cargar();
+	});
 
 	function mesAnterior() {
 		mesActual = new Date(mesActual.getFullYear(), mesActual.getMonth() - 1, 1);

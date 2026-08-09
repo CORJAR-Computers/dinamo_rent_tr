@@ -1,0 +1,11 @@
+# Prettier: no formatear artefactos generados ni recursos externos
+.svelte-kit
+build
+dist
+node_modules
+src-tauri
+src-tauri/resources
+*.lock
+bun.lock
+package-lock.json
+src/lib/assets

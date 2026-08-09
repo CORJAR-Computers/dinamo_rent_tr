@@ -220,41 +220,41 @@ impl ClienteRepository {
         Ok(rows.into_iter().map(from_row).collect())
     }
 
-    /// Crea un cliente y devuelve su id
+    /// Crea un cliente y devuelve su id (RETURNING evita race conditions de MAX(id))
     pub fn insertar(conn: &mut PooledConnection, d: &ClienteDatos) -> Result<i64, AppError> {
-        conn.execute(
-            "INSERT INTO clientes (\
-                tipo_doc, no_doc, nombres, apellidos, nombre_completo, \
-                celular, celular2, email, ciudad, estado_region, pais, nacionalidad, \
-                dir_residencia, dir_temporal, hotel, habitacion, \
-                no_licencia, tipo_licencia, vencimiento_licencia, estado \
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            params![
-                opt_str(&d.tipo_doc),
-                opt_str(&d.no_doc),
-                d.nombres.to_string(),
-                opt_str(&d.apellidos),
-                d.nombre_completo.to_string(),
-                opt_str(&d.celular),
-                opt_str(&d.celular2),
-                opt_str(&d.email),
-                opt_str(&d.ciudad),
-                opt_str(&d.estado_region),
-                opt_str(&d.pais),
-                opt_str(&d.nacionalidad),
-                opt_str(&d.dir_residencia),
-                opt_str(&d.dir_temporal),
-                opt_str(&d.hotel),
-                opt_str(&d.habitacion),
-                opt_str(&d.no_licencia),
-                opt_str(&d.tipo_licencia),
-                opt_str(&d.vencimiento_licencia),
-                d.estado.to_string(),
-            ],
-        )
-        .map_err(map_fb_error)?;
-        let id: Option<(i64,)> = conn.query_first("SELECT MAX(id) FROM clientes", ())?;
-        Ok(id.map(|(i,)| i).unwrap_or(0))
+        let (id,): (i64,) = conn
+            .execute_returnable(
+                "INSERT INTO clientes (\
+                    tipo_doc, no_doc, nombres, apellidos, nombre_completo, \
+                    celular, celular2, email, ciudad, estado_region, pais, nacionalidad, \
+                    dir_residencia, dir_temporal, hotel, habitacion, \
+                    no_licencia, tipo_licencia, vencimiento_licencia, estado \
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                params![
+                    opt_str(&d.tipo_doc),
+                    opt_str(&d.no_doc),
+                    d.nombres.to_string(),
+                    opt_str(&d.apellidos),
+                    d.nombre_completo.to_string(),
+                    opt_str(&d.celular),
+                    opt_str(&d.celular2),
+                    opt_str(&d.email),
+                    opt_str(&d.ciudad),
+                    opt_str(&d.estado_region),
+                    opt_str(&d.pais),
+                    opt_str(&d.nacionalidad),
+                    opt_str(&d.dir_residencia),
+                    opt_str(&d.dir_temporal),
+                    opt_str(&d.hotel),
+                    opt_str(&d.habitacion),
+                    opt_str(&d.no_licencia),
+                    opt_str(&d.tipo_licencia),
+                    opt_str(&d.vencimiento_licencia),
+                    d.estado.to_string(),
+                ],
+            )
+            .map_err(map_fb_error)?;
+        Ok(id)
     }
 
     /// Actualiza un cliente por id

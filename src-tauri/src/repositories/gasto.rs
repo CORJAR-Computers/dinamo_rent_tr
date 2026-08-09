@@ -109,7 +109,7 @@ impl GastoRepository {
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM gastos ORDER BY fecha DESC, id DESC"
+                "SELECT {SELECT_COLS} FROM gastos WHERE deleted_at IS NULL ORDER BY fecha DESC, id DESC"
             ),
             (),
         )?;
@@ -122,10 +122,11 @@ impl GastoRepository {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM gastos \
-                 WHERE UPPER(COALESCE(placa, '')) LIKE UPPER(?) \
-                    OR UPPER(descripcion) LIKE UPPER(?) \
-                    OR UPPER(categoria) LIKE UPPER(?) \
-                    OR UPPER(COALESCE(comprobante, '')) LIKE UPPER(?) \
+                 WHERE deleted_at IS NULL \
+                   AND (UPPER(COALESCE(placa, '')) LIKE UPPER(?) \
+                        OR UPPER(descripcion) LIKE UPPER(?) \
+                        OR UPPER(categoria) LIKE UPPER(?) \
+                        OR UPPER(COALESCE(comprobante, '')) LIKE UPPER(?)) \
                  ORDER BY fecha DESC, id DESC"
             ),
             (like.clone(), like.clone(), like.clone(), like),
@@ -137,7 +138,7 @@ impl GastoRepository {
     pub fn obtener_por_placa(conn: &mut PooledConnection, placa: &str) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM gastos WHERE placa = ? \
+                "SELECT {SELECT_COLS} FROM gastos WHERE placa = ? AND deleted_at IS NULL \
                  ORDER BY fecha DESC, id DESC"
             ),
             (placa.to_string(),),
@@ -149,7 +150,7 @@ impl GastoRepository {
     pub fn obtener_por_categoria(conn: &mut PooledConnection, categoria: &str) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM gastos WHERE categoria = ? \
+                "SELECT {SELECT_COLS} FROM gastos WHERE categoria = ? AND deleted_at IS NULL \
                  ORDER BY fecha DESC, id DESC"
             ),
             (categoria.to_string(),),
@@ -165,7 +166,7 @@ impl GastoRepository {
     ) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM gastos WHERE placa = ? AND categoria = ? \
+                "SELECT {SELECT_COLS} FROM gastos WHERE placa = ? AND categoria = ? AND deleted_at IS NULL \
                  ORDER BY fecha DESC, id DESC"
             ),
             (placa.to_string(), categoria.to_string()),
@@ -177,7 +178,7 @@ impl GastoRepository {
     pub fn obtener_recientes(conn: &mut PooledConnection, limit: i64) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM gastos \
+                "SELECT {SELECT_COLS} FROM gastos WHERE deleted_at IS NULL \
                  ORDER BY fecha DESC, id DESC ROWS {limit}"
             ),
             (),
@@ -188,7 +189,7 @@ impl GastoRepository {
     /// Obtiene un gasto por id
     pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Gasto>, AppError> {
         let row: Option<GastoRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM gastos WHERE id = ?"),
+            &format!("SELECT {SELECT_COLS} FROM gastos WHERE id = ? AND deleted_at IS NULL"),
             (id,),
         )?;
         Ok(row.map(from_row))
@@ -238,22 +239,26 @@ impl GastoRepository {
     }
 
     /// Elimina un gasto
+    /// Soft-delete: marca el gasto como borrado (deleted_at).
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("DELETE FROM gastos WHERE id = ?", (id,))
-            .map_err(map_fb_error)?;
+        conn.execute(
+            "UPDATE gastos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (id,),
+        )
+        .map_err(map_fb_error)?;
         Ok(())
     }
 
     /// Total de gastos registrados
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM gastos", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM gastos WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
     /// Suma total de todos los gastos
     pub fn total_general(conn: &mut PooledConnection) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
-            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM gastos",
+            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM gastos WHERE deleted_at IS NULL",
             (),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -263,7 +268,8 @@ impl GastoRepository {
     pub fn total_mes(conn: &mut PooledConnection) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
             "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM gastos \
-             WHERE fecha >= DATEADD(DAY, 1 - EXTRACT(DAY FROM CURRENT_DATE), CURRENT_DATE)",
+             WHERE fecha >= DATEADD(DAY, 1 - EXTRACT(DAY FROM CURRENT_DATE), CURRENT_DATE) \
+               AND deleted_at IS NULL",
             (),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -273,7 +279,7 @@ impl GastoRepository {
     pub fn total_por_placa(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(Option<String>, String)> = conn.query(
             "SELECT placa, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
-             WHERE placa IS NOT NULL GROUP BY placa ORDER BY SUM(monto) DESC",
+             WHERE placa IS NOT NULL AND deleted_at IS NULL GROUP BY placa ORDER BY SUM(monto) DESC",
             (),
         )?;
         Ok(rows
@@ -286,7 +292,7 @@ impl GastoRepository {
     pub fn total_por_categoria(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT categoria, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
-             GROUP BY categoria ORDER BY SUM(monto) DESC",
+             WHERE deleted_at IS NULL GROUP BY categoria ORDER BY SUM(monto) DESC",
             (),
         )?;
         Ok(rows)

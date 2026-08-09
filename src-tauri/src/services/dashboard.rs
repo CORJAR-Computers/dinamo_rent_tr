@@ -55,7 +55,7 @@ impl DashboardService {
         let alertas = AutoService::alertas_vencimiento(&mut conn, &state.config)?;
         // Conteo parcial de rentas activas (repo de rentas llega en Fase 4)
         let rentas_activas: Option<(i64,)> = conn.query_first(
-            "SELECT COUNT(*) FROM rentas WHERE estado = 'Activo'",
+            "SELECT COUNT(*) FROM rentas WHERE estado = 'Activo' AND deleted_at IS NULL",
             (),
         )?;
 

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rsfbclient::{Execute, Queryable};
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
@@ -132,16 +133,60 @@ impl MantenimientoService {
         Self::obtener(conn, id)
     }
 
-    /// Elimina un mantenimiento. Si era un cambio de aceite, recalcula
-    /// `autos.proximo_aceite` desde el último cambio de aceite del historial
-    /// restante (o lo limpia si ya no hay ninguno).
+    /// Elimina un mantenimiento (SOFT-DELETE). Si era un cambio de aceite,
+    /// recalcula `autos.proximo_aceite` desde el último cambio de aceite del
+    /// historial restante NO borrado (o lo limpia si ya no hay ninguno).
+    ///
+    /// TRANSACCIÓN: soft-delete mantenimiento + (si era cambio de aceite)
+    /// recálculo de `autos.proximo_aceite` + INSERT auditoría. Atómico: si el
+    /// recálculo o la auditoría fallan, el soft-delete se revierte y el
+    /// historial queda intacto. (Grupo D: adaptado a soft-delete — el DELETE
+    /// original de Grupo B se reemplazó por UPDATE ... SET deleted_at.)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
         let actual = Self::obtener(conn, id)?;
-        MantenimientoRepository::eliminar(conn, id)?;
-        if actual.tipo == TIPO_CAMBIO_ACEITE {
-            let km = MantenimientoRepository::ultimo_km_aceite(conn, &actual.placa)?;
-            AutoRepository::actualizar_proximo_aceite(conn, &actual.placa, km)?;
-        }
+        let es_cambio_aceite = actual.tipo == TIPO_CAMBIO_ACEITE;
+        let placa = actual.placa.clone();
+        let tipo = actual.tipo.clone();
+
+        conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
+            // 1) Soft-delete del mantenimiento (Grupo D)
+            tx.execute(
+                "UPDATE mantenimiento_vehiculos SET deleted_at = CURRENT_TIMESTAMP \
+                 WHERE id = ? AND deleted_at IS NULL",
+                (id,),
+            )?;
+            // 2) Si era un cambio de aceite, recalcular autos.proximo_aceite
+            //    desde el historial restante NO borrado (Grupo D: filtro
+            //    deleted_at IS NULL para no usar el registro recién borrado).
+            if es_cambio_aceite {
+                let km: Option<(Option<i64>,)> = tx.query_first(
+                    "SELECT first 1 km_proximo_cambio_aceite FROM mantenimiento_vehiculos \
+                     WHERE placa = ? AND pieza_varias_tipo = ? AND km_proximo_cambio_aceite > 0 \
+                       AND deleted_at IS NULL \
+                     ORDER BY pieza_varias_fecha DESC, id DESC",
+                    (placa.clone(), TIPO_CAMBIO_ACEITE.to_string()),
+                )?;
+                let nuevo_km = km.and_then(|(k,)| k);
+                tx.execute(
+                    "UPDATE autos SET proximo_aceite = ?, updated_at = CURRENT_TIMESTAMP \
+                     WHERE placa = ?",
+                    (nuevo_km, placa.clone()),
+                )?;
+            }
+            // 3) Auditoría
+            tx.execute(
+                "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (
+                    "sistema".to_string(),
+                    "ELIMINAR MANTENIMIENTO".to_string(),
+                    format!("mant={id}, placa={placa}, tipo={tipo}"),
+                    "local".to_string(),
+                ),
+            )?;
+            Ok(())
+        })
+        .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
 

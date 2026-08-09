@@ -1,8 +1,14 @@
-// informeExcel.ts — Exportación .xlsx real (SheetJS) del informe financiero.
+// informeExcel.ts — Exportación .xlsx real (ExcelJS) del informe financiero.
 // Funciones puras: `filasInformeExcel` produce las filas (testeable) y
 // `construirLibroInforme` las convierte en un Workbook estilizado (título,
 // encabezados con color, formato de moneda, anchos de columna y totales).
-import * as XLSX from 'xlsx';
+//
+// MIGRACIÓN (G-C2): reemplazado el paquete `xlsx` (SheetJS CE, descontinuado en
+// npm + CVE-2023-30533 prototype pollution, CVE-2024-22363 ReDoS) por
+// `exceljs` ^4.4.0 (mantenido, sin CVEs conocidos). Las funciones públicas
+// `filasInformeExcel` (pura) y `construirLibroInforme` mantienen su contrato
+// (esta última ahora devuelve un `ExcelJS.Workbook` en lugar de `XLSX.WorkBook`).
+import ExcelJS from 'exceljs';
 import type { InformeMensual } from '$lib/api';
 
 /** Formato numérico de moneda aplicado a las celdas de dinero */
@@ -26,14 +32,7 @@ export type CeldaInforme = string | number | { v: string | number; estilo?: Esti
 export type FilaInforme = CeldaInforme[];
 
 /** Ancho de columnas del libro (A–F) */
-const ANCHOS_COLUMNAS: XLSX.ColInfo[] = [
-	{ wch: 42 }, // Concepto / Cliente / Placa (utilidad)
-	{ wch: 18 }, // Monto / Placa / Vehículo
-	{ wch: 16 }, // Monto categorías / Total renta / Ingresos
-	{ wch: 14 }, // Fecha / Costos
-	{ wch: 14 }, // Estado / Utilidad
-	{ wch: 14 } // Total
-];
+const ANCHOS_COLUMNAS: number[] = [42, 18, 16, 14, 14, 14];
 
 /** Color institucional (azul marino) para títulos y encabezados */
 const AZUL = '1A237E';
@@ -52,6 +51,11 @@ const SECCIONES: [prefijo: string, ultimaCol: number][] = [
 
 function aplanar(fila: FilaInforme): (string | number)[] {
 	return fila.map((c) => (typeof c === 'object' ? c.v : c));
+}
+
+/** Convierte un hex sin '#' ('1A237E') a ARGB con alpha FF ('FF1A237E') para ExcelJS */
+function argb(hex: string): string {
+	return hex.length === 8 ? hex : `FF${hex}`;
 }
 
 /**
@@ -180,40 +184,48 @@ export function filasInformeExcel(informe: InformeMensual, periodo: string): Fil
  * Convierte las filas del informe en un Workbook .xlsx estilizado.
  * La celda (0,0) se fusiona como título y los encabezados de sección
  * ocupan el ancho de su tabla.
+ *
+ * @returns `ExcelJS.Workbook` síncrono (no requiere await para construirse).
+ *   Llama `await wb.xlsx.writeBuffer()` para serializarlo a bytes.
  */
-export function construirLibroInforme(informe: InformeMensual, periodo: string): XLSX.WorkBook {
+export function construirLibroInforme(informe: InformeMensual, periodo: string): ExcelJS.Workbook {
 	const filas = filasInformeExcel(informe, periodo);
-	const ws = XLSX.utils.aoa_to_sheet(filas.map(aplanar));
-	ws['!cols'] = ANCHOS_COLUMNAS;
+	const wb = new ExcelJS.Workbook();
+	const ws = wb.addWorksheet('Informe');
 
-	// ── Fusiones: título (fila 0) y periodo (fila 1) a lo ancho del libro ──
-	const anchoLibro = ANCHOS_COLUMNAS.length - 1;
-	ws['!merges'] = [
-		{ s: { r: 0, c: 0 }, e: { r: 0, c: anchoLibro } },
-		{ s: { r: 1, c: 0 }, e: { r: 1, c: anchoLibro } }
-	];
+	// ── Anchos de columna (ExcelJS es 1-indexed) ──
+	ws.columns = ANCHOS_COLUMNAS.map((w) => ({ width: w }));
 
-	// ── Estilos por celda ──
+	// ── Volcado de filas + estilos por celda ──
 	filas.forEach((fila, r) => {
+		const row = ws.addRow(aplanar(fila));
 		fila.forEach((celda, c) => {
 			if (typeof celda !== 'object' || !celda.estilo) return;
-			const addr = XLSX.utils.encode_cell({ r, c });
-			const cell = ws[addr];
-			if (!cell) return;
+			const cell = row.getCell(c + 1); // 1-indexed
 			const { bold, fill, color, fontSize, monto } = celda.estilo;
-			cell.s = {
-				font: {
-					...(bold ? { bold: true } : {}),
-					...(color ? { color: { rgb: color } } : {}),
-					...(fontSize ? { sz: fontSize } : {})
-				},
-				...(fill ? { fill: { patternType: 'solid', fgColor: { rgb: fill } } } : {}),
-				...(monto
-					? { numFmt: FORMATO_MONTO, alignment: { horizontal: 'right' } }
-					: {})
-			};
+			const font: Partial<ExcelJS.Font> = {};
+			if (bold) font.bold = true;
+			if (color) font.color = { argb: argb(color) };
+			if (fontSize) font.size = fontSize;
+			if (Object.keys(font).length > 0) cell.font = font as ExcelJS.Font;
+			if (fill) {
+				cell.fill = {
+					type: 'pattern',
+					pattern: 'solid',
+					fgColor: { argb: argb(fill) }
+				};
+			}
+			if (monto) {
+				cell.numFmt = FORMATO_MONTO;
+				cell.alignment = { horizontal: 'right' };
+			}
 		});
 	});
+
+	// ── Fusiones: título (fila 1) y periodo (fila 2) a lo ancho del libro ──
+	const anchoLibro = ANCHOS_COLUMNAS.length; // número de columnas
+	ws.mergeCells(1, 1, 1, anchoLibro);
+	ws.mergeCells(2, 1, 2, anchoLibro);
 
 	// ── Fusiones de encabezados de sección (ancho de su tabla) ──
 	filas.forEach((fila, r) => {
@@ -222,13 +234,12 @@ export function construirLibroInforme(informe: InformeMensual, periodo: string):
 		const clave = String(primera.v);
 		for (const [prefijo, ultimaCol] of SECCIONES) {
 			if (clave.startsWith(prefijo)) {
-				ws['!merges']!.push({ s: { r, c: 0 }, e: { r, c: ultimaCol } });
+				// ExcelJS: (top, left, bottom, right), 1-indexed
+				ws.mergeCells(r + 1, 1, r + 1, ultimaCol + 1);
 				break;
 			}
 		}
 	});
 
-	const wb = XLSX.utils.book_new();
-	XLSX.utils.book_append_sheet(wb, ws, 'Informe');
 	return wb;
 }

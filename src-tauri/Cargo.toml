@@ -13,6 +13,16 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "dev_reset_admin"
 path = "src/bin/dev_reset_admin.rs"
+# El binario de reseteo de admin sólo se construye cuando se activa la
+# feature `dev` (cargo build --features dev). Así no llega al bundle de
+# release por defecto. El `main` además está detrás de `#[cfg(debug_assertions)]`
+# como defense-in-depth.
+required-features = ["dev"]
+
+[features]
+default = []
+# Feature de desarrollo: habilita el binario `dev_reset_admin`.
+dev = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -28,11 +38,14 @@ log = "0.4"
 rsfbclient = { version = "0.27", features = ["dynamic_loading"] }
 r2d2 = "0.8"
 r2d2_firebird = "0.27"
-tokio = { version = "1", features = ["full"] }
+# tokio = { version = "1", features = ["full"] }  # TODO G-C3: sin uso actual (grep `tokio::` no encuentra referencias en src/). Reactivar si se añaden transacciones async, timers con tokio::time o spawn de tareas en background. Tauri v2 ya expone su propio runtime async.
 rust_decimal = { version = "1", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Criptografía y seguridad
+# - aes-gcm: cifrado PII nuevo formato `v1:` (AES-256-GCM) — ver core/crypto.rs
+# - cbc + aes: solo para desencriptar tokens Fernet legacy (AES-128-CBC). NO quitar.
+# - hmac: verificación HMAC-SHA256 de tokens Fernet legacy. NO quitar.
 argon2 = "0.5"
 pbkdf2 = { version = "0.12", features = ["sha2"] }
 sha2 = "0.10"

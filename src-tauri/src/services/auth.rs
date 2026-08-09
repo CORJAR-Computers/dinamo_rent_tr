@@ -80,7 +80,7 @@ impl AuthService {
 
         // 1) Cuenta bloqueada
         {
-            let mut tracker = state.login_tracker.lock().unwrap();
+            let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
             if tracker.is_locked(username) {
                 let remaining = tracker.get_lockout_remaining_seconds(username);
                 let minutes = remaining / 60;
@@ -100,7 +100,7 @@ impl AuthService {
         let usuario = UsuarioRepository::obtener_para_autenticacion(&mut conn, username)?;
         let Some(usuario) = usuario else {
             // Usuario no existe → registrar intento fallido igualmente (anti-enumeración)
-            let mut tracker = state.login_tracker.lock().unwrap();
+            let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
             let attempts = tracker.record_failed_attempt(username, ip);
             let remaining = tracker.get_remaining_attempts(username);
             log::warn!("Login fallido (usuario inexistente): {username}");
@@ -137,7 +137,7 @@ impl AuthService {
             }
             VerifyResult::Invalid => {
                 // Credenciales incorrectas
-                let mut tracker = state.login_tracker.lock().unwrap();
+                let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
                 let attempts = tracker.record_failed_attempt(username, ip);
                 let remaining = tracker.get_remaining_attempts(username);
                 // Persistir contador en BD
@@ -174,14 +174,14 @@ impl AuthService {
     ) -> Result<LoginResult, AppError> {
         // Resetear intentos
         {
-            let mut tracker = state.login_tracker.lock().unwrap();
+            let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
             tracker.reset_attempts(username);
         }
         let _ = UsuarioRepository::persistir_intentos(&mut conn, username, 0);
         let _ = UsuarioRepository::registrar_acceso(&mut conn, username);
 
         // Crear sesión
-        let mut sessions = state.sessions.lock().unwrap();
+        let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
         let sid = sessions.create(
             user_id,
             username,
@@ -211,7 +211,7 @@ impl AuthService {
 
     /// Estado de login de un usuario (intentos, bloqueo) — puerto de get_login_status
     pub fn get_login_status(state: &AppState, username: &str) -> LoginStatus {
-        let mut tracker = state.login_tracker.lock().unwrap();
+        let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
         let is_locked = tracker.is_locked(username);
         LoginStatus {
             is_locked,
@@ -227,13 +227,13 @@ impl AuthService {
             Ok(mut conn) => UsuarioRepository::obtener_intentos_pendientes(&mut conn).unwrap_or_default(),
             Err(_) => std::collections::HashMap::new(),
         };
-        let mut tracker = state.login_tracker.lock().unwrap();
+        let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
         tracker.sync_from_db(attempts);
     }
 
     /// Cierra sesión
     pub fn logout(state: &AppState, session_id: &str) {
-        state.sessions.lock().unwrap().destroy(session_id);
+        state.sessions.lock().unwrap_or_else(|e| e.into_inner()).destroy(session_id);
     }
 
     /// Cambio de contraseña (obligatorio tras primer login o por solicitud)
@@ -295,7 +295,7 @@ impl AuthService {
     pub fn unlock_account(state: &AppState, username: &str) -> Result<bool, AppError> {
         let mut conn = state.pool.get()?;
         let _ = UsuarioRepository::reset_intentos(&mut conn, username);
-        let mut tracker = state.login_tracker.lock().unwrap();
+        let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
         let was_locked = tracker.is_locked(username);
         tracker.reset_attempts(username);
         if was_locked {

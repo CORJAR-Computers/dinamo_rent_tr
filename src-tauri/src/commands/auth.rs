@@ -47,7 +47,7 @@ pub fn unlock_account(
 ) -> Cmd<bool> {
     // RBAC: solo Administrador
     let _session = {
-        let mut sessions = state.sessions.lock().unwrap();
+        let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
         crate::core::rbac::require_role(&mut sessions, &session_id, &["Administrador"])
     }
     .map_err(|e| e.to_payload())?;
@@ -58,7 +58,7 @@ pub fn unlock_account(
 /// Estado de la sesión actual (para guard de rutas / refresh de UI)
 #[tauri::command]
 pub fn get_session(state: State<'_, AppState>, session_id: String) -> Cmd<crate::core::rbac::SessionData> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
     crate::core::rbac::require_active_session(&mut sessions, &session_id).map_err(|e| e.to_payload())
 }
 

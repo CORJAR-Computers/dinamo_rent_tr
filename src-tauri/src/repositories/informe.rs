@@ -15,7 +15,7 @@ impl InformeRepository {
     pub fn ingresos_pagos(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
             "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM pagos \
-             WHERE fecha >= ? AND fecha <= ?",
+             WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL",
             (inicio.to_string(), fin.to_string()),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -36,7 +36,7 @@ impl InformeRepository {
     pub fn egresos_gastos(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
             "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM gastos \
-             WHERE fecha >= ? AND fecha <= ?",
+             WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL",
             (inicio.to_string(), fin.to_string()),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -47,7 +47,8 @@ impl InformeRepository {
         let row: Option<(Option<String>,)> = conn.query_first(
             "SELECT CAST(COALESCE(SUM(total_mantenimiento), 0) AS VARCHAR(12)) \
              FROM mantenimiento_vehiculos \
-             WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ?",
+             WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ? \
+               AND deleted_at IS NULL",
             (inicio.to_string(), fin.to_string()),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -57,7 +58,7 @@ impl InformeRepository {
     pub fn egresos_comparendos(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
             "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM comparendos \
-             WHERE fecha_infraccion >= ? AND fecha_infraccion <= ?",
+             WHERE fecha_infraccion >= ? AND fecha_infraccion <= ? AND deleted_at IS NULL",
             (inicio.to_string(), fin.to_string()),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -67,7 +68,7 @@ impl InformeRepository {
     pub fn gastos_por_categoria(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT categoria, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
-             WHERE fecha >= ? AND fecha <= ? \
+             WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL \
              GROUP BY categoria ORDER BY SUM(monto) DESC",
             (inicio.to_string(), fin.to_string()),
         )?;
@@ -82,6 +83,7 @@ impl InformeRepository {
                     CAST(r.fecha_recogida AS VARCHAR(10)) \
              FROM rentas r \
              WHERE r.fecha_recogida >= ? AND r.fecha_recogida <= ? \
+               AND r.deleted_at IS NULL \
              ORDER BY r.fecha_recogida, r.id",
             (inicio.to_string(), fin.to_string()),
         )?;
@@ -97,6 +99,7 @@ impl InformeRepository {
              FROM pagos p JOIN rentas r ON r.id = p.id_renta \
              WHERE r.placa IS NOT NULL \
                AND p.fecha >= ? AND p.fecha <= ? \
+               AND p.deleted_at IS NULL AND r.deleted_at IS NULL \
              GROUP BY r.placa",
             (inicio.to_string(), fin.to_string()),
         )?;
@@ -122,6 +125,7 @@ impl InformeRepository {
             "SELECT placa, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
              WHERE placa IS NOT NULL \
                AND fecha >= ? AND fecha <= ? \
+               AND deleted_at IS NULL \
              GROUP BY placa",
             (inicio.to_string(), fin.to_string()),
         )?;
@@ -134,6 +138,7 @@ impl InformeRepository {
             "SELECT placa, CAST(SUM(total_mantenimiento) AS VARCHAR(12)) \
              FROM mantenimiento_vehiculos \
              WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ? \
+               AND deleted_at IS NULL \
              GROUP BY placa",
             (inicio.to_string(), fin.to_string()),
         )?;
@@ -145,6 +150,7 @@ impl InformeRepository {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT placa, CAST(SUM(monto) AS VARCHAR(12)) FROM comparendos \
              WHERE fecha_infraccion >= ? AND fecha_infraccion <= ? \
+               AND deleted_at IS NULL \
              GROUP BY placa",
             (inicio.to_string(), fin.to_string()),
         )?;

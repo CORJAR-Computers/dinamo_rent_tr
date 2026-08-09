@@ -172,14 +172,14 @@ describe('página de Rentas', () => {
 		await fireEvent.input(screen.getByPlaceholderText('Nombre para la renta'), {
 			target: { value: 'Cliente Nuevo' }
 		});
-		await fireEvent.change(within(dialogo).getByDisplayValue('— Seleccionar vehículo —'), {
+		await fireEvent.change(within(dialogo).getByDisplayValue('— Seleccionar —'), {
 			target: { value: 'ABC123' }
 		});
 		await fireEvent.input(screen.getByPlaceholderText('Ej: 42000'), {
 			target: { value: '42100' }
 		});
 		// Tarifa y abono
-		await fireEvent.input(screen.getByPlaceholderText('Ej: 150000'), {
+		await fireEvent.input(screen.getByPlaceholderText('150000'), {
 			target: { value: '150000' }
 		});
 

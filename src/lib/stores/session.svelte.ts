@@ -93,3 +93,22 @@ class SessionStore {
 }
 
 export const session = new SessionStore();
+
+/**
+ * Helper de un solo uso para obtener el sessionId activo.
+ *
+ * Reemplaza el patrón `const sid = () => session.token ?? ''` repetido en
+ * 15 rutas. Importar desde el store:
+ *
+ * ```ts
+ * import { sid } from '$lib/stores/session.svelte';
+ * // …
+ * autoApi.listar(sid(), …);
+ * ```
+ *
+ * Si no hay sesión activa devuelve '' (las APIs lanzarán ApiError de
+ * "no autenticado" en el backend; el guard de ruta redirige a /login).
+ */
+export function sid(): string {
+	return session.token ?? '';
+}

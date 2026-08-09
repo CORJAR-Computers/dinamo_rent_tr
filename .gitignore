@@ -1,27 +1,54 @@
-node_modules
-
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
+# Dependencias
+node_modules/
+.output/
+.vercel/
+.netlify/
+.wrangler/
+/.svelte-kit/
+/build/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Env
+# Env / secretos
 .env
 .env.*
 !.env.example
 !.env.test
 
-# Artefactos temporales de verificación de impresión
+# Tauri / Rust build
+src-tauri/target/
+src-tauri/gen/
+
+# Base de datos Firebird (NUNCA commitear)
+data/*.fdb
+data/*.fdb.bak
+
+# Config con secretos (usar config.ini.example)
+data/config.ini
+
+# Backups y logs
+Backups/
+logs/
+*.log
+
+# Binarios Firebird duplicados (el bundle usa src-tauri/resources/firebird/)
+Firebird-5.0.3.1683-0-windows-x64/
+
+# Documentos artefacto (van en docs/ o storage externo)
+/Contrato_Dinamo.docx
+/informe_*.xlsx
+static/preview-shots/*.pdf
+
+# IDE
+.vscode/
+.idea/
+
+# Temporales de impresión
 .tmp-print/
 scripts/.tmp-*
 
-# Vite
+# Vite timestamps
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

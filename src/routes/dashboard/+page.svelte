@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { dashboardApi, ApiError, type DashboardData } from '$lib/api';
-	import { session } from '$lib/stores/session.svelte';
+	import { session, sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
@@ -10,7 +10,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import PiiKeyDialog from '$lib/components/PiiKeyDialog.svelte';
 
-	const sid = () => session.token ?? '';
+	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
 
 	let data = $state<DashboardData | null>(null);
 	let piiDialogOpen = $state(false);

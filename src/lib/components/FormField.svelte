@@ -4,13 +4,17 @@
 		required?: boolean;
 		hint?: string;
 		error?: string;
+		/** Espaciado vertical compacto (mb-3 en vez de mb-4). Útil en formularios densos. */
+		dense?: boolean;
+		/** Clases extra para el contenedor (ej. 'col-span-2'). */
+		class?: string;
 		children?: import('svelte').Snippet;
 	}
 
-	let { label, required = false, hint, error, children }: Props = $props();
+	let { label, required = false, hint, error, dense = false, class: klass = '', children }: Props = $props();
 </script>
 
-<div class="mb-4">
+<div class="{dense ? 'mb-3' : 'mb-4'} {klass}">
 	{#if label}
 		<span class="label">
 			{label}
@@ -24,6 +28,6 @@
 			{error}
 		</p>
 	{:else if hint}
-		<p class="mt-1 text-xs text-text-secondary/70">{hint}</p>
+		<p class="mt-0.5 text-[10px] text-text-secondary/70 leading-tight">{hint}</p>
 	{/if}
 </div>

@@ -22,7 +22,7 @@ use crate::services::AppState;
 
 /// Requiere sesión activa y devuelve los datos de la sesión
 pub fn require_session(state: &AppState, session_id: &str) -> Result<SessionData, ErrorPayload> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
     crate::core::rbac::require_active_session(&mut sessions, session_id)
         .map_err(|e| e.to_payload())
 }
@@ -30,7 +30,7 @@ pub fn require_session(state: &AppState, session_id: &str) -> Result<SessionData
 /// Requiere sesión activa con rol de administración de usuarios
 /// (roles_con_usuarios en config.ini — por defecto solo Administrador).
 pub fn require_usuario_admin(state: &AppState, session_id: &str) -> Result<SessionData, ErrorPayload> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
     // Fallback: si config.ini no define roles_con_usuarios, solo Administrador
     let roles: Vec<&str> = if state.config.roles_con_usuarios.is_empty() {
         vec!["Administrador"]

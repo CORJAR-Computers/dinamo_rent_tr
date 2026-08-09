@@ -7,9 +7,10 @@
 
 use std::sync::Arc;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rsfbclient::{Execute, IntoParam, ParamsType};
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
@@ -20,6 +21,14 @@ use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::renta::{
     Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaDatos, RentaRepository,
 };
+
+/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
+/// limitadas a 15 elementos en rsfbclient).
+macro_rules! params {
+    ($($e:expr),+ $(,)?) => {
+        ParamsType::Positional(vec![$($e.into_param()),+])
+    };
+}
 
 /// Resultado de cancelación (para la UI)
 #[derive(Debug, Clone, Serialize)]
@@ -145,15 +154,80 @@ impl RentaService {
         let abono = dec_str(&actual.abono);
         let saldo = (total - abono).max(Decimal::ZERO);
 
-        RentaRepository::cerrar(
-            conn,
-            id,
-            &datos,
-            &subtotal.round_dp(2).to_string(),
-            &impuestos.to_string(),
-            &total.round_dp(2).to_string(),
-            &saldo.round_dp(2).to_string(),
-        )?;
+        // Pre-calcular los valores parseados fuera del closure (la transacción
+        // sólo propaga `FbError`, no `AppError`).
+        let fecha_dev = parse_fecha_opt(&datos.fecha_devolucion_real)?;
+        let hora_dev = parse_hora(&datos.hora_devolucion_real)?;
+        let km_final = opt_str(&datos.km_final);
+        let tanque_final = opt_str(&datos.tanque_final);
+        let valor_dia = datos.valor_dia.as_deref().map(|s| s.trim().replace(',', "."));
+        let valor_hora_extra = datos.valor_hora_extra.as_deref().map(|s| s.trim().replace(',', "."));
+        let descuento = datos.descuento.as_deref().map(|s| s.trim().replace(',', "."));
+        let observaciones = opt_str(&datos.observaciones);
+        let subtotal_s = subtotal.round_dp(2).to_string();
+        let impuestos_s = impuestos.to_string();
+        let total_s = total.round_dp(2).to_string();
+        let saldo_s = saldo.round_dp(2).to_string();
+        let placa_auto = actual.placa.clone();
+        let usuario_audit = "sistema".to_string();
+
+        // TRANSACCIÓN: UPDATE rentas (estado Cerrada + devolución) + UPDATE autos
+        // (liberar vehículo) + INSERT auditoría. Atómico: si cualquiera falla,
+        // rollback y la renta queda en su estado anterior.
+        conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
+            tx.execute(
+                "UPDATE rentas SET \
+                    estado = 'Cerrada', \
+                    fecha_devolucion_real = ?, hora_devolucion_real = ?, km_final = ?, tanque_final = ?, \
+                    dias_calculados = COALESCE(?, dias_calculados), \
+                    horas_extras = COALESCE(?, horas_extras), \
+                    valor_dia = CAST(COALESCE(?, valor_dia) AS DECIMAL(12,2)), \
+                    valor_hora_extra = CAST(COALESCE(?, valor_hora_extra) AS DECIMAL(12,2)), \
+                    descuento = CAST(COALESCE(?, descuento) AS DECIMAL(12,2)), \
+                    subtotal = CAST(? AS DECIMAL(12,2)), impuestos = CAST(? AS DECIMAL(12,2)), \
+                    total = CAST(? AS DECIMAL(12,2)), saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
+                    observaciones = COALESCE(?, observaciones) \
+                 WHERE id = ?",
+                params![
+                    fecha_dev,
+                    hora_dev,
+                    km_final,
+                    tanque_final,
+                    dias,
+                    horas,
+                    valor_dia,
+                    valor_hora_extra,
+                    descuento,
+                    subtotal_s,
+                    impuestos_s,
+                    total_s,
+                    saldo_s,
+                    observaciones,
+                    id,
+                ],
+            )?;
+            // Liberar el vehículo (sólo si la renta tenía placa asignada)
+            if let Some(placa) = placa_auto.as_ref() {
+                tx.execute(
+                    "UPDATE autos SET estado = 'Disponible', updated_at = CURRENT_TIMESTAMP \
+                     WHERE placa = ?",
+                    (placa.clone(),),
+                )?;
+            }
+            // Auditoría del cierre
+            tx.execute(
+                "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (
+                    usuario_audit.clone(),
+                    "CIERRE RENTA".to_string(),
+                    format!("renta={id}, placa={}", placa_auto.as_deref().unwrap_or("-")),
+                    "local".to_string(),
+                ),
+            )?;
+            Ok(())
+        })
+        .map_err(|e| AppError::Database(e.to_string()))?;
         Self::obtener(conn, id)
     }
 
@@ -173,7 +247,9 @@ impl RentaService {
         Ok(RentaCancelada { renta, cancelada: true })
     }
 
-    /// Elimina una renta (pagos e inspecciones caen en cascada)
+    /// Elimina una renta (soft-delete: marca deleted_at en rentas y pagos).
+    /// Las inspecciones no tienen deleted_at; dejan de ser accesibles porque la
+    /// renta no aparece en los SELECTs. Ver RentaRepository::eliminar.
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
         Self::obtener(conn, id)?;
         RentaRepository::eliminar(conn, id)
@@ -226,14 +302,45 @@ impl RentaService {
         }
         let abono_nuevo = (dec_str(&renta.abono) + monto).round_dp(2);
         let saldo_nuevo = (saldo_actual - monto).round_dp(2);
-        let id = RentaRepository::insertar_pago(
-            conn,
-            id_renta,
-            &pago,
-            usuario,
-            &abono_nuevo.to_string(),
-            &saldo_nuevo.to_string(),
-        )?;
+        // TRANSACCIÓN: INSERT pago + UPDATE rentas (abono/saldo) + INSERT auditoría.
+        // Atómico: si cualquiera falla, se hace rollback y no queda pago huérfano
+        // ni abono desincronizado. Patrón: conn.with_transaction(|tx| -> Result<T, FbError>).
+        let id = conn
+            .with_transaction(|tx| -> Result<i64, rsfbclient::FbError> {
+                let (id,): (i64,) = tx.execute_returnable(
+                    "INSERT INTO pagos (id_renta, monto, metodo_pago, concepto, observaciones, usuario) \
+                     VALUES (?, CAST(? AS DECIMAL(12,2)), ?, ?, ?, ?) RETURNING id",
+                    params![
+                        id_renta,
+                        pago.monto.to_string(),
+                        pago.metodo_pago.to_string(),
+                        pago.concepto.to_string(),
+                        opt_str(&pago.observaciones),
+                        usuario.to_string(),
+                    ],
+                )?;
+                tx.execute(
+                    "UPDATE rentas SET abono = CAST(? AS DECIMAL(12,2)), \
+                     saldo_pendiente = CAST(? AS DECIMAL(12,2)) WHERE id = ?",
+                    (
+                        abono_nuevo.to_string(),
+                        saldo_nuevo.to_string(),
+                        id_renta,
+                    ),
+                )?;
+                tx.execute(
+                    "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                    (
+                        usuario.to_string(),
+                        "PAGO RENTA".to_string(),
+                        format!("renta={id_renta}, pago={id}, monto={}", pago.monto),
+                        "local".to_string(),
+                    ),
+                )?;
+                Ok(id)
+            })
+            .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(RentaRepository::pagos_de(conn, id_renta)?
             .into_iter()
             .find(|p| p.id == id)
@@ -564,4 +671,38 @@ fn es_hora_valida(h: &str) -> bool {
         }
     }
     true
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Helpers para las transacciones de `registrar_pago` y `cerrar` (duplicados
+// de `repositories/renta.rs` porque son privados allí; se mantienen aquí para
+// no alterar el API público del repositorio).
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Recorta un `Option<String>` y descarta vacíos (devuelve `None`).
+fn opt_str(v: &Option<String>) -> Option<String> {
+    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// Parsea `Option<String>` → `Option<NaiveDate>` (formato AAAA-MM-DD).
+fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError> {
+    match opt_str(v) {
+        None => Ok(None),
+        Some(s) => NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+            .map(Some)
+            .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into())),
+    }
+}
+
+/// Parsea `Option<String>` → `Option<NaiveTime>` (formato HH:MM o HH:MM:SS).
+fn parse_hora(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
+    match opt_str(v) {
+        None => Ok(None),
+        Some(h) => {
+            let h = if h.len() == 5 { format!("{h}:00") } else { h };
+            NaiveTime::parse_from_str(&h, "%H:%M:%S")
+                .map(Some)
+                .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
+        }
+    }
 }

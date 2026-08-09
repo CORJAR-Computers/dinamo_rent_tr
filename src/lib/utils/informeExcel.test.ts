@@ -1,6 +1,7 @@
 // src/lib/utils/informeExcel.test.ts — Tests de la exportación .xlsx del informe
+// Migrado de `xlsx` a `exceljs` (ver informeExcel.ts).
 import { describe, it, expect } from 'vitest';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type { InformeMensual } from '$lib/api';
 import { filasInformeExcel, construirLibroInforme } from './informeExcel';
 
@@ -104,30 +105,43 @@ describe('construirLibroInforme', () => {
 	it('genera un Workbook con la hoja "Informe", anchos y fusiones', () => {
 		const wb = construirLibroInforme(informe(), 'periodo');
 
-		expect(wb.SheetNames).toEqual(['Informe']);
-		const ws = wb.Sheets['Informe'];
+		expect(wb.worksheets.map((w) => w.name)).toEqual(['Informe']);
+		const ws = wb.getWorksheet('Informe');
 		expect(ws).toBeDefined();
-		expect(Array.isArray(ws['!cols'])).toBe(true);
-		// Título + periodo fusionados + encabezados de sección
-		expect(ws['!merges']?.length ?? 0).toBeGreaterThanOrEqual(6);
-		// Título estilizado (fuente blanca sobre azul)
-		const titulo = ws['A1'];
-		expect(titulo.v).toContain('INFORME FINANCIERO');
-		expect(titulo.s?.font?.bold).toBe(true);
+		// Anchos de columna asignados (6 columnas)
+		expect(ws!.columnCount).toBeGreaterThanOrEqual(6);
+		// Título estilizado (fuente bold)
+		const titulo = ws!.getCell('A1');
+		expect(String(titulo.value)).toContain('INFORME FINANCIERO');
+		expect(titulo.font?.bold).toBe(true);
+		// Las fusiones se cuentan en el modelo de ExcelJS (mínimo: título A1:F1 +
+		// periodo A2:F2 + 4 encabezados de sección = 6).
+		const wsModel = (ws as unknown as { model?: { merges?: unknown[] } }).model;
+		const mergesCount = wsModel?.merges?.length ?? 0;
+		expect(mergesCount).toBeGreaterThanOrEqual(6);
 	});
 
-	it('el workbook es serializable a archivo y se puede releer', () => {
+	it('el workbook es serializable a buffer y se puede releer', async () => {
 		const wb = construirLibroInforme(informe(), 'periodo');
-		const datos = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-		expect(datos.length).toBeGreaterThan(0);
+		const buffer = await wb.xlsx.writeBuffer();
+		expect(buffer.byteLength).toBeGreaterThan(0);
 
-		const releido = XLSX.read(datos, { type: 'buffer' });
-		const ws = releido.Sheets[releido.SheetNames[0]];
-		expect(String(ws['A1'].v)).toContain('INFORME FINANCIERO');
-		// Balance sigue siendo numérico tras el round-trip
-		const filaBalance = Object.keys(ws)
-			.filter((k) => /^A\d+$/.test(k) && typeof ws[k].v === 'string' && String(ws[k].v).startsWith('BALANCE'))
-			.map((k) => ws[k]);
-		expect(filaBalance.length).toBe(1);
+		const wb2 = new ExcelJS.Workbook();
+		await wb2.xlsx.load(buffer);
+		const ws = wb2.getWorksheet(wb2.worksheets[0]!.name)!;
+		expect(String(ws.getCell('A1').value ?? '')).toContain('INFORME FINANCIERO');
+		// Balance sigue siendo numérico tras el round-trip (lo buscamos en la columna A)
+		const balanceRow = Array.from({ length: ws.rowCount }, (_, i) => i + 1)
+			.map((r) => ws.getCell(`A${r}`))
+			.find((c) => typeof c.value === 'string' && String(c.value).startsWith('BALANCE'));
+		expect(balanceRow).toBeDefined();
+		// La celda adyacente (B) del balance debe ser numérica
+		if (balanceRow) {
+			const monto = ws.getCell(`B${balanceRow.row}`);
+			expect(
+				typeof monto.value === 'number' ||
+					(monto.value as { result?: number })?.result !== undefined
+			).toBe(true);
+		}
 	});
 });

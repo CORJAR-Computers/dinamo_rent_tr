@@ -201,22 +201,22 @@ impl UsuarioRepository {
         activo: bool,
         debe_cambiar_password: bool,
     ) -> Result<i64, AppError> {
-        conn.execute(
-            "INSERT INTO usuarios (username, password, nombre, rol, email, activo, intentos_fallidos, debe_cambiar_password)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
-            (
-                username.to_string(),
-                password_hash.to_string(),
-                nombre.to_string(),
-                rol.to_string(),
-                email.map(String::from),
-                if activo { 1_i16 } else { 0_i16 },
-                if debe_cambiar_password { 1_i16 } else { 0_i16 },
-            ),
-        )
-        .map_err(map_fb_error)?;
-        let id: Option<(i64,)> = conn.query_first("SELECT MAX(id) FROM usuarios", ())?;
-        Ok(id.map(|(i,)| i).unwrap_or(0))
+        let (id,): (i64,) = conn
+            .execute_returnable(
+                "INSERT INTO usuarios (username, password, nombre, rol, email, activo, intentos_fallidos, debe_cambiar_password)
+                 VALUES (?, ?, ?, ?, ?, ?, 0, ?) RETURNING id",
+                (
+                    username.to_string(),
+                    password_hash.to_string(),
+                    nombre.to_string(),
+                    rol.to_string(),
+                    email.map(String::from),
+                    if activo { 1_i16 } else { 0_i16 },
+                    if debe_cambiar_password { 1_i16 } else { 0_i16 },
+                ),
+            )
+            .map_err(map_fb_error)?;
+        Ok(id)
     }
 
     /// Actualiza datos de gestión de un usuario (nombre, rol, email, activo)
@@ -370,19 +370,19 @@ impl UsuarioRepository {
         rol: &str,
         debe_cambiar_password: bool,
     ) -> Result<i64, AppError> {
-        conn.execute(
-            "INSERT INTO usuarios (username, password, nombre, rol, activo, intentos_fallidos, debe_cambiar_password)
-             VALUES (?, ?, ?, ?, 1, 0, ?)",
-            (
-                username.to_string(),
-                password_hash.to_string(),
-                nombre.to_string(),
-                rol.to_string(),
-                if debe_cambiar_password { 1_i16 } else { 0_i16 },
-            ),
-        )?;
-        let id: Option<(i64,)> = conn.query_first("SELECT MAX(id) FROM usuarios", ())?;
-        Ok(id.map(|(i,)| i).unwrap_or(0))
+        let (id,): (i64,) = conn
+            .execute_returnable(
+                "INSERT INTO usuarios (username, password, nombre, rol, activo, intentos_fallidos, debe_cambiar_password)
+                 VALUES (?, ?, ?, ?, 1, 0, ?) RETURNING id",
+                (
+                    username.to_string(),
+                    password_hash.to_string(),
+                    nombre.to_string(),
+                    rol.to_string(),
+                    if debe_cambiar_password { 1_i16 } else { 0_i16 },
+                ),
+            )?;
+        Ok(id)
     }
 }
 

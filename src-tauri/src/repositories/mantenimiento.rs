@@ -123,6 +123,7 @@ impl MantenimientoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
                  LEFT JOIN autos a ON a.placa = m.placa \
+                 WHERE m.deleted_at IS NULL \
                  ORDER BY m.pieza_varias_fecha DESC, m.id DESC"
             ),
             (),
@@ -136,7 +137,7 @@ impl MantenimientoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
                  LEFT JOIN autos a ON a.placa = m.placa \
-                 WHERE m.placa = ? \
+                 WHERE m.placa = ? AND m.deleted_at IS NULL \
                  ORDER BY m.pieza_varias_fecha DESC, m.id DESC"
             ),
             (placa.to_string(),),
@@ -150,7 +151,7 @@ impl MantenimientoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
                  LEFT JOIN autos a ON a.placa = m.placa \
-                 WHERE m.pieza_varias_tipo = ? \
+                 WHERE m.pieza_varias_tipo = ? AND m.deleted_at IS NULL \
                  ORDER BY m.pieza_varias_fecha DESC, m.id DESC"
             ),
             (tipo.to_string(),),
@@ -168,7 +169,7 @@ impl MantenimientoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
                  LEFT JOIN autos a ON a.placa = m.placa \
-                 WHERE m.placa = ? AND m.pieza_varias_tipo = ? \
+                 WHERE m.placa = ? AND m.pieza_varias_tipo = ? AND m.deleted_at IS NULL \
                  ORDER BY m.pieza_varias_fecha DESC, m.id DESC"
             ),
             (placa.to_string(), tipo.to_string()),
@@ -183,6 +184,7 @@ impl MantenimientoRepository {
         let row: Option<(Option<i64>,)> = conn.query_first(
             "SELECT first 1 km_proximo_cambio_aceite FROM mantenimiento_vehiculos \
              WHERE placa = ? AND pieza_varias_tipo = ? AND km_proximo_cambio_aceite > 0 \
+               AND deleted_at IS NULL \
              ORDER BY pieza_varias_fecha DESC, id DESC",
             (placa.to_string(), "Cambio Aceite".to_string()),
         )?;
@@ -196,8 +198,9 @@ impl MantenimientoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
                  LEFT JOIN autos a ON a.placa = m.placa \
-                 WHERE UPPER(m.placa) LIKE UPPER(?) OR UPPER(m.pieza_varias_tipo) LIKE UPPER(?) \
-                    OR UPPER(COALESCE(m.pieza_varias_desc, '')) LIKE UPPER(?) \
+                 WHERE m.deleted_at IS NULL \
+                   AND (UPPER(m.placa) LIKE UPPER(?) OR UPPER(m.pieza_varias_tipo) LIKE UPPER(?) \
+                        OR UPPER(COALESCE(m.pieza_varias_desc, '')) LIKE UPPER(?)) \
                  ORDER BY m.pieza_varias_fecha DESC, m.id DESC"
             ),
             (like.clone(), like.clone(), like),
@@ -211,6 +214,7 @@ impl MantenimientoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
                  LEFT JOIN autos a ON a.placa = m.placa \
+                 WHERE m.deleted_at IS NULL \
                  ORDER BY m.pieza_varias_fecha DESC, m.id DESC ROWS {limit}"
             ),
             (),
@@ -223,7 +227,7 @@ impl MantenimientoRepository {
         let row: Option<MantenimientoRow> = conn.query_first(
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
-                 LEFT JOIN autos a ON a.placa = m.placa WHERE m.id = ?"
+                 LEFT JOIN autos a ON a.placa = m.placa WHERE m.id = ? AND m.deleted_at IS NULL"
             ),
             (id,),
         )?;
@@ -279,22 +283,28 @@ impl MantenimientoRepository {
     }
 
     /// Elimina un mantenimiento
+    /// Soft-delete: marca el mantenimiento como borrado (deleted_at).
+    /// El service recalculará autos.proximo_aceite con ultimo_km_aceite(),
+    /// que ya filtra deleted_at IS NULL (ver query de ese método).
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("DELETE FROM mantenimiento_vehiculos WHERE id = ?", (id,))
-            .map_err(map_fb_error)?;
+        conn.execute(
+            "UPDATE mantenimiento_vehiculos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (id,),
+        )
+        .map_err(map_fb_error)?;
         Ok(())
     }
 
     /// Total de mantenimientos registrados
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM mantenimiento_vehiculos", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM mantenimiento_vehiculos WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
     /// Suma total de todos los mantenimientos
     pub fn total_general(conn: &mut PooledConnection) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
-            "SELECT CAST(COALESCE(SUM(total_mantenimiento), 0) AS VARCHAR(12)) FROM mantenimiento_vehiculos",
+            "SELECT CAST(COALESCE(SUM(total_mantenimiento), 0) AS VARCHAR(12)) FROM mantenimiento_vehiculos WHERE deleted_at IS NULL",
             (),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -304,7 +314,7 @@ impl MantenimientoRepository {
     pub fn total_por_placa(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT placa, CAST(SUM(total_mantenimiento) AS VARCHAR(12)) FROM mantenimiento_vehiculos \
-             GROUP BY placa ORDER BY SUM(total_mantenimiento) DESC",
+             WHERE deleted_at IS NULL GROUP BY placa ORDER BY SUM(total_mantenimiento) DESC",
             (),
         )?;
         Ok(rows)
@@ -314,7 +324,8 @@ impl MantenimientoRepository {
     pub fn total_por_tipo(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT pieza_varias_tipo, CAST(SUM(total_mantenimiento) AS VARCHAR(12)) \
-             FROM mantenimiento_vehiculos GROUP BY pieza_varias_tipo ORDER BY SUM(total_mantenimiento) DESC",
+             FROM mantenimiento_vehiculos WHERE deleted_at IS NULL GROUP BY pieza_varias_tipo \
+             ORDER BY SUM(total_mantenimiento) DESC",
             (),
         )?;
         Ok(rows)

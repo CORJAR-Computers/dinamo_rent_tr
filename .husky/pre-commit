@@ -1,0 +1,13 @@
+# Husky pre-commit hook (TAREA E6 del Grupo E).
+# Requiere `husky` instalado (devDependency en package.json) y activado con
+# `bunx husky install` o `npx husky init`. Una vez instalado, este fichero
+# se ejecuta automáticamente antes de cada `git commit`.
+#
+# Si lint falla, el commit se aborta. Para omitirlo en casos excepcionales:
+#   git commit --no-verify
+#
+# Nota: NO formateamos automáticamente (podría alterar ficheros que el
+# desarrollador no quiera commitear aún). `lint:fix` sí arregla, pero lo
+# deja en el staging area para revisión manual.
+
+bun run lint

@@ -9,11 +9,32 @@
 		width?: string;
 		/** Evita cerrar con click fuera / Esc */
 		dismissible?: boolean;
+		/** Altura fija al viewport (h-[calc(100vh-2rem)]) en vez de max-h. Útil para
+		 *  modales con panel lateral sticky que NO deben crecer con el contenido. */
+		fullHeight?: boolean;
+		/** Quita el padding y overflow del body; el contenido gestiona su propio
+		 *  scroll (útil para layouts de 2 paneles). */
+		rawBody?: boolean;
+		/** Oculta el footer (cuando las acciones viven dentro del body, p.ej. en
+		 *  un panel lateral). */
+		noFooter?: boolean;
 		children?: import('svelte').Snippet;
 		footer?: import('svelte').Snippet;
 	}
 
-	let { open, title, subtitle, onClose, width = 'max-w-xl', dismissible = true, children, footer }: Props = $props();
+	let {
+		open,
+		title,
+		subtitle,
+		onClose,
+		width = 'max-w-xl',
+		dismissible = true,
+		fullHeight = false,
+		rawBody = false,
+		noFooter = false,
+		children,
+		footer
+	}: Props = $props();
 
 	function handleKey(e: KeyboardEvent) {
 		if (e.key === 'Escape' && dismissible) onClose();
@@ -22,7 +43,6 @@
 	$effect(() => {
 		if (open && typeof document !== 'undefined') {
 			document.addEventListener('keydown', handleKey);
-			// Bloquear scroll del fondo
 			const prev = document.body.style.overflow;
 			document.body.style.overflow = 'hidden';
 			return () => {
@@ -35,7 +55,7 @@
 
 {#if open}
 	<div
-		class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+		class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain p-3 sm:p-4"
 		role="dialog"
 		aria-modal="true"
 		aria-label={title}
@@ -48,14 +68,16 @@
 		></button>
 
 		<div
-			class="relative w-full {width} mt-4 sm:mt-10 card shadow-2xl flex flex-col max-h-[calc(100vh-4rem)] animate-[modal-pop-in_180ms_ease-out]"
+			class="relative w-full {width} mt-2 sm:mt-3 card shadow-2xl flex flex-col {fullHeight
+				? 'h-[calc(100vh-1.5rem)]'
+				: 'max-h-[calc(100vh-2rem)]'} animate-[modal-pop-in_180ms_ease-out]"
 		>
 			<!-- Header -->
-			<div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-border shrink-0">
+			<div class="flex items-start justify-between gap-4 px-5 py-3 border-b border-border shrink-0">
 				<div>
-					<h2 class="text-lg font-bold text-text-primary leading-tight">{title}</h2>
+					<h2 class="text-base font-bold text-text-primary leading-tight">{title}</h2>
 					{#if subtitle}
-						<p class="text-xs text-text-secondary mt-0.5">{subtitle}</p>
+						<p class="text-[11px] text-text-secondary mt-0.5">{subtitle}</p>
 					{/if}
 				</div>
 				<button
@@ -68,13 +90,13 @@
 			</div>
 
 			<!-- Cuerpo -->
-			<div class="px-6 py-5 overflow-y-auto grow">
+			<div class="{rawBody ? 'grow min-h-0' : 'px-5 py-4 overflow-y-auto grow'}">
 				{@render children?.()}
 			</div>
 
 			<!-- Footer -->
-			{#if footer}
-				<div class="px-6 py-4 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-surface/50 rounded-b-xl">
+			{#if footer && !noFooter}
+				<div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-surface/50 rounded-b-xl">
 					{@render footer()}
 				</div>
 			{/if}

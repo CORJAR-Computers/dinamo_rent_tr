@@ -7,7 +7,6 @@
 	import { guardSesion } from '$lib/utils/guards';
 	import { construirLibroInforme } from '$lib/utils/informeExcel';
 	import { imprimirDocumento } from '$lib/utils/imprimir';
-	import * as XLSX from 'xlsx';
 
 	const sid = () => session.token ?? '';
 
@@ -46,11 +45,26 @@
 		imprimirDocumento();
 	}
 
-	function exportarExcel() {
+	// MIGRACIÓN (G-C2): reemplazado `xlsx` (SheetJS CE descontinuado + CVEs) por
+	// `exceljs`. La serialización es async y descarga vía Blob (en Tauri desktop el
+	// guardado directo de archivos requiere el plugin fs/dialog; aquí seguimos usando
+	// el flujo de descarga del navegador embebido, que WebView2 cumple bien).
+	async function exportarExcel() {
 		if (!informe) return;
 		try {
 			const wb = construirLibroInforme(informe, rangoTexto);
-			XLSX.writeFile(wb, `informe_${fechaInicio}_al_${fechaFin}.xlsx`);
+			const buffer = await wb.xlsx.writeBuffer();
+			const blob = new Blob([buffer], {
+				type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+			});
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `informe_${fechaInicio}_al_${fechaFin}.xlsx`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
 			toast.success('Informe exportado a Excel.');
 		} catch {
 			toast.error('No se pudo exportar el informe a Excel.');

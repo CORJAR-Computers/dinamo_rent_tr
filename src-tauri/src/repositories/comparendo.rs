@@ -122,6 +122,7 @@ impl ComparendoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM comparendos c \
                  LEFT JOIN autos a ON a.placa = c.placa \
+                 WHERE c.deleted_at IS NULL \
                  ORDER BY c.fecha_infraccion DESC, c.id DESC"
             ),
             (),
@@ -136,8 +137,9 @@ impl ComparendoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM comparendos c \
                  LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE UPPER(c.placa) LIKE UPPER(?) \
-                    OR UPPER(COALESCE(c.observaciones, '')) LIKE UPPER(?) \
+                 WHERE c.deleted_at IS NULL \
+                   AND (UPPER(c.placa) LIKE UPPER(?) \
+                        OR UPPER(COALESCE(c.observaciones, '')) LIKE UPPER(?)) \
                  ORDER BY c.fecha_infraccion DESC, c.id DESC"
             ),
             (like.clone(), like),
@@ -151,7 +153,7 @@ impl ComparendoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM comparendos c \
                  LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE c.placa = ? ORDER BY c.fecha_infraccion DESC, c.id DESC"
+                 WHERE c.placa = ? AND c.deleted_at IS NULL ORDER BY c.fecha_infraccion DESC, c.id DESC"
             ),
             (placa.to_string(),),
         )?;
@@ -164,7 +166,7 @@ impl ComparendoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM comparendos c \
                  LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE c.estado = ? ORDER BY c.fecha_infraccion DESC, c.id DESC"
+                 WHERE c.estado = ? AND c.deleted_at IS NULL ORDER BY c.fecha_infraccion DESC, c.id DESC"
             ),
             (estado.to_string(),),
         )?;
@@ -176,7 +178,7 @@ impl ComparendoRepository {
         let row: Option<ComparendoRow> = conn.query_first(
             &format!(
                 "SELECT {SELECT_COLS} FROM comparendos c \
-                 LEFT JOIN autos a ON a.placa = c.placa WHERE c.id = ?"
+                 LEFT JOIN autos a ON a.placa = c.placa WHERE c.id = ? AND c.deleted_at IS NULL"
             ),
             (id,),
         )?;
@@ -239,22 +241,26 @@ impl ComparendoRepository {
     }
 
     /// Elimina un comparendo
+    /// Soft-delete: marca el comparendo como borrado (deleted_at).
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("DELETE FROM comparendos WHERE id = ?", (id,))
-            .map_err(map_fb_error)?;
+        conn.execute(
+            "UPDATE comparendos SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (id,),
+        )
+        .map_err(map_fb_error)?;
         Ok(())
     }
 
     /// Total de comparendos registrados
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM comparendos", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM comparendos WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
     /// Suma total de todos los comparendos
     pub fn total_general(conn: &mut PooledConnection) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
-            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM comparendos",
+            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM comparendos WHERE deleted_at IS NULL",
             (),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -264,7 +270,7 @@ impl ComparendoRepository {
     pub fn total_pendiente(conn: &mut PooledConnection) -> Result<String, AppError> {
         let row: Option<(Option<String>,)> = conn.query_first(
             "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM comparendos \
-             WHERE estado = 'Pendiente'",
+             WHERE estado = 'Pendiente' AND deleted_at IS NULL",
             (),
         )?;
         Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
@@ -274,7 +280,7 @@ impl ComparendoRepository {
     pub fn total_por_placa(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT placa, CAST(SUM(monto) AS VARCHAR(12)) FROM comparendos \
-             GROUP BY placa ORDER BY SUM(monto) DESC",
+             WHERE deleted_at IS NULL GROUP BY placa ORDER BY SUM(monto) DESC",
             (),
         )?;
         Ok(rows)
@@ -284,7 +290,7 @@ impl ComparendoRepository {
     pub fn total_por_estado(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT estado, CAST(SUM(monto) AS VARCHAR(12)) FROM comparendos \
-             GROUP BY estado ORDER BY SUM(monto) DESC",
+             WHERE deleted_at IS NULL GROUP BY estado ORDER BY SUM(monto) DESC",
             (),
         )?;
         Ok(rows)

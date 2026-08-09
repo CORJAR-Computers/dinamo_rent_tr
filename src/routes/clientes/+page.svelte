@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { clienteApi, businessApi, ApiError, type Cliente, type ClienteConPii, type BusinessLists } from '$lib/api';
-	import { session } from '$lib/stores/session.svelte';
+	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
@@ -11,8 +11,9 @@
 	import PiiKeyDialog from '$lib/components/PiiKeyDialog.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import ClienteFormModal from '$lib/components/ClienteFormModal.svelte';
+	import { useDebouncedEffect } from '$lib/utils/debounce.svelte';
 
-	const sid = () => session.token ?? '';
+	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
 
 	let clientes = $state<ClienteConPii[]>([]);
 	let lists = $state<BusinessLists | null>(null);
@@ -22,7 +23,6 @@
 	// Filtros
 	let busqueda = $state('');
 	let estadoFiltro = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Modal crear/editar (formulario reutilizable ClienteFormModal)
 	let modalOpen = $state(false);
@@ -60,19 +60,16 @@
 		// La carga inicial de clientes la dispara el $effect de filtros (una sola vez)
 	});
 
-	// Carga inicial + filtros (debounce solo al escribir)
-	let primerCiclo = true;
+	// Carga inicial + filtros con debounce (skipFirst=false: la primera invocación
+	// hace la carga inicial; immediateIf: si la búsqueda está vacía recarga sin debounce).
+	const scheduleReload = useDebouncedEffect(cargar, {
+		skipFirst: false,
+		immediateIf: () => !busqueda.trim()
+	});
 	$effect(() => {
-		const term = busqueda;
-		const est = estadoFiltro;
-		if (primerCiclo) {
-			primerCiclo = false;
-			cargar();
-			return;
-		}
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => cargar(), term.trim() ? 350 : 0);
-		return () => clearTimeout(searchTimer);
+		const _b = busqueda;
+		const _e = estadoFiltro;
+		scheduleReload();
 	});
 
 	function abrirNuevo() {
@@ -118,10 +115,8 @@
 		return formatDate(fecha);
 	}
 
-	// Filas para la tabla (cast a Record para DataTable genérico)
-	const tablaClientes = $derived(
-		clientes.map((x) => x.cliente) as unknown as Record<string, unknown>[]
-	);
+	// Filas para la tabla (DataTable genérico infiere T = Cliente)
+	const tablaClientes = $derived(clientes.map((x) => x.cliente));
 
 	const columnas = [
 		{ key: 'documento', header: 'Documento' },
@@ -202,7 +197,7 @@
 			emptyIcon="users"
 		>
 			{#snippet children(col, item)}
-				{@const c = item as unknown as Cliente}
+				{@const c = item}
 				{#if col.key === 'documento'}
 					<div>
 						<p class="font-bold text-primary tabular-nums">{c.noDoc || '—'}</p>
@@ -247,7 +242,7 @@
 						</button>
 					</div>
 				{:else}
-					<span>{String(item[col.key] ?? '—')}</span>
+					<span>{String((item as unknown as Record<string, unknown>)[col.key] ?? '—')}</span>
 				{/if}
 			{/snippet}
 		</DataTable>

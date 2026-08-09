@@ -88,3 +88,67 @@ Dinamo_Rent_tr/
 
 **Versión**: 4.0.0-beta (Migración Tauri V2)
 
+
+---
+
+## 🚀 Setup rápido
+
+```bash
+# 1. Configurar secrets (NUNCA commitear data/config.ini)
+cp data/config.ini.example data/config.ini
+# Editar data/config.ini y rellenar:
+#   - database.password  -> contraseña strong de sysdba (dejar vacío en embedded)
+#   - security.db_encryption_key -> generar con: openssl rand -base64 32
+
+# 2. Generar clave PII (AES-256-GCM, base64 de 32 bytes)
+openssl rand -base64 32
+# Pegar el resultado en data/config.ini -> [security] db_encryption_key
+
+# 3. Instalar dependencias frontend
+bun install
+
+# 4. Lanzar en modo desarrollo
+bun run tauri dev
+```
+
+> ℹ️ Alternativamente las credenciales pueden pasarse por variables de entorno (ver `.env.example`) sin tocar `config.ini`.
+
+---
+
+## 🔒 Seguridad
+
+El sistema cifra datos PII de clientes (cédula, teléfono, licencia) con **AES-256-GCM** y aplica **Argon2id** para hashes de contraseñas. Ver detalles técnicos y políticas en:
+
+- **[SECURITY.md](SECURITY.md)** — manejo de secretos, rotación de clave PII, reporte de vulnerabilidades e historial del incidente de clave expuesta.
+
+⚠️ **Importante**:
+- `data/config.ini` **NO se commitea** — está en `.gitignore`. Usar `data/config.ini.example` como plantilla.
+- La clave `db_encryption_key` debe rotarse al menos una vez al año (ver `SECURITY.md` §2).
+- Si clonas este repo por primera vez, ejecuta `scripts/sanitize-repo.sh --yes` para limpiar artefactos del working tree (ver §Saneamiento abajo).
+
+---
+
+## 📦 Licencias de terceros
+
+Dinamo Rent ERP redistribuye binarios de Firebird 5.0.3 (licencia dual IDPL+IPL) y VCRedist 14.3 (EULA Microsoft) en `src-tauri/resources/firebird/`. El listado completo de dependencias y sus licencias está en:
+
+- **[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)**
+
+---
+
+## 🧹 Saneamiento del repositorio
+
+El repo incluye un script para limpiar artefactos no commiteables del working tree y del índice Git:
+
+```bash
+# Ejecutar en seco (sin --yes, solo imprime qué haría)
+bash scripts/sanitize-repo.sh
+
+# Ejecutar de verdad
+bash scripts/sanitize-repo.sh --yes
+```
+
+El script:
+- Borra `Firebird-5.0.3.1683-0-windows-x64/` (copia duplicada, el bundle usa `src-tauri/resources/firebird/`).
+- Hace `git rm --cached` de `data/dinamo_rent_v3.fdb`, `data/config.ini`, `Contrato_Dinamo.docx`, `informe_*.xlsx`, `static/preview-shots/*.pdf` (sin borrar del disco).
+- Imprime instrucciones para purgar el historial con `git filter-repo` (necesario tras el incidente de clave expuesta, ver `SECURITY.md` §4).

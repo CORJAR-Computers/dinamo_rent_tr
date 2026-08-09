@@ -1,0 +1,9 @@
+# ESLint flat config usa `ignores` dentro del config, pero este fichero sigue
+# siendo respetado por ESLint 8.x (legacy) y por herramientas que lo leen.
+.svelte-kit
+build
+dist
+node_modules
+src-tauri
+src-tauri/resources
+scripts

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { autoApi, businessApi, ApiError, type Auto, type AutoDatos, type AlertaVencimiento, type BusinessLists } from '$lib/api';
-	import { session } from '$lib/stores/session.svelte';
+	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
@@ -12,7 +12,7 @@
 	import FormField from '$lib/components/FormField.svelte';
 	import CopiarExistente from '$lib/components/CopiarExistente.svelte';
 
-	const sid = () => session.token ?? '';
+	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
 
 	let autos = $state<Auto[]>([]);
 	let alertas = $state<AlertaVencimiento[]>([]);

@@ -15,7 +15,7 @@
 		type Auto,
 		type BusinessLists
 	} from '$lib/api';
-	import { session } from '$lib/stores/session.svelte';
+	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
@@ -28,8 +28,11 @@
 	import ContratoRenta from '$lib/components/reports/ContratoRenta.svelte';
 	import AvisoImpresion from '$lib/components/AvisoImpresion.svelte';
 	import { imprimirDocumento } from '$lib/utils/imprimir';
+	import { useDebouncedEffect } from '$lib/utils/debounce.svelte';
 
-	const sid = () => session.token ?? '';
+	// sid() viene del store (reemplaza el patrón `const sid = () => session.token ?? ''`
+	// repetido en 15 rutas). Ver TAREA E3 del Grupo E.
+	// La importación explícita reemplaza a `const sid = () => session.token ?? '';`.
 
 	let rentas = $state<Renta[]>([]);
 	let clientes = $state<ClienteConPii[]>([]);
@@ -41,7 +44,6 @@
 	let busqueda = $state('');
 	let estadoFiltro = $state('');
 	let placaFiltro = $state('');
-	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Modal crear/editar
 	let modalOpen = $state(false);
@@ -50,6 +52,8 @@
 	let guardando = $state(false);
 	let form = $state<RentaDatos>(defaultForm());
 	let formError = $state('');
+	// Costos adicionales colapsables (mejora UX: 7 campos opcionales ocultos por defecto)
+	let costosOpen = $state(false);
 
 	// Modal cliente embebido (crear cliente sin salir de la renta)
 	let clienteModalOpen = $state(false);
@@ -253,18 +257,18 @@
 		await cargar();
 	});
 
-	let primerCiclo = true;
+	// Recarga con debounce al cambiar filtros. `skipFirst: true` porque la
+	// carga inicial la hace onMount; `immediateIf` recarga sin debounce al
+	// vaciar la búsqueda (mismo comportamiento que el patrón manual previo).
+	const scheduleReload = useDebouncedEffect(cargar, {
+		skipFirst: true,
+		immediateIf: () => !busqueda.trim()
+	});
 	$effect(() => {
-		const term = busqueda;
-		const est = estadoFiltro;
-		const plac = placaFiltro;
-		if (primerCiclo) {
-			primerCiclo = false;
-			return;
-		}
-		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => cargar(), term.trim() ? 350 : 0);
-		return () => clearTimeout(searchTimer);
+		const _b = busqueda;
+		const _e = estadoFiltro;
+		const _p = placaFiltro;
+		scheduleReload();
 	});
 
 	// ── CRUD ──
@@ -501,8 +505,6 @@
 
 	const rentaActiva = (r: Renta) => r.estado === 'Activo' || r.estado === 'Activa';
 
-	const tablaRentas = $derived(rentas as unknown as Record<string, unknown>[]);
-
 	const columnas = [
 		{ key: 'contrato', header: 'Contrato' },
 		{ key: 'cliente', header: 'Cliente' },
@@ -569,13 +571,13 @@
 	{:else}
 		<DataTable
 			columns={columnas}
-			items={tablaRentas}
+			items={rentas}
 			emptyTitle="No hay rentas"
 			emptyDescription="Crea la primera renta con el botón «Nueva Renta»."
 			emptyIcon="clipboard"
 		>
 			{#snippet children(col, item)}
-				{@const r = item as unknown as Renta}
+				{@const r = item}
 				{#if col.key === 'contrato'}
 					<div class="whitespace-nowrap">
 						<p class="font-bold text-primary tabular-nums" title="Número de contrato">{formatContrato(r.anioContrato, r.noContrato)}</p>
@@ -671,7 +673,7 @@
 						</button>
 					</div>
 				{:else}
-					<span>{String(item[col.key] ?? '—')}</span>
+					<span>{String((item as unknown as Record<string, unknown>)[col.key] ?? '—')}</span>
 				{/if}
 			{/snippet}
 		</DataTable>
@@ -684,190 +686,248 @@
 	title={editando ? `Editar renta #${editandoId}` : 'Nueva renta'}
 	subtitle={editando ? 'Modifica los datos y guarda los cambios.' : 'Registra una renta para un cliente.'}
 	onClose={() => (modalOpen = false)}
-	width="max-w-3xl"
+	width="max-w-6xl"
+	fullHeight
+	rawBody
 >
 	{#snippet children()}
-		{#if formError}
-			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
-		{/if}
+		<div class="flex grow min-h-0">
+			<!-- ── Panel izquierdo: campos (scrollable solo si es necesario) ── -->
+			<div class="flex-1 min-w-0 overflow-y-auto din-scroll px-5 py-4">
 
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-			<!-- Cliente -->
-			<div class="col-span-full mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">1</span>
-					Cliente
-				</h3>
-			</div>
-			<FormField label="Cliente registrado" hint="Opcional: se autocompleta el nombre.">
-				<select class="input" onchange={onClienteChange}>
-					<option value="">— Sin cliente registrado —</option>
-					{#each clientes as c}
-						<option value={c.cliente.id} selected={form.idCliente === c.cliente.id}>{c.cliente.nombreCompleto}</option>
-					{/each}
-				</select>
-				<button
-					type="button"
-					class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-focus transition-colors"
-					onclick={() => (clienteModalOpen = true)}
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-					¿No está registrado? Crear nuevo cliente
-				</button>
-			</FormField>
-			<FormField label="Nombre del cliente" required>
-				<input class="input" placeholder="Nombre para la renta" bind:value={form.nombreCliente} maxlength="200" />
-			</FormField>
-			<FormField label="Nacionalidad">
-				<input class="input" placeholder="Ej: Colombiana" bind:value={form.nacionalidad} maxlength="80" />
-			</FormField>
-			<FormField label="No. licencia de conducción">
-				<input class="input" placeholder="Ej: LC-102345678" bind:value={form.noLicencia} maxlength="50" />
-			</FormField>
+				{#if formError}
+					<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
+				{/if}
 
-			<!-- Vehículo -->
-			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">2</span>
-					Vehículo
-				</h3>
-			</div>
-			<FormField label="Placa" required hint="Autocompleta el kilometraje actual.">
-				<select class="input" onchange={onPlacaChange}>
-					<option value="">— Seleccionar vehículo —</option>
-					{#each autos as a}
-						<option value={a.placa} selected={form.placa === a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
-					{/each}
-				</select>
-			</FormField>
-			<FormField label="Km de salida">
-				<input class="input" inputmode="numeric" placeholder="Ej: 42000" bind:value={form.kmSalida} />
-			</FormField>
-			<FormField label="Tanque de salida">
-				<select class="input" bind:value={form.tanqueSalida}>
-					{#each (lists?.nivelTanque ?? ['Lleno', '3/4', '1/2', '1/4', 'Vacío']) as t}
-						<option value={t}>{t}</option>
-					{/each}
-				</select>
-			</FormField>
-
-			<!-- Itinerario -->
-			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">3</span>
-					Itinerario
-				</h3>
-			</div>
-			<FormField label="Fecha de recogida" required>
-				<input class="input" type="date" bind:value={form.fechaRecogida} onchange={recalcularDias} />
-			</FormField>
-			<FormField label="Hora de recogida">
-				<input class="input" type="time" bind:value={form.horaRecogida} />
-			</FormField>
-			<FormField label="Lugar de recogida">
-				<input class="input" placeholder="Ej: Aeropuerto, oficina..." bind:value={form.ubicacionRecogida} maxlength="200" />
-			</FormField>
-			<FormField label="Fecha de retorno" required>
-				<input class="input" type="date" bind:value={form.fechaRetorno} onchange={recalcularDias} />
-			</FormField>
-			<FormField label="Hora de retorno">
-				<input class="input" type="time" bind:value={form.horaRetorno} />
-			</FormField>
-			<FormField label="Lugar de retorno">
-				<input class="input" placeholder="Ej: Aeropuerto, oficina..." bind:value={form.ubicacionRetorno} maxlength="200" />
-			</FormField>
-
-			<!-- Tarifas -->
-			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">4</span>
-					Tarifas y costos
-				</h3>
-			</div>
-			<FormField label="Valor por día (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 150000" bind:value={form.valorDia} />
-			</FormField>
-			<FormField label="Valor hora extra (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 10000" bind:value={form.valorHoraExtra} />
-			</FormField>
-			<FormField label="Días calculados" hint="Se calcula de las fechas; ajustable.">
-				<input class="input" type="number" min="0" step="1" bind:value={form.diasCalculados} />
-			</FormField>
-			<FormField label="Horas extras">
-				<input class="input" type="number" min="0" step="1" bind:value={form.horasExtras} />
-			</FormField>
-			<FormField label="Valor día extra (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 50000" bind:value={form.valorDiaExtra} />
-			</FormField>
-			<FormField label="Costo lavado (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 25000" bind:value={form.costoLavado} />
-			</FormField>
-			<FormField label="Costo silla de bebé (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 15000" bind:value={form.costoSilla} />
-			</FormField>
-			<FormField label="Costo recogida/retorno (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 30000" bind:value={form.costoRetorno} />
-			</FormField>
-			<FormField label="Costo domicilio (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 20000" bind:value={form.costoDomicilio} />
-			</FormField>
-			<FormField label="Costo cables (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 10000" bind:value={form.costoCables} />
-			</FormField>
-			<FormField label="Costo inversor (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 8000" bind:value={form.costoInversor} />
-			</FormField>
-			<FormField label="Descuento (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 5000" bind:value={form.descuento} />
-			</FormField>
-			<FormField label="Abono inicial (COP)">
-				<input class="input" inputmode="decimal" placeholder="Ej: 100000" bind:value={form.abono} />
-			</FormField>
-
-			<!-- Resumen en vivo -->
-			<div class="col-span-full rounded-xl border border-border bg-alt-row/60 px-4 py-3 mt-1">
-				<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Subtotal</p>
-						<p class="font-bold text-text-primary tabular-nums">{formatCOP(subtotalCalc)}</p>
-					</div>
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Total estimado</p>
-						<p class="font-black text-primary tabular-nums text-base">{formatCOP(totalCalc)}</p>
-					</div>
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Abono</p>
-						<p class="font-semibold text-text-primary tabular-nums">{formatCOP(form.abono)}</p>
-					</div>
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Saldo pendiente</p>
-						<p class="font-bold text-exito tabular-nums">{formatCOP(saldoCalc)}</p>
+				<!-- ── 1. Cliente ── -->
+				<div class="flex items-center gap-2 mb-2.5">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">1</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Cliente</h3>
+				</div>
+				<div class="grid grid-cols-2 gap-x-3 mb-3">
+					<FormField label="Cliente registrado" hint="Opcional: se autocompleta el nombre." dense class="col-span-2">
+						<div class="flex gap-2">
+							<select class="input flex-1" onchange={onClienteChange}>
+								<option value="">— Sin cliente registrado —</option>
+								{#each clientes as c}
+									<option value={c.cliente.id} selected={form.idCliente === c.cliente.id}>{c.cliente.nombreCompleto}</option>
+								{/each}
+							</select>
+							<button
+								type="button"
+								class="shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
+								onclick={() => (clienteModalOpen = true)}
+								title="Crear nuevo cliente"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+								<span class="hidden xl:inline">Nuevo</span>
+							</button>
+						</div>
+					</FormField>
+					<FormField label="Nombre del cliente" required dense>
+						<input class="input" placeholder="Nombre para la renta" bind:value={form.nombreCliente} maxlength="200" />
+					</FormField>
+					<div class="grid grid-cols-2 gap-x-3">
+						<FormField label="Nacionalidad" dense>
+							<input class="input" placeholder="Ej: Colombiana" bind:value={form.nacionalidad} maxlength="80" />
+						</FormField>
+						<FormField label="No. licencia" dense>
+							<input class="input" placeholder="LC-102345678" bind:value={form.noLicencia} maxlength="50" />
+						</FormField>
 					</div>
 				</div>
-				<p class="text-[10px] text-text-secondary mt-2">
-					El total final incluye impuestos (config.ini) y lo recalcula el sistema al guardar.
-				</p>
+
+				<!-- ── 2. Vehículo ── -->
+				<div class="flex items-center gap-2 mb-2.5 mt-2">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">2</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Vehículo</h3>
+				</div>
+				<div class="grid grid-cols-3 gap-x-3 mb-3">
+					<FormField label="Placa" required hint="Autocompleta km" dense>
+						<select class="input" onchange={onPlacaChange}>
+							<option value="">— Seleccionar —</option>
+							{#each autos as a}
+								<option value={a.placa} selected={form.placa === a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
+							{/each}
+						</select>
+					</FormField>
+					<FormField label="Km de salida" dense>
+						<input class="input" inputmode="numeric" placeholder="Ej: 42000" bind:value={form.kmSalida} />
+					</FormField>
+					<FormField label="Tanque salida" dense>
+						<select class="input" bind:value={form.tanqueSalida}>
+							{#each (lists?.nivelTanque ?? ['Lleno', '3/4', '1/2', '1/4', 'Vacío']) as t}
+								<option value={t}>{t}</option>
+							{/each}
+						</select>
+					</FormField>
+				</div>
+
+				<!-- ── 3. Itinerario ── -->
+				<div class="flex items-center gap-2 mb-2.5 mt-2">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">3</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Itinerario</h3>
+				</div>
+				<div class="grid grid-cols-3 gap-x-3 mb-3">
+					<FormField label="Fecha recogida" required dense>
+						<input class="input" type="date" bind:value={form.fechaRecogida} onchange={recalcularDias} />
+					</FormField>
+					<FormField label="Hora recogida" dense>
+						<input class="input" type="time" bind:value={form.horaRecogida} />
+					</FormField>
+					<FormField label="Lugar recogida" dense>
+						<input class="input" placeholder="Aeropuerto, oficina…" bind:value={form.ubicacionRecogida} maxlength="200" />
+					</FormField>
+					<FormField label="Fecha retorno" required dense>
+						<input class="input" type="date" bind:value={form.fechaRetorno} onchange={recalcularDias} />
+					</FormField>
+					<FormField label="Hora retorno" dense>
+						<input class="input" type="time" bind:value={form.horaRetorno} />
+					</FormField>
+					<FormField label="Lugar retorno" dense>
+						<input class="input" placeholder="Aeropuerto, oficina…" bind:value={form.ubicacionRetorno} maxlength="200" />
+					</FormField>
+				</div>
+
+				<!-- ── 4. Tarifas base ── -->
+				<div class="flex items-center gap-2 mb-2.5 mt-2">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">4</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Tarifas base</h3>
+				</div>
+				<div class="grid grid-cols-4 gap-x-3 mb-3">
+					<FormField label="Valor por día" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="150000" bind:value={form.valorDia} />
+					</FormField>
+					<FormField label="Días calculados" hint="Auto desde fechas" dense>
+						<input class="input" type="number" min="0" step="1" bind:value={form.diasCalculados} />
+					</FormField>
+					<FormField label="Valor hora extra" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="10000" bind:value={form.valorHoraExtra} />
+					</FormField>
+					<FormField label="Horas extras" dense>
+						<input class="input" type="number" min="0" step="1" bind:value={form.horasExtras} />
+					</FormField>
+				</div>
+
+				<!-- ── 5. Costos adicionales (colapsable) ── -->
+				<button
+					type="button"
+					onclick={() => (costosOpen = !costosOpen)}
+					class="w-full flex items-center gap-2 mb-2 mt-2 group text-left"
+					aria-expanded={costosOpen}
+				>
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">5</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Costos adicionales</h3>
+					<span class="text-[10px] text-text-secondary bg-alt-row px-1.5 py-0.5 rounded">
+						{costosOpen ? '7 campos' : '7 opcionales · ocultos'}
+					</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="ml-auto w-4 h-4 text-text-secondary group-hover:text-text-primary transition-transform {costosOpen ? 'rotate-90' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+				</button>
+				{#if costosOpen}
+					<div class="grid grid-cols-3 gap-x-3 mb-3 animate-[modal-fade-in_150ms_ease-out]">
+						<FormField label="Valor día extra" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="50000" bind:value={form.valorDiaExtra} />
+						</FormField>
+						<FormField label="Costo lavado" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="25000" bind:value={form.costoLavado} />
+						</FormField>
+						<FormField label="Silla de bebé" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="15000" bind:value={form.costoSilla} />
+						</FormField>
+						<FormField label="Recogida/retorno" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="30000" bind:value={form.costoRetorno} />
+						</FormField>
+						<FormField label="Domicilio" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="20000" bind:value={form.costoDomicilio} />
+						</FormField>
+						<FormField label="Cables" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="10000" bind:value={form.costoCables} />
+						</FormField>
+						<FormField label="Inversor" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="8000" bind:value={form.costoInversor} />
+						</FormField>
+					</div>
+				{/if}
+
+				<!-- ── 6. Descuento y abono ── -->
+				<div class="grid grid-cols-2 gap-x-3">
+					<FormField label="Descuento" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="5000" bind:value={form.descuento} />
+					</FormField>
+					<FormField label="Abono inicial" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="100000" bind:value={form.abono} />
+					</FormField>
+				</div>
 			</div>
 
-			<FormField label="Observaciones" hint="Aparecen en el documento imprimible.">
-				<textarea class="input min-h-[70px] resize-y" bind:value={form.observaciones} maxlength="2000"></textarea>
-			</FormField>
+			<!-- ── Panel derecho: resumen + observaciones + acciones (sticky) ── -->
+			<div class="w-72 xl:w-80 shrink-0 border-l border-border bg-alt-row/40 flex flex-col">
+				<!-- Resumen en vivo (siempre visible) -->
+				<div class="px-4 py-3 border-b border-border">
+					<div class="flex items-center gap-2 mb-2.5">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+						<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Resumen en vivo</h3>
+					</div>
+					<!-- Total destacado -->
+					<div class="rounded-lg bg-gradient-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2">
+						<p class="text-[10px] uppercase tracking-wide opacity-80 font-semibold">Total estimado</p>
+						<p class="text-xl font-black tabular-nums leading-tight">{formatCOP(totalCalc)}</p>
+						<p class="text-[10px] opacity-80 mt-0.5">el sistema recalcula IVA al guardar</p>
+					</div>
+					<!-- Desglose compacto -->
+					<div class="space-y-1 text-xs">
+						<div class="flex justify-between">
+							<span class="text-text-secondary">Subtotal</span>
+							<span class="font-semibold text-text-primary tabular-nums">{formatCOP(subtotalCalc)}</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-text-secondary">Abono</span>
+							<span class="font-semibold text-text-primary tabular-nums">{formatCOP(form.abono)}</span>
+						</div>
+						<div class="flex justify-between pt-1 border-t border-border">
+							<span class="text-text-secondary font-semibold">Saldo</span>
+							<span class="font-bold text-exito tabular-nums text-sm">{formatCOP(saldoCalc)}</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Observaciones -->
+				<div class="px-4 py-3 grow flex flex-col min-h-0">
+					<span class="label flex items-center gap-1.5">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+						Observaciones
+					</span>
+					<textarea
+						class="input flex-1 min-h-[60px] resize-none text-xs"
+						placeholder="Aparecen en el documento imprimible…"
+						bind:value={form.observaciones}
+						maxlength="2000"
+					></textarea>
+					<p class="text-[10px] text-text-secondary/70 mt-1">{(form.observaciones ?? '').length}/2000</p>
+				</div>
+
+				<!-- Acciones -->
+				<div class="px-4 py-3 border-t border-border bg-surface/50 flex flex-col gap-2">
+					<button class="btn-primary w-full" onclick={guardar} disabled={guardando}>
+						{#if guardando}
+							<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+							Guardando...
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+							{editando ? 'Guardar cambios' : 'Crear renta'}
+						{/if}
+					</button>
+					<button class="btn-ghost w-full" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
+				</div>
+			</div>
 		</div>
 	{/snippet}
-
-	{#snippet footer()}
-		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
-		<button class="btn-primary" onclick={guardar} disabled={guardando}>
-			{#if guardando}
-				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-				Guardando...
-			{:else}
-				{editando ? 'Guardar cambios' : 'Crear renta'}
-			{/if}
-		</button>
-	{/snippet}
 </Modal>
-
 <!-- Modal cierre -->
 <Modal
 	open={cerrandoId !== null}
