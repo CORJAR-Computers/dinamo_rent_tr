@@ -127,14 +127,12 @@
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
 			indice = Math.min(indice + 1, resultados.length - 1);
-			console.log('[debug] ArrowDown → indice =', indice, '| total =', resultados.length);
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
 			indice = Math.max(indice - 1, 0);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			const r = resultados[indice];
-			console.log('[debug] Enter → indice =', indice, '| r =', r?.href);
 			if (r) navegar(r);
 		}
 		// Esc lo cierra el Modal (listener global de documento)

@@ -104,12 +104,21 @@ describe('PaletaComandos', () => {
 	});
 
 	it('navega con ↑↓ y Enter', () => {
+		// Menú dedicado de 2 ítems para que el orden del filtro sea determinista
+		const menuCorto: SeccionMenu[] = [
+			{
+				section: 'OPERACIÓN',
+				items: [
+					{ label: 'Rentas', href: '/rentas', icon: 'rentas' },
+					{ label: 'Reservas', href: '/reservas', icon: 'reservas' }
+				]
+			}
+		];
 		const onClose = vi.fn();
-		render(PaletaComandos, { open: true, onClose, menu });
+		render(PaletaComandos, { open: true, onClose, menu: menuCorto });
 		const input = screen.getByRole('combobox');
 
 		escribir('r');
-		console.log('[test] OPTIONS:', screen.getAllByRole('option').map((o) => o.textContent?.trim()));
 		// Resultados: Rentas (0), Reservas (1) — 'r' matchea ambos
 		fireEvent.keyDown(input, { key: 'ArrowDown' });
 		fireEvent.keyDown(input, { key: 'Enter' });
@@ -193,4 +202,7 @@ describe('esAtajoPaleta', () => {
 describe('normalizarTexto', () => {
 	it('elimina acentos y pasa a minúsculas', () => {
 		expect(normalizarTexto('Auditoría')).toBe('auditoria');
-		expect(normalizarTexto('RENTA
+		expect(normalizarTexto('RENTAS')).toBe('rentas');
+		expect(normalizarTexto('Administración')).toBe('administracion');
+	});
+});
