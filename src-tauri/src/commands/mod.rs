@@ -1,0 +1,47 @@
+//! commands/ — Wrappers #[tauri::command] (thin: validan sesión/RBAC, llaman servicio, mapean error)
+
+pub mod auditoria;
+pub mod auth;
+pub mod auto;
+pub mod business;
+pub mod comparendo;
+pub mod cliente;
+pub mod dashboard;
+pub mod gasto;
+pub mod informe;
+pub mod mantenimiento;
+pub mod pii;
+pub mod reserva;
+pub mod renta;
+pub mod usuario;
+
+use crate::core::error::{AppError, ErrorPayload};
+use crate::core::rbac::SessionData;
+use crate::core::PooledConnection;
+use crate::services::AppState;
+
+/// Requiere sesión activa y devuelve los datos de la sesión
+pub fn require_session(state: &AppState, session_id: &str) -> Result<SessionData, ErrorPayload> {
+    let mut sessions = state.sessions.lock().unwrap();
+    crate::core::rbac::require_active_session(&mut sessions, session_id)
+        .map_err(|e| e.to_payload())
+}
+
+/// Requiere sesión activa con rol de administración de usuarios
+/// (roles_con_usuarios en config.ini — por defecto solo Administrador).
+pub fn require_usuario_admin(state: &AppState, session_id: &str) -> Result<SessionData, ErrorPayload> {
+    let mut sessions = state.sessions.lock().unwrap();
+    // Fallback: si config.ini no define roles_con_usuarios, solo Administrador
+    let roles: Vec<&str> = if state.config.roles_con_usuarios.is_empty() {
+        vec!["Administrador"]
+    } else {
+        state.config.roles_con_usuarios.iter().map(|s| s.as_str()).collect()
+    };
+    crate::core::rbac::require_role(&mut sessions, session_id, &roles)
+        .map_err(|e| e.to_payload())
+}
+
+/// Obtiene una conexión del pool
+pub fn conn(state: &AppState) -> Result<PooledConnection, ErrorPayload> {
+    state.pool.get().map_err(|e| AppError::from(e).to_payload())
+}

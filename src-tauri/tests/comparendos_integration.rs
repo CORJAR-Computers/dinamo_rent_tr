@@ -1,0 +1,199 @@
+//! comparendos_integration.rs — Pruebas de integración del servicio de
+//! comparendos contra el .fdb de desarrollo (data/dinamo_rent_v3.fdb).
+//!
+//! Usa un auto real de la BD (solo lectura) y crea/elimina comparendos
+//! temporales en cada test. Verifica CRUD, marcado de pago y totales.
+
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use chrono::Local;
+use serial_test::serial;
+
+use dinamo_rent_lib::core::config::AppConfig;
+use dinamo_rent_lib::core::rbac::SessionStore;
+use dinamo_rent_lib::core::security::LoginAttemptTracker;
+use dinamo_rent_lib::repositories::auto::AutoRepository;
+use dinamo_rent_lib::repositories::comparendo::ComparendoDatos;
+use dinamo_rent_lib::services::comparendo::ComparendoService;
+use dinamo_rent_lib::services::AppState;
+
+fn dev_state() -> AppState {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let data_dir = manifest.join("../data");
+    let resource_dir = manifest.join("resources");
+    let cfg = Arc::new(AppConfig::load(&data_dir, &resource_dir, &manifest));
+    let pool = dinamo_rent_lib::core::db::create_pool(&cfg).expect("pool embedded");
+    AppState {
+        pool,
+        sessions: Mutex::new(SessionStore::new(3600)),
+        login_tracker: Mutex::new(LoginAttemptTracker::new(5, 1800, 300, 10)),
+        config: cfg.clone(),
+        pii_key: Mutex::new(cfg.db_encryption_key.clone()),
+    }
+}
+
+/// Auto real de la BD de dev (lectura) — o None si no hay autos
+fn auto_real(state: &AppState) -> Option<String> {
+    let mut conn = state.pool.get().expect("conn");
+    let autos = AutoRepository::obtener_todos(&mut conn).expect("autos");
+    autos.first().map(|a| a.placa.clone())
+}
+
+fn datos_comparendo(placa: &str, monto: &str) -> ComparendoDatos {
+    let hoy = Local::now().date_naive();
+    ComparendoDatos {
+        placa: placa.into(),
+        fecha_infraccion: hoy.format("%Y-%m-%d").to_string(),
+        hora_infraccion: "14:30".into(),
+        monto: monto.into(),
+        id_renta: None,
+        id_cliente: None,
+        estado: "Pendiente".into(),
+        observaciones: Some("Exceso de velocidad".into()),
+    }
+}
+
+#[test]
+#[serial]
+fn comparendo_crud_y_marcar_pagado() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        eprintln!("Sin autos en la BD de dev — test omitido");
+        return;
+    };
+
+    let mut datos = datos_comparendo(&placa, "580000");
+    let creado = ComparendoService::crear(&mut conn, cfg, datos.clone()).expect("crear comparendo");
+    let id = creado.id;
+    assert_eq!(creado.placa, placa);
+    assert_eq!(creado.monto, "580000.00", "monto normalizado con 2 decimales");
+    assert_eq!(creado.estado, "Pendiente");
+    assert_eq!(creado.hora_infraccion, "14:30", "hora recortada a HH:MM");
+    assert!(!creado.vehiculo.is_empty(), "JOIN con autos para la UI");
+
+    // Obtener
+    let obtenido = ComparendoService::obtener(&mut conn, id).expect("obtener");
+    assert_eq!(obtenido.fecha_infraccion, datos.fecha_infraccion);
+
+    // Actualizar
+    datos.monto = "650000".into();
+    datos.observaciones = Some("Foto-detección".into());
+    let actualizado =
+        ComparendoService::actualizar(&mut conn, cfg, id, datos.clone()).expect("actualizar");
+    assert_eq!(actualizado.monto, "650000.00");
+    assert_eq!(actualizado.observaciones.as_deref(), Some("Foto-detección"));
+
+    // Marcar pagado
+    let pagado = ComparendoService::marcar_pagado(&mut conn, id).expect("marcar pagado");
+    assert_eq!(pagado.estado, "Pagado");
+    // Idempotente
+    let otra = ComparendoService::marcar_pagado(&mut conn, id).expect("marcar pagado 2");
+    assert_eq!(otra.estado, "Pagado");
+
+    // Historial por placa
+    let historial = ComparendoService::listar(&mut conn, None, Some(&placa), None).expect("historial");
+    assert!(historial.iter().any(|c| c.id == id));
+
+    // Eliminar
+    ComparendoService::eliminar(&mut conn, id).expect("eliminar");
+    assert!(ComparendoService::obtener(&mut conn, id).is_err(), "eliminado");
+}
+
+#[test]
+#[serial]
+fn comparendo_validaciones() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        eprintln!("Sin autos en la BD de dev — test omitido");
+        return;
+    };
+
+    // Placa inexistente → business (no existe el vehículo)
+    let sin_auto = datos_comparendo("ZZZ999", "100000");
+    let err = ComparendoService::crear(&mut conn, cfg, sin_auto).expect_err("placa inexistente");
+    assert_eq!(err.kind(), "business");
+
+    // Placa vacía → validation
+    let mut sin_placa = datos_comparendo(&placa, "100000");
+    sin_placa.placa = "".into();
+    let err = ComparendoService::crear(&mut conn, cfg, sin_placa).expect_err("placa vacía");
+    assert_eq!(err.kind(), "validation");
+
+    // Hora inválida → validation
+    let mut hora = datos_comparendo(&placa, "100000");
+    hora.hora_infraccion = "25:99".into();
+    let err = ComparendoService::crear(&mut conn, cfg, hora).expect_err("hora inválida");
+    assert_eq!(err.kind(), "validation");
+
+    // Fecha inválida → validation
+    let mut fecha = datos_comparendo(&placa, "100000");
+    fecha.fecha_infraccion = "no-es-fecha".into();
+    let err = ComparendoService::crear(&mut conn, cfg, fecha).expect_err("fecha inválida");
+    assert_eq!(err.kind(), "validation");
+
+    // Monto cero → validation
+    let cero = datos_comparendo(&placa, "0");
+    let err = ComparendoService::crear(&mut conn, cfg, cero).expect_err("monto cero");
+    assert_eq!(err.kind(), "validation");
+
+    // Monto inválido → validation
+    let inv = datos_comparendo(&placa, "abc");
+    let err = ComparendoService::crear(&mut conn, cfg, inv).expect_err("monto inválido");
+    assert_eq!(err.kind(), "validation");
+
+    // Estado inválido → validation
+    let mut est = datos_comparendo(&placa, "100000");
+    est.estado = "Apelado".into();
+    let err = ComparendoService::crear(&mut conn, cfg, est).expect_err("estado inválido");
+    assert_eq!(err.kind(), "validation");
+
+    // XSS en observaciones → validation
+    let mut xss = datos_comparendo(&placa, "100000");
+    xss.observaciones = Some("<script>alert(1)</script>".into());
+    let err = ComparendoService::crear(&mut conn, cfg, xss).expect_err("xss");
+    assert_eq!(err.kind(), "validation");
+}
+
+#[test]
+#[serial]
+fn comparendo_totales() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        eprintln!("Sin autos en la BD de dev — test omitido");
+        return;
+    };
+
+    let c1 = ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "150000"))
+        .expect("crear c1");
+    let c2 = ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "90000"))
+        .expect("crear c2");
+    ComparendoService::marcar_pagado(&mut conn, c1.id).expect("pagar c1");
+
+    let totales = ComparendoService::totales(&mut conn).expect("totales");
+    let monto_total: rust_decimal::Decimal = totales.total_general.parse().expect("numérico");
+    assert!(monto_total >= rust_decimal::Decimal::from(240_000), "total >= 240000");
+    assert!(
+        totales.por_placa.iter().any(|t| t.clave == placa),
+        "la placa aparece en los totales por placa"
+    );
+    assert!(
+        totales.por_estado.iter().any(|t| t.clave == "Pendiente"),
+        "el estado aparece en los totales por estado"
+    );
+
+    let total = ComparendoService::contar(&mut conn).expect("contar");
+    assert!(total >= 2);
+
+    ComparendoService::eliminar(&mut conn, c1.id).expect("eliminar c1");
+    ComparendoService::eliminar(&mut conn, c2.id).expect("eliminar c2");
+}

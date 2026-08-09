@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<title>Informe mensual (A4, dos páginas)</title>
+	<style>
+		@page {
+			size: a4;
+			margin: 0;
+		}
+		* {
+			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
+		}
+		html,
+		body {
+			background: #fff;
+		}
+		body {
+			font: 10pt/1.3 Arial, sans-serif;
+			color: #111;
+			padding: 10mm 14mm;
+		}
+		h1 {
+			font-size: 14pt;
+			margin-bottom: 2mm;
+		}
+		p {
+			text-align: justify;
+			margin-bottom: 3mm;
+		}
+	</style>
+</head>
+<body>
+	<h1>Informe mensual de operación</h1>
+	<script>
+		// Contenido generado por JS: ~2 hojas A4.
+		const textos = [
+			'Durante el periodo reportado la flota registró una ocupación promedio del 78%, con un total de 132 rentas activas y 118 cerradas, distribuidas principalmente entre turistas nacionales e internacionales.',
+			'Los ingresos totales del periodo ascendieron a $48.250.000, con un margen operativo del 22% antes de impuestos, incluyendo los cargos por días adicionales, horas extras y servicios complementarios.',
+			'El vehículo más rentable fue la camioneta de gama media con un índice de utilización del 91%, seguido del sedán compacto con el 84%; el segmento de vans registró la menor demanda del periodo.',
+			'Se reportaron 4 siniestros menores sin lesionados, todos cubiertos por la póliza de todo riesgo; el tiempo promedio de gestión por siniestro fue de 3,2 días hábiles, dentro del objetivo fijado.',
+			'Los costos de lavado y mantenimiento preventivo aumentaron 6% frente al periodo anterior por ajuste tarifario de los proveedores; se recomienda revisar los contratos de servicios al vencimiento.',
+			'La cartera de clientes creció en 23 cuentas corporativas nuevas, las cuales aportaron el 31% de los ingresos del periodo; la tasa de recompra de clientes particulares se mantuvo en 41%.'
+		];
+		const parrafos = [];
+		for (let i = 0; i < 5; i++) {
+			for (const t of textos) parrafos.push(`<p>${t}</p>`);
+		}
+		document.body.insertAdjacentHTML('beforeend', parrafos.join(''));
+	</script>
+</body>
+</html>

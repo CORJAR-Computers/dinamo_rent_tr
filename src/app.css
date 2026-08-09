@@ -1,0 +1,431 @@
+@import 'tailwindcss';
+
+/* ─── Tokens de tema Dinamo Rent (fuente: config.ini [ui]) ───────────────────
+   Paleta semántica: los componentes usan únicamente estas variables, así que
+   el tema oscuro se consigue redefiniéndolas bajo .dark (ver abajo). */
+@theme {
+	/* Brand / primarios */
+	--color-primary: #1e40af;
+	--color-primary-hover: #1b3aa4;
+	--color-primary-focus: #3b82f6;
+	--color-fondo: #f5f7fb;
+	/* Semánticos */
+	--color-exito: #15803d;
+	--color-success-hover: #166534;
+	--color-peligro: #b91c1c;
+	--color-danger-hover: #991b1b;
+	--color-alerta: #c2410c;
+	/* Superficie */
+	--color-surface: #ffffff;
+	--color-border: #dbe3ef;
+	--color-text-primary: #0f1e38;
+	--color-text-secondary: #3e5066;
+	--color-alt-row: #edf1f7;
+	/* Estados de auto */
+	--color-estado-disponible: #2e7d32;
+	--color-estado-rentado: #1565c0;
+	--color-estado-mantenimiento: #ef6c00;
+	--color-estado-inactivo: #c62828;
+	--color-estado-activo: #2e7d32;
+	--color-estado-vip: #7b1fa2;
+	--color-estado-lista-negra: #c62828;
+	/* Calendario */
+	--color-cal-disponible: #bbdefb;
+	--color-cal-rentado: #81c784;
+	--color-cal-reservado: #ffd54f;
+
+	--font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Tema oscuro ────────────────────────────────────────────────────────────
+   Todas las utilidades referencian var(--color-*), por lo que basta con
+   sobreescribir las variables bajo .dark para tematizar toda la app (botones,
+   tablas, modales, calendario…). color-scheme ajusta scrollbars y controles
+   nativos (selects, inputs) al modo oscuro. */
+.dark {
+	color-scheme: dark;
+	/* Los hovers quedan MÁS OSCUROS que el base para que el texto blanco de los
+	   botones mantenga contraste al pasar el cursor (el hover no puede ser más
+	   claro que el fondo de los botones). */
+	--color-primary: #3b82f6;
+	--color-primary-hover: #2563eb;
+	--color-primary-focus: #93c5fd;
+	--color-fondo: #0b1220;
+	--color-exito: #34d399;
+	--color-success-hover: #16a34a;
+	--color-peligro: #f87171;
+	--color-danger-hover: #dc2626;
+	--color-alerta: #fb923c;
+	--color-surface: #101a2e;
+	--color-border: #22314e;
+	--color-text-primary: #e8eef8;
+	--color-text-secondary: #9db0c9;
+	--color-alt-row: #16223a;
+	--color-estado-disponible: #34d399;
+	--color-estado-rentado: #60a5fa;
+	--color-estado-mantenimiento: #fb923c;
+	--color-estado-inactivo: #f87171;
+	--color-estado-activo: #34d399;
+	--color-estado-vip: #c084fc;
+	--color-estado-lista-negra: #f87171;
+	--color-cal-disponible: #1e4a8a;
+	--color-cal-rentado: #166534;
+	--color-cal-reservado: #92600a;
+}
+
+/* ─── Documentos imprimibles en modo oscuro (solo pantalla) ──────────────────
+   La vista previa de orden/contrato usa la paleta del tema (las variables
+   --ord-* / --ct-* se definen en los componentes y aquí solo se redefinen).
+   En papel (@media print, más abajo) se fuerza SIEMPRE la paleta clara: los
+   documentos se entregan en blanco con tinta oscura (ahorro de tinta y
+   legibilidad, apropiado para documentos legales). */
+.dark .print-area.orden-carta {
+	--ord-fondo: #0f172a;
+	--ord-texto: #e2e8f0;
+	--ord-acento: #60a5fa;
+	--ord-secundario: #94a3b8;
+	--ord-borde: #334155;
+	--ord-borde-fila: #26324a;
+	--ord-fondo-tabla: #1e293b;
+	--ord-fondo-subtotal: #172135;
+	--ord-texto-medio: #cbd5e1;
+	--ord-texto-danios: #b6c2d4;
+	--ord-pie: #7d8ca3;
+	--ord-peligro: #f87171;
+	--ord-exito: #4ade80;
+}
+
+.dark .print-area.contrato-carta {
+	--ct-fondo: #0f172a;
+	--ct-texto: #e2e8f0;
+	--ct-acento: #818cf8;
+	--ct-secundario: #94a3b8;
+	--ct-contacto: #b6c2d4;
+	--ct-fondo-suave: #1e293b;
+	--ct-fondo-caja: #16213a;
+	--ct-fondo-poliza: #141d33;
+	--ct-fondo-resaltado: #1e2a4a;
+	--ct-borde: #334155;
+	--ct-borde-tabla: #2c3a55;
+	--ct-borde-firma: #64748b;
+	--ct-footer-borde: #22314e;
+	background: var(--ct-fondo);
+}
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	@apply bg-fondo text-text-primary font-sans antialiased;
+	font-size: 13px;
+}
+
+/* Títulos: evita viudas y reparte mejor las líneas. Solo en pantalla: en la
+   impresión (contrato/orden) el balanceo de líneas podría alterar la
+   paginación verificada, así que se excluye del medio print. */
+@media screen {
+	h1,
+	h2,
+	h3,
+	h4 {
+		text-wrap: balance;
+	}
+}
+
+/* Selección de texto con la marca */
+::selection {
+	background: var(--color-primary);
+	color: #fff;
+}
+
+/* Táctil: sin retardo de doble tap; toque sin destello gris */
+button,
+[role='button'],
+a,
+select,
+input,
+textarea,
+label {
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* Autofill del navegador: fondo consistente con el tema (evita el azul del
+   navegador sobre fondos oscuros) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+	-webkit-text-fill-color: var(--color-text-primary);
+	caret-color: var(--color-text-primary);
+	-webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+	transition: background-color 99999s ease-out 0s;
+}
+
+/* Selects nativos: que el desplegable del sistema respete el tema */
+select.input {
+	color-scheme: light;
+}
+.dark select.input {
+	color-scheme: dark;
+}
+
+/* Animaciones de componentes (usadas por Modal) */
+@keyframes modal-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+@keyframes modal-pop-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* ─── Utilidades reutilizables ─────────────────────────────────────────────── */
+.btn {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.btn-primary {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus disabled:cursor-not-allowed disabled:opacity-50 bg-primary text-white hover:bg-primary-hover active:scale-[0.98] shadow-sm;
+}
+
+.btn-success {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus disabled:cursor-not-allowed disabled:opacity-50 bg-exito text-white hover:bg-success-hover active:scale-[0.98] shadow-sm;
+}
+
+.btn-danger {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus disabled:cursor-not-allowed disabled:opacity-50 bg-peligro text-white hover:bg-danger-hover active:scale-[0.98] shadow-sm;
+}
+
+.btn-ghost {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus disabled:cursor-not-allowed disabled:opacity-50 border border-border bg-surface text-text-primary hover:bg-alt-row;
+}
+
+.btn-outline {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-focus disabled:cursor-not-allowed disabled:opacity-50 border border-primary text-primary hover:bg-primary hover:text-white;
+}
+
+.input {
+	@apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 transition duration-150 focus:border-primary-focus focus:outline-none focus:ring-2 focus:ring-primary-focus/30;
+}
+
+.label {
+	@apply mb-1 block text-xs font-semibold uppercase tracking-wide text-text-secondary;
+}
+
+.card {
+	@apply rounded-xl border border-border bg-surface shadow-sm;
+}
+
+/* ─── Scrollbar sutil ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: #cbd5e1;
+	border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: #94a3b8;
+}
+.dark ::-webkit-scrollbar-thumb {
+	background: #2c3d5e;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+	background: #3b5177;
+}
+
+/* Usuarios con movimiento reducido: sin animaciones ni transiciones */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* ─── Impresión (órdenes de renta/reserva y documentos) ────────────────────── */
+@page {
+	/* En Colombia el tamaño comercial estándar es Carta (Letter) */
+	size: letter;
+	margin: 0;
+}
+
+/* Contrato de renta: pie de página numerado «Página X de Y». Se aplica solo a
+   este documento vía la named page `page: contrato` (propiedad `page` en
+   .contrato-carta); los demás documentos conservan el @page sin margen inferior.
+   Requiere Chromium moderno (margin boxes @bottom-center). Si el runtime no lo
+   soporta, el pie no se dibuja pero el margen inferior (14mm) sí se aplica, así
+   que el contrato gana un poco de aire bajo el contenido (sin romper el layout). */
+@page contrato {
+	size: letter;
+	margin: 0 0 14mm 0;
+	@bottom-center {
+		content: "Página " counter(page) " de " counter(pages);
+		font-family: Arial, sans-serif;
+		font-size: 7pt;
+		color: #444;
+	}
+}
+
+@media print {
+	html,
+	body {
+		background: #ffffff !important;
+	}
+	/* Ocultar la app completa. La visibilidad se hereda, pero un descendiente
+	   con visibility:visible puede restaurarse (base del mecanismo de impresión). */
+	body.printing * {
+		visibility: hidden;
+	}
+	/* Con el clon activo, la app (sidebar + main, hijos del body salvo el clon)
+	   se elimina del flujo por completo: si solo se ocultara con visibility
+	   seguiría ocupando espacio y generaría páginas en blanco después del
+	   documento o consumiría la primera hoja. */
+	body.printing-clone > *:not(.print-clone) {
+		display: none !important;
+	}
+	/* ── Clon raíz del documento imprimible ──
+	   El área imprimible vive dentro de un Modal con overflow propio; para que
+	   el navegador page documentos largos (contrato) hay que sacarla de esa
+	   cadena de contenedores. imprimirDocumento() (utils/imprimir.ts) clona el
+	   .print-area a un hijo directo de <body> con la clase .print-clone y
+	   activa body.printing-clone. El clon fluye en posición estática y pagina
+	   de forma natural. */
+	body.printing .print-clone,
+	body.printing .print-clone * {
+		visibility: visible;
+	}
+	body.printing .print-clone {
+		position: static !important;
+		inset: auto !important;
+		width: 100% !important;
+		height: auto !important;
+		max-height: none !important;
+		overflow: visible !important;
+		box-shadow: none !important;
+		border: none !important;
+		margin: 0 !important;
+		padding: 12mm !important;
+		border-radius: 0 !important;
+		color-adjust: exact !important;
+		-webkit-print-color-adjust: exact !important;
+		print-color-adjust: exact !important;
+	}
+	/* Los contenedores con scroll propio dentro del documento (p. ej. la tabla
+	   de rentas del informe con max-h/overflow) se recortarían en papel:
+	   se resetean a flujo natural para que todo el contenido se imprima. */
+	body.printing .print-clone * {
+		max-height: none !important;
+		overflow: visible !important;
+	}
+	/* Respaldo (sin clon): el .print-area original se muestra y se fija al
+	   inicio del papel para escapar del overflow del Modal. Útil para
+	   documentos de una sola página. */
+	body.printing:not(.printing-clone) .print-area,
+	body.printing:not(.printing-clone) .print-area * {
+		visibility: visible;
+	}
+	body.printing:not(.printing-clone) .print-area {
+		position: fixed !important;
+		inset: 0 !important;
+		width: 100% !important;
+		height: auto !important;
+		max-height: none !important;
+		overflow: visible !important;
+		box-shadow: none !important;
+		border: none !important;
+		margin: 0 !important;
+		padding: 12mm !important;
+		border-radius: 0 !important;
+		color-adjust: exact !important;
+		-webkit-print-color-adjust: exact !important;
+		print-color-adjust: exact !important;
+	}
+	body.printing .print-hidden {
+		display: none !important;
+	}
+	/* Contrato de renta: documento extenso, se reduce el margen vertical para
+	   aprovechar mejor la altura de la hoja Carta. `page: contrato` activa la
+	   named page con el pie numerado «Página X de Y» (ver @page contrato). */
+	body.printing .print-clone.contrato-carta,
+	body.printing .print-area.contrato-carta {
+		padding: 8mm 12mm !important;
+		page: contrato;
+	}
+	/* Orden de renta: hoja compacta — margen mínimo seguro para impresoras
+	   reales (≥7mm de borde no imprimible) y que quepa en UNA sola hoja
+	   Carta (el diseño compacto vive en OrdenRenta.svelte) */
+	body.printing .print-clone.orden-carta,
+	body.printing .print-area.orden-carta {
+		padding: 7mm 9mm !important;
+	}
+	/* Evitar cortes dentro de tablas/tarjetas del documento */
+	body.printing .print-clone table,
+	body.printing .print-clone .grid > div,
+	body.printing .print-area table,
+	body.printing .print-area .grid > div {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+	/* ── Paleta de impresión SIEMPRE clara ──
+	   En papel los documentos usan fondo blanco y tinta oscura aunque la app
+	   esté en modo oscuro (los clientes reciben el documento en blanco). Los
+	   selectores incluyen .dark (misma especificidad) para ganar la cascada
+	   por ir después en el archivo. */
+	body.printing .print-clone.orden-carta,
+	body.printing .print-area.orden-carta,
+	body.printing.dark .print-clone.orden-carta,
+	body.printing.dark .print-area.orden-carta {
+		--ord-fondo: #ffffff;
+		--ord-texto: #0f172a;
+		--ord-acento: #1e40af;
+		--ord-secundario: #64748b;
+		--ord-borde: #cbd5e1;
+		--ord-borde-fila: #e2e8f0;
+		--ord-fondo-tabla: #f1f5f9;
+		--ord-fondo-subtotal: #f8fafc;
+		--ord-texto-medio: #334155;
+		--ord-texto-danios: #475569;
+		--ord-pie: #94a3b8;
+		--ord-peligro: #b91c1c;
+		--ord-exito: #15803d;
+	}
+	body.printing .print-clone.contrato-carta,
+	body.printing .print-area.contrato-carta,
+	body.printing.dark .print-clone.contrato-carta,
+	body.printing.dark .print-area.contrato-carta {
+		--ct-fondo: #ffffff;
+		--ct-texto: #000000;
+		--ct-acento: #1a237e;
+		--ct-secundario: #666666;
+		--ct-contacto: #444444;
+		--ct-fondo-suave: #f5f5f5;
+		--ct-fondo-caja: #f9f9f9;
+		--ct-fondo-poliza: #f8f8f8;
+		--ct-fondo-resaltado: #e8eaf6;
+		--ct-borde: #cccccc;
+		--ct-borde-tabla: #dddddd;
+		--ct-borde-firma: #333333;
+		--ct-footer-borde: #eeeeee;
+		background: #ffffff !important;
+	}
+}

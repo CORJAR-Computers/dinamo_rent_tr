@@ -1,0 +1,62 @@
+[package]
+name = "dinamo-rent"
+version = "0.1.0"
+description = "Dinamo Rent ERP — Tauri V2 + Rust + Firebird Embedded 5.0"
+authors = ["Dinamo Rent a Car"]
+edition = "2021"
+default-run = "dinamo-rent"
+
+[lib]
+name = "dinamo_rent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "dev_reset_admin"
+path = "src/bin/dev_reset_admin.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+
+# Base de datos Firebird
+rsfbclient = { version = "0.27", features = ["dynamic_loading"] }
+r2d2 = "0.8"
+r2d2_firebird = "0.27"
+tokio = { version = "1", features = ["full"] }
+rust_decimal = { version = "1", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Criptografía y seguridad
+argon2 = "0.5"
+pbkdf2 = { version = "0.12", features = ["sha2"] }
+sha2 = "0.10"
+hmac = "0.12"
+aes-gcm = "0.10"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+rand = "0.8"
+base64 = "0.22"
+hex = "0.4"
+subtle = "2.5"
+
+# Utilidades
+once_cell = "1.19"
+
+[dev-dependencies]
+tempfile = "3"
+serial_test = "3"
+# Permite tauri::test::mock_builder() para probar comandos con State<AppState> real
+tauri = { version = "2", features = ["test"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<title>Contrato de renta (tres páginas)</title>
+	<style>
+		/* Hoja Carta con pie «Página X de Y» vía named page + margin box,
+		   igual que el contrato real de la app (src/app.css, @page contrato). */
+		@page {
+			size: letter;
+			margin: 0;
+		}
+		@page contrato {
+			size: letter;
+			margin: 0 0 14mm 0;
+			@bottom-center {
+				content: "Página " counter(page) " de " counter(pages);
+				font-family: Arial, sans-serif;
+				font-size: 7pt;
+				color: #444;
+			}
+		}
+		* {
+			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
+		}
+		html,
+		body {
+			background: #fff;
+		}
+		.hoja {
+			page: contrato;
+			font: 9pt/1.25 Arial, sans-serif;
+			color: #111;
+			padding: 8mm 12mm;
+		}
+		h1 {
+			font-size: 12pt;
+			text-align: center;
+			margin-bottom: 2mm;
+		}
+		h2 {
+			font-size: 9.5pt;
+			margin: 3mm 0 1mm;
+		}
+		.cl {
+			text-align: justify;
+			margin-bottom: 2mm;
+		}
+	</style>
+</head>
+<body>
+	<div class="hoja">
+		<h1>ANEXO DE CONTRATO DE ALQUILER DE VEHÍCULOS</h1>
+
+		<h2>Partes</h2>
+		<p class="cl">
+			Entre Dinamo Rent a Car S.A.S., en adelante «EL ARRENDADOR», y el señor Juan Pérez Gómez, en
+			adelante «EL ARRENDATARIO», se celebra el presente anexo al contrato marco de alquiler de
+			vehículos, regido por las siguientes cláusulas.
+		</p>
+
+		<h2>Cláusulas</h2>
+		<!-- El contenido se genera con JS para mantener compacto el fixture;
+		     Chrome/Edge headless lo ejecuta antes de imprimir. -->
+		<script>
+			const textos = [
+				'El arrendador entrega al arrendatario el vehículo identificado con placa XYZ-123, marca Chevrolet, modelo Spark GT, color blanco, con tanque lleno y kilometraje 42.150, en perfecto estado de funcionamiento.',
+				'El arrendatario declara haber recibido el vehículo conforme, con el tanque lleno, y se obliga a devolverlo en las mismas condiciones de recibo, salvo el desgaste normal derivado del uso.',
+				'La duración del alquiler es de cinco días calendario contados desde el 8 de agosto de 2026 a las 10:00 hasta el 13 de agosto de 2026 a las 10:00, prorrogable por acuerdo escrito entre las partes.',
+				'El valor diario del alquiler es de ciento cincuenta mil pesos ($150.000), que el arrendatario pagará de forma anticipada. La entrega del vehículo queda condicionada al pago total o del abono pactado.',
+				'El arrendatario podrá recorrer un máximo de 300 kilómetros diarios. El exceso se liquidará a razón de quinientos pesos ($500) por kilómetro adicional, pagadero a la entrega del vehículo.',
+				'La pérdida, hurto o daño total del vehículo, así como los daños a terceros causados con el mismo, serán de cargo exclusivo del arrendatario, quien asume la total responsabilidad civil y penal.',
+				'El arrendatario se obliga a no subarrendar, ceder ni prestar el vehículo a terceros sin autorización escrita del arrendador, bajo pena de dar por terminado el contrato sin derecho a devolución.',
+				'El vehículo debe ser utilizado únicamente en territorio nacional y para fines de transporte particular, quedando prohibido su uso en competencias, transporte público de pasajeros o de carga.',
+				'El mantenimiento preventivo programado será por cuenta del arrendador, siempre que el arrendatario avise con al menos 24 horas de anticipación y cumpla con los horarios señalados.',
+				'El arrendatario responderá por los costos de reparaciones derivadas del mal uso, negligencia o accidentes, así como por el valor de los elementos del vehículo que se extravíen durante el alquiler.',
+				'La entrega se hará con el vehículo asegurado contra todo riesgo. El deducible por siniestro será asumido por el arrendatario conforme a la póliza, según las condiciones vigentes de la aseguradora.',
+				'Las multas de tránsito, comparendos o infracciones que se generen durante el periodo de alquiler serán pagadas y asumidas directamente por el arrendatario, quien autoriza el cobro a su tarjeta de crédito.'
+			];
+			// 12 textos × 4 repeticiones = 48 párrafos ≈ 3 hojas Carta.
+			const parrafos = [];
+			for (let i = 0; i < 4; i++) {
+				for (let j = 0; j < textos.length; j++) {
+					parrafos.push(`<p class="cl"><strong>CLÁUSULA ${i * textos.length + j + 1}.</strong> ${textos[j]}</p>`);
+				}
+			}
+			document.querySelector('.hoja').insertAdjacentHTML('beforeend', parrafos.join(''));
+		</script>
+
+		<h2>Firmas</h2>
+		<p class="cl">
+			En constancia de lo anterior, se firma el presente anexo en la ciudad de Cartagena, a los ocho
+			días del mes de agosto de 2026, en dos ejemplares de igual contenido y valor.
+		</p>
+		<div style="display: flex; gap: 20mm; margin-top: 8mm">
+			<div style="flex: 1; text-align: center; border-top: 0.5pt solid #444; padding-top: 1mm">El arrendatario</div>
+			<div style="flex: 1; text-align: center; border-top: 0.5pt solid #444; padding-top: 1mm">El arrendador</div>
+		</div>
+	</div>
+</body>
+</html>
