@@ -310,4 +310,21 @@ describe('panel del Agente SIMIT', () => {
 		expect(screen.getByText(/aún sin sincronizar/)).toBeInTheDocument();
 		expect(screen.queryByText(/primera corrida en ~10 min/)).not.toBeInTheDocument();
 	});
+
+	it('no muestra «primera corrida» cuando startDelayMinutes es 0 (sin retraso configurado)', async () => {
+		tauri.register('listar_comparendos', () => []);
+		tauri.register('simit_sync_status', () =>
+			infoAgente({
+				startDelayMinutes: 0,
+				proximaSincronizacion: '2026-08-10T18:20:00-05:00'
+			})
+		);
+
+		render(ComparendosPage);
+
+		expect(await screen.findByText('Agente SIMIT')).toBeInTheDocument();
+		expect(screen.getByText(/aún sin sincronizar/)).toBeInTheDocument();
+		expect(screen.queryByText(/primera corrida en/)).not.toBeInTheDocument();
+		expect(screen.getByText(/próxima: 18:20/)).toBeInTheDocument();
+	});
 });
