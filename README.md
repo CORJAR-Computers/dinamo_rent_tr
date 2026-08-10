@@ -113,7 +113,7 @@ bun run tauri dev
 
 > ℹ️ Alternativamente las credenciales pueden pasarse por variables de entorno (ver `.env.example`) sin tocar `config.ini`.
 
-> 🪝 **Hook de pre-commit (husky)**: cada `git commit` ejecuta `bun run lint` (eslint sobre `src`). `bun` queda en el PATH de usuario al instalarlo; si un `git commit` falla con `bun: command not found`, abre una **terminal nueva** (el PATH se refresca al iniciarla) o añade `C:\Users\WinterOS\.bun\bin` al PATH de usuario. En casos excepcionales se puede omitir el hook con `git commit --no-verify`.
+> 🪝 **Scripts del proyecto y hook de pre-commit**: todos los comandos se ejecutan con `bun run <script>` — `dev`, `build`, `check`, `test`, `lint`, `tauri`, `check:simit`, `watch:simit`, `smoke:app`, `verificar:paginacion` — y el hook de husky ejecuta `bun run lint` (eslint sobre `src`) en cada `git commit`. `bun` queda en el PATH de usuario al instalarlo; si algún comando falla con `bun: command not found`, abre una **terminal nueva** (el PATH se refresca al iniciarla) o añade `C:\Users\WinterOS\.bun\bin` al PATH de usuario. En casos excepcionales se puede omitir el hook con `git commit --no-verify`. Los scripts `.mjs` de `scripts/` (`check-simit`, `watch-simit`, `smoke-test-app`, `verificar-paginacion`) se ejecutan con `node` directo (`node scripts/check-simit.mjs`) y **no** requieren bun.
 
 ---
 
