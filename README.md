@@ -115,6 +115,60 @@ bun run tauri dev
 
 ---
 
+## 🗄️ Migraciones de base de datos
+
+La base de datos es un `.fdb` portable de **Firebird Embedded 5.0**. El esquema se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en la tabla `schema_migrations`.
+
+### Flujo de auto-reparación (idempotente)
+
+- **Autocommit por sentencia**: cada sentencia va en su propia transacción. Si una migración falla, su versión **NO se registra** y el siguiente arranque la reintenta.
+- **DDL idempotente**: todas las migraciones usan `EXECUTE BLOCK` con guard contra el catálogo (`RDB$RELATIONS`, `RDB$RELATION_FIELDS`, `RDB$INDICES`, `RDB$RELATION_CONSTRAINTS`, `RDB$GENERATORS`) o `RECREATE TRIGGER`. Si una instalación quedó a medias (crash, corte de luz), el próximo arranque **omite lo ya creado y crea lo que falta** — se auto-repara sola.
+- **BDs existentes**: si la BD ya tiene el esquema inicial completo (`has_initial_schema` exige las 4 tablas núcleo **+** `pagos`, la última que crea 0001), `0001` se registra sin ejecutarse; el resto se aplica igual que en instalación nueva.
+- **Consolidación con seguridad**: los `DROP INDEX` de 0010-0013 solo eliminan un índice si otro (compuesto de prefijo izquierdo o el automático de la FK) sigue cubriendo la columna — nunca se deja una búsqueda sin índice.
+
+### Serie de migraciones
+
+| Versión | Propósito |
+|---|---|
+| `0001_initial_schema.sql` | Esquema inicial: tablas, FKs, índices y unique canónicos |
+| `0002_indices_optimizacion.sql` | Índices para el informe mensual y búsquedas por placa |
+| `0003_no_contrato.sql` | Número de contrato secuencial global (`no_contrato` + generator + backfill + índice único) |
+| `0004_no_contrato_anual.sql` | Numeración anual: `anio_contrato` y unicidad por `(anio_contrato, no_contrato)` |
+| `0005_tema_usuario.sql` | Preferencia de tema por usuario (`usuarios.tema`: light/dark/auto) |
+| `0006_soft_deletes.sql` | Soft deletes (`deleted_at` + índices) en rentas, pagos, gastos, comparendos y mantenimiento |
+| `0007_triggers_updated_at.sql` | Triggers `updated_at` en las 9 tablas con auditoría (añade la columna a `rentas`) |
+| `0008_check_constraints.sql` | CHECKs de estados (rentas, autos, clientes, reservas, comparendos) |
+| `0009_indices.sql` | Índices faltantes detectados en el análisis de rendimiento |
+| `0010_dedup_indices.sql` | Deduplica índices `IX_`/`IDX_` duplicados sobre las mismas columnas |
+| `0011_consolidar_indices.sql` | Consolida índices redundantes con los automáticos de las FKs y alinea dev↔fresh |
+| `0012_consolidar_indices_simples.sql` | Elimina índices de una columna subsumidos por compuestos (prefijo izquierdo) |
+| `0013_consolidar_indices_auditoria.sql` | Elimina `IX_AUDITORIA_USUARIO` (último subsumido: lo cubre `IX_AUDITORIA_USUARIO_FECHA`) |
+| `0014_limpiar_tablas_tests.sql` | Elimina tablas residuales de sesiones de test (PROBE_T, T2, T_TEST) |
+
+### Esquema canónico de índices (tras 0010-0013)
+
+Principio de la consolidación: **una columna de búsqueda = un solo índice** — el compuesto de prefijo izquierdo o el automático de la FK. Ya no existen índices estrechos redundantes ni pares `IX_`/`IDX_` duplicados (mismo resultado en instalaciones nuevas y BDs migradas):
+
+| Tabla | Índices de búsqueda canónicos |
+|---|---|
+| **RENTAS** | `IDX_RENTAS_ESTADO_FECHA_RETORNO`, `IDX_RENTAS_ESTADO_PLACA`, `IDX_RENTAS_FECHAS`, `IDX_RENTAS_PLACA`, `IX_RENTAS_NO_CONTRATO_ANIO` (único), `IX_RENTAS_DELETED` |
+| **AUTOS** | `IX_AUTOS_ESTADO_TIPO`, `IX_AUTOS_TIPO` |
+| **CLIENTES** | `IX_CLIENTES_ESTADO_NOMBRE`, `IX_CLIENTES_NOMBRE_COMPLETO`, `IX_CLIENTES_NO_DOC` (único) |
+| **RESERVAS** | `IX_RESERVAS_ESTADO_FECHA` |
+| **MANTENIMIENTO_VEHICULOS** | `IX_MANTENIMIENTO_PLACA_FECHA`, `IDX_MANTENIMIENTO_FECHA`, `IX_MANTENIMIENTO_DELETED` |
+| **GASTOS** | `IX_GASTOS_PLACA_FECHA`, `IX_GASTOS_CATEGORIA_FECHA`, `IDX_GASTOS_FECHA`, `IX_GASTOS_DELETED` |
+| **COMPARENDOS** | `IX_COMPARENDOS_PLACA_FECHA`, `IDX_COMPARENDOS_FECHA`, `IX_COMPARENDOS_DELETED` |
+| **PAGOS** | `IX_PAGOS_RENTA_FECHA`, `IDX_PAGOS_FECHA`, `IX_PAGOS_DELETED` |
+| **INSPECCIONES** | — (solo el índice automático de la FK `RDB$FOREIGN42`) |
+| **USUARIOS** | `IX_USUARIOS_USERNAME` (único) |
+| **AUDITORIA** | `IX_AUDITORIA_FECHA`, `IX_AUDITORIA_USUARIO_FECHA` |
+
+> Los `RDB$PRIMARY*` (PK), `RDB$UNIQUE*` (unique) y `RDB$FOREIGN*` (FK) son automáticos y **no se dropean** (soportan constraints). El planner **prefiere el índice de la FK** para `WHERE placa = ?` (verificado con `SET PLAN ON`): RENTAS → `RDB$FOREIGN38`, MANTENIMIENTO_VEHICULOS → `RDB$FOREIGN34`, GASTOS → `RDB$FOREIGN36`.
+
+> ℹ️ **Rendimiento**: tras 0010-0013 se validó con `SET PLAN ON` que las búsquedas por placa (RENTAS, MANTENIMIENTO_VEHICULOS, GASTOS) y por estado (RENTAS, AUTOS, CLIENTES, RESERVAS) siguen usando índices — la consolidación no degradó ningún plan (cero full scans nuevos).
+
+---
+
 ## 🪟 Windows: exclusiones para builds sin `os error 32`
 
 > Aplica solo en máquinas Windows con Defender / índice de búsqueda activos; en Linux/macOS no hace falta.
@@ -165,6 +219,39 @@ cd .. && npm run tauri dev   # build + arranque de la app
 ```
 
 > ℹ️ **Nota**: un `os error 32` en un *note* del directorio incremental (`target/debug/incremental`) es **no fatal** (cargo solo descarta ese caché y sigue); suele ser el índice tocando el directorio justo tras compilar. Para silenciarlo: `CARGO_INCREMENTAL=0 cargo build` (o `cargo test`).
+
+### 4) Flacidez residual (aunque haya exclusiones) — loop de reintentos
+
+Incluso con ambas exclusiones activas, el `os error 32` puede reaparecer **de forma intermitente** en el paso de archive de la lib (el primer `Compiling dinamo-rent` de un build fresco):
+
+```
+error: failed to build archive at `...\target\debug\deps\libdinamo_rent_lib.rlib`:
+failed to remove temporary directory: ... (os error 32) at path "...\.tmpXXXX.temp-archive"
+```
+
+**Diagnóstico verificado (09-08, a fondo):**
+
+- Las exclusiones de Defender **sí están aplicadas** — se confirma con el evento **5007** del registro de Windows Defender al añadirlas (verificarlo con `Get-MpPreference` **requiere admin**; un shell normal las muestra vacías/denegadas, lo cual **no** significa que falten).
+- **No hay otro antivirus** activo (Defender es el único, escaneo on-access ON) y ningún escaneo programado coincidía con los fallos.
+- La causa es un **lock transitorio** de Defender (escaneo on-access/nube) sobre archivos recién escritos durante **ráfagas de escritura intensas** (el fallo se reproduce con una sonda de churn de archivos; en condiciones calmadas no: martillo de 11 rebuilds forzados = **0 fallos**). No es un error de configuración.
+- **Lo que NO lo arregla (probado):** `--jobs 1`, redirigir `TMP`/`TEMP`, ni `CARGO_HOME`. No existe variable de entorno para el temp-archive: `rustc` lo crea siempre en el directorio de salida (`target/debug/deps`).
+
+**Workaround probado — loop de reintentos** (el fallo es raro y nunca persistente; el reintento limpio completa):
+
+```bash
+# desde src-tauri/
+for i in 1 2 3 4 5; do
+  echo "== intento $i =="
+  CARGO_INCREMENTAL=0 cargo test -j 2 && break
+  # limpiar restos del temp-archive que hayan quedado bloqueados
+  find target/debug/deps -maxdepth 1 -name '.tmp*.temp-archive' -exec rm -rf {} + 2>/dev/null
+  sleep 15
+done
+```
+
+- `CARGO_INCREMENTAL=0`: silencia además los avisos no fatales del directorio incremental.
+- La limpieza de `.tmp*.temp-archive` + `sleep` deja que el lock transitorio se libere antes del reintento.
+- En la práctica el fallo aparece como mucho 2-3 veces seguidas (suele ser tras un build fresco después de inactividad) y el intento siguiente completa la suite.
 
 ---
 

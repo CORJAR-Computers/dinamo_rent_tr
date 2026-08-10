@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-08** · Estado: **todos los módulos operativos, validación verde**
+> Última actualización: **2026-08-09** · Estado: **todos los módulos operativos, validación verde**
 
 > **Números de contrato secuenciales (08-08):** la renta ahora tiene `no_contrato`, un número
 > de contrato **secuencial e independiente del id** de la renta, generado por el generator
@@ -19,6 +19,17 @@
 > con el texto legal real de `Contrato_Dinamo.docx` (14 cláusulas + póliza + firmas) e impresión
 > multi-página con el nuevo util `imprimirDocumento()` (clon al body, evita el recorte del
 > `position: fixed`). Detalle en las secciones 2 y 3.
+
+> **Consolidación de índices y migraciones (09-08):** serie de migraciones **0001-0014**
+> (0001-0004 idempotentes, 0005-0009 auto-reparables, 0010-0013 de consolidación de índices:
+> dedup `IX_`/`IDX_`, redundantes con las FKs, subsumidos por compuestos y el último
+> `IX_AUDITORIA_USUARIO`, y **0014 de limpieza de tablas residuales de test** con guard de
+> esquema exacto + `RDB$RELATION_TYPE = 0`, ver §5.2). Resultado verificado sobre la BD dev: **0 índices duplicados, 0
+> subsumidos** (esquema canónico en README §Migraciones), `SET PLAN ON` sin full scans nuevos
+> (placa → FK `RDB$FOREIGN38/34/36`; estado → compuestos) y `gstat -i` con **−17% de páginas de
+> índice**. Además, el `os error 32` de cargo quedó resuelto con exclusiones de Windows
+> (Defender + índice; ver README) y el ciclo completo `cargo test` + `npm run tauri dev` corre
+> verde. Ciclo de trabajo de migraciones en la sección 5.
 
 ---
 
@@ -142,8 +153,10 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 ## 3. Pendiente / mejoras sugeridas
 
 - [ ] **Configurar `business.impuesto_porcentaje`** en el `config.ini` real de producción (dev usa 19).
-- [ ] **Auditar índices** de `mantenimiento_vehiculos` y `informes` para los filtros por rango de
+- [x] **Auditar índices** de `mantenimiento_vehiculos` y `informes` para los filtros por rango de
       fechas (pagos.fecha, reservas.fecha_recogida, gastos.fecha, comparendos.fecha_infraccion).
+      *Hecho en 0010-0013 (dedup + consolidación; los `IDX_*_FECHA` de 0002 se conservan porque no
+      están subsumidos) — ver sección 5 y README §Migraciones.*
 - [ ] **Revisión visual en Tauri**: la **orden de reserva, notificación de comparendo y orden
       de renta + contrato** ya se revisaron en navegador (dev server + mock de Tauri) con
       capturas en `static/preview-shots/*.png` y audit de layout (0 desbordes, 0 imágenes rotas).
@@ -172,3 +185,95 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 7. **Tests:** integración Rust contra `data/dinamo_rent_v3.fdb` (serial, autos/clientes reales de
    solo lectura, limpieza de registros temporales). Frontend con mock de Tauri
    (`src/test/tauri.ts` + `register`), `session.setSession` en `beforeEach`.
+
+---
+
+## 5. Migraciones de base de datos — ciclo de trabajo
+
+El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que
+aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
+`schema_migrations`. Serie actual: **0001-0014** (propósito de cada una y esquema canónico de
+índices en el README §Migraciones).
+
+### 5.1 Cómo añadir una migración nueva (000N)
+
+1. Crear `src-tauri/migrations/000N_descripcion.sql` — número siguiente con padding a 4 dígitos
+   y sufijo descriptivo (`0004_no_contrato_anual.sql`, `0013_consolidar_indices_auditoria.sql`).
+2. **Nunca DDL "pelado"**: cada objeto va dentro de un `EXECUTE BLOCK` con guard contra el
+   catálogo (patrón en 5.2). Es obligatorio por el diseño del runner: cada sentencia se ejecuta
+   en **autocommit** y, si una migración falla a mitad, su versión **NO se registra** y el
+   siguiente arranque la reintenta — los guards omiten lo ya creado y crean lo que falta, así que
+   las instalaciones a medias se auto-reparan solas.
+3. Si la migración **deja de crear** un objeto que otra creaba (p. ej. 0012 quitó de 0001 los
+   índices que después dropea), edita también la migración creadora para que las instalaciones
+   nuevas nunca lo creen — y actualiza los tests (5.3).
+4. Encabezado de comentario: propósito, tablas/columnas afectadas y por qué es idempotente.
+5. Validar con `cargo test --test migraciones_integration` (5.3) y, al final, arranque real
+   (`npm run tauri dev`) para que se aplique a la BD dev.
+
+### 5.2 Patrón EXECUTE BLOCK + guard
+
+```sql
+EXECUTE BLOCK
+AS
+BEGIN
+  IF (NOT EXISTS(SELECT 1 FROM RDB$RELATION_FIELDS
+                 WHERE RDB$RELATION_NAME = 'X' AND RDB$FIELD_NAME = 'COL')) THEN
+    EXECUTE STATEMENT 'ALTER TABLE x ADD col ...';
+END;
+```
+
+Guards por objeto (catálogo Firebird):
+
+| Objeto | Catálogo |
+|---|---|
+| Tabla (crear) | `RDB$RELATIONS.RDB$RELATION_NAME` |
+| Tabla (DROP residual de test) | `RDB$RELATIONS` + `RDB$SYSTEM_FLAG = 0` + `RDB$RELATION_TYPE = 0` + esquema exacto vía `RDB$RELATION_FIELDS` |
+| Columna | `RDB$RELATION_FIELDS` (relation+field); NOT NULL → `RDB$NULL_FLAG = 1` |
+| Índice | `RDB$INDICES.RDB$INDEX_NAME` |
+| Índice por columnas | `RDB$INDEX_SEGMENTS` (`FIELD_NAME` + `FIELD_POSITION`) |
+| Constraint CHECK | `RDB$RELATION_CONSTRAINTS.RDB$CONSTRAINT_NAME` |
+| Generator | `RDB$GENERATORS.RDB$GENERATOR_NAME` |
+| Trigger | `RECREATE TRIGGER` (crea o recrea, sin guard) |
+
+**DROP condicional (consolidación de índices, patrón 0011-0013):** solo se elimina un índice si
+queda OTRO índice no-sistema de la misma tabla que cubra la columna como **primer segmento**
+(`RDB$FIELD_POSITION = 0`) y esté **activo** (`COALESCE(RDB$INDEX_INACTIVE, 0) = 0`) — nunca se
+deja una búsqueda sin índice.
+
+**DROP de tabla residual (patrón 0014):** solo se elimina una tabla de test si es **tabla real
+no-sistema** (`RDB$SYSTEM_FLAG = 0` **y** `RDB$RELATION_TYPE = 0` — las vistas también viven en
+`RDB$RELATIONS` y un `DROP TABLE` sobre una fallaría) y coincide **exactamente** con el esquema
+residual esperado (conteo de columnas + `EXISTS` por nombre, recuperado del catálogo original
+vía git HEAD). Una tabla futura con el mismo nombre pero otro esquema **NO** se dropea
+(seguridad ante colisión; el tradeoff residual — nombre + esquema idénticos — está documentado
+en la cabecera de 0014).
+
+Reglas de oro:
+- Comillas simples de los literales **duplicadas** (`''...''`) por ir dentro del literal de
+  `EXECUTE STATEMENT`.
+- **NUNCA `--` dentro de un literal**: `split_sql_statements` recorta los comentarios de cada
+  línea sin mirar si están dentro de una cadena → truncaría la sentencia en silencio.
+- Triggers con varias sentencias no caben (el splitter respeta bloques BEGIN...END pero no `;`
+  internos): cuerpo de UNA sentencia (ver 0007).
+- **`isql` NO ejecuta `EXECUTE BLOCK`** (error -104, limitación de la herramienta): validar
+  siempre por el runner, nunca por isql.
+
+### 5.3 Validación
+
+```bash
+cd src-tauri && cargo test --test migraciones_integration
+```
+
+Los **8 tests** corren contra una **copia temporal** de la BD dev (la real nunca se toca) y contra
+una BD nueva vacía: versiones registradas (incluida la nueva) + 2ª ejecución no-op (idempotencia),
+instalación fresca desde cero, auto-reparación de instalaciones a medias (crash en 0001/0003-0004),
+`has_initial_schema` (exige las 4 tablas núcleo + `pagos`) y la **seguridad ante colisión de
+0014** (tablas creadas antes de migrar: el esquema residual exacto se dropea, una tabla con el
+mismo nombre pero esquema distinto sobrevive).
+
+Al añadir una migración hay que actualizar en `migraciones_integration.rs`: el conteo
+`versiones_aplicadas(&pool).len()` (actual: **14**), las listas de versiones de los tests de
+registro y las assertions de columnas/índices afectados (copia dev y BD fresca). Después, la
+suite completa (`cargo test`) y `npm run tauri dev` (aplica la migración a la BD dev real en el
+arranque; verificar el catálogo al cerrar).

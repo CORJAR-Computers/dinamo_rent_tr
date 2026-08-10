@@ -22,13 +22,14 @@
 //! constraint ... on table RDB$RELATION_FIELDS" (columna duplicada).
 //!
 //! La defensa es DOBLE:
-//!   1. TODAS las migraciones (0001-0011) usan DDL idempotente: EXECUTE BLOCK
+//!   1. TODAS las migraciones (0001-0014) usan DDL idempotente: EXECUTE BLOCK
 //!      con guard contra RDB$RELATIONS / RDB$RELATION_FIELDS / RDB$INDICES /
 //!      RDB$RELATION_CONSTRAINTS / RDB$GENERATORS (y RECREATE TRIGGER en 0007).
 //!      Si una ejecución quedó a medias, el siguiente arranque se auto-repara
 //!      (omite lo ya creado y crea lo que falta) — también en instalaciones
-//!      nuevas: 0001-0011 están guardadas (0010 y 0011 eliminan índices
-//!      redundantes/duplicados con DROP condicional si otro índice los cubre).
+//!      nuevas: 0001-0014 están guardadas (0010/0011/0012/0013 eliminan
+//!      índices redundantes/duplicados con DROP condicional si otro índice los
+//!      cubre, y 0014 elimina tablas residuales de test si existen).
 //!   2. Errores descriptivos: si una migración falla, el mensaje incluye el
 //!      nombre de la migración, el número de sentencia y el SQL, y la versión
 //!      NO se registra (el siguiente arranque la reintenta).
@@ -41,10 +42,15 @@
 //!
 //! `split_sql_statements` divide por ';' respetando bloques BEGIN...END pero NO
 //! respeta comillas: recorta los comentarios `--` de cada línea sin mirar si
-//! están dentro de un literal. Las migraciones 0001-0011 llevan DDL dentro de
+//! están dentro de un literal. Las migraciones 0001-0014 llevan DDL dentro de
 //! literales de EXECUTE STATEMENT (líneas muy largas): un valor con `--` (p.ej.
 //! `DEFAULT 'x--y'`) truncaría la línea y rompería la migración silenciosamente.
 //! Evitar `--` dentro de los literales y validar con los tests de migraciones.
+//!
+//! # Serie actual: 0001-0014
+//!
+//! 0001-0009 esquema + funciones (0001-0004 idempotentes, 0005-0009 auto-reparables),
+//! 0010-0013 consolidación de índices, 0014 limpieza de tablas residuales de test.
 
 use std::path::Path;
 
@@ -117,7 +123,7 @@ pub fn run_migrations(pool: &Pool, migrations_dir: &Path) -> Result<(), AppError
 
         // Ejecutar sentencia por sentencia (autocommit). Si una falla, la
         // migración NO se registra y el siguiente arranque la reintenta; las
-        // migraciones 0001-0011 son idempotentes y se auto-reparan.
+        // migraciones 0001-0014 son idempotentes y se auto-reparan.
         for (i, stmt) in statements.iter().enumerate() {
             conn.execute(stmt, ()).map_err(|e| {
                 AppError::Database(format!(

@@ -16,7 +16,7 @@
 //! migración rompe 0003/0004, que combinan DDL + UPDATE backfill: Firebird no
 //! ve dentro de la misma transacción el DDL que acaba de ejecutar). La defensa
 //! contra estados parciales es la IDEMPOTENCIA de TODAS las migraciones
-//! (0001-0011): una instalación nueva que quedó a medias se auto-repara igual
+//! (0001-0014): una instalación nueva que quedó a medias se auto-repara igual
 //! que una BD existente. 0001 solo se ejecuta de verdad sobre BD vacía (en BDs
 //! existentes se registra sin ejecutar vía `has_initial_schema`).
 
@@ -230,7 +230,7 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
     run_migrations(&pool, &migrations_dir)
         .expect("la migración debe auto-reparar la BD parcial");
 
-    // Las 11 migraciones quedan registradas.
+    // Las 14 migraciones quedan registradas.
     let aplicadas = versiones_aplicadas(&pool);
     for v in [
         "0001_initial_schema.sql",
@@ -244,6 +244,9 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
         "0009_indices.sql",
         "0010_dedup_indices.sql",
         "0011_consolidar_indices.sql",
+        "0012_consolidar_indices_simples.sql",
+        "0013_consolidar_indices_auditoria.sql",
+        "0014_limpiar_tablas_tests.sql",
     ] {
         assert!(
             aplicadas.contains(&v.to_string()),
@@ -309,12 +312,53 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
         "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
         "IX_GASTOS_PLACA"
     ));
-    // Los índices de COBERTURA deben sobrevivir a la consolidación (los guards
-    // de 0011 nunca deben tocar los compuestos canónicos):
-    assert!(existe_objeto(
+    // 0012 elimina los índices de una columna subsumidos por compuestos:
+    assert!(!existe_objeto(
         &pool,
         "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
         "IDX_RENTAS_ESTADO"
+    ));
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUTOS_ESTADO"
+    ));
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_CLIENTES_ESTADO"
+    ));
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_RESERVAS_ESTADO"
+    ));
+    // Los compuestos canónicos (cobertura de prefijo izquierdo) sobreviven a
+    // la consolidación de 0011/0012:
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUTOS_ESTADO_TIPO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_CLIENTES_ESTADO_NOMBRE"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_RESERVAS_ESTADO_FECHA"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IDX_RENTAS_ESTADO_FECHA_RETORNO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IDX_RENTAS_ESTADO_PLACA"
     ));
     assert!(existe_objeto(
         &pool,
@@ -325,6 +369,37 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
         &pool,
         "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
         "IX_MANTENIMIENTO_PLACA_FECHA"
+    ));
+    // 0013 elimina el último subsumido: IX_AUDITORIA_USUARIO (la cubre el
+    // compuesto IX_AUDITORIA_USUARIO_FECHA, que sobrevive).
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUDITORIA_USUARIO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUDITORIA_USUARIO_FECHA"
+    ));
+    // 0014 no deja tablas residuales de test en la copia de dev (la BD dev ya
+    // quedó limpia al aplicar 0014 en el arranque real; una copia de una BD que
+    // aún las tuviera las eliminaría — el DROP del patrón exacto se ejercita en
+    // migracion_0014_no_borra_tablas_colisionantes) y no toca las de la app.
+    for t in ["PROBE_T", "T2", "T_TEST"] {
+        assert!(
+            !existe_objeto(
+                &pool,
+                "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = ? AND RDB$SYSTEM_FLAG = 0",
+                t
+            ),
+            "0014 debe eliminar la tabla residual {t} de la copia de dev"
+        );
+    }
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = ?",
+        "RENTAS"
     ));
 
     // 2ª ejecución: idempotente, sin error y sin añadir versiones.
@@ -447,7 +522,7 @@ fn migracion_que_falla_no_se_registra_y_es_reintentable() {
     );
 }
 
-/// Las 11 migraciones deben aplicarse desde cero sobre una BD NUEVA y vacía
+/// Las 13 migraciones deben aplicarse desde cero sobre una BD NUEVA y vacía
 /// (camino de instalación en máquinas nuevas: 0001 crea todo el esquema).
 #[test]
 #[serial]
@@ -456,7 +531,7 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
     let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
 
     run_migrations(&pool, &migrations_dir)
-        .expect("las 11 migraciones deben aplicar sobre una BD vacía");
+        .expect("las 14 migraciones deben aplicar sobre una BD vacía");
 
     let aplicadas = versiones_aplicadas(&pool);
     for v in [
@@ -467,6 +542,9 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
         "0009_indices.sql",
         "0010_dedup_indices.sql",
         "0011_consolidar_indices.sql",
+        "0012_consolidar_indices_simples.sql",
+        "0013_consolidar_indices_auditoria.sql",
+        "0014_limpiar_tablas_tests.sql",
     ] {
         assert!(
             aplicadas.contains(&v.to_string()),
@@ -553,9 +631,145 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
         "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
         "IX_GASTOS_PLACA_FECHA"
     ));
+    // 0012: los índices de una columna subsumidos por compuestos no se crean
+    // en instalación nueva; los compuestos (prefijo izquierdo) sí.
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IDX_RENTAS_ESTADO"
+    ));
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUTOS_ESTADO"
+    ));
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_CLIENTES_ESTADO"
+    ));
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_RESERVAS_ESTADO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUTOS_ESTADO_TIPO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_CLIENTES_ESTADO_NOMBRE"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_RESERVAS_ESTADO_FECHA"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IDX_RENTAS_ESTADO_FECHA_RETORNO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IDX_RENTAS_ESTADO_PLACA"
+    ));
+    // 0013 en instalación nueva: AUDITORIA solo queda con el compuesto y fecha.
+    assert!(!existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUDITORIA_USUARIO"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUDITORIA_USUARIO_FECHA"
+    ));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_AUDITORIA_FECHA"
+    ));
+    // 0014 en instalación nueva: no-op (0001 nunca creó las tablas de test).
+    for t in ["PROBE_T", "T2", "T_TEST"] {
+        assert!(
+            !existe_objeto(
+                &pool,
+                "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = ? AND RDB$SYSTEM_FLAG = 0",
+                t
+            ),
+            "0014 no debe crear la tabla de test {t} en BD nueva"
+        );
+    }
 
     // Idempotente también en el camino de BD nueva.
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución en BD nueva");
+}
+
+/// 0014 (limpieza de tablas residuales de test) debe ser segura ante colisión
+/// de nombres: solo dropea una tabla que coincida EXACTAMENTE con el esquema
+/// residual esperado (PROBE_T: H,D · T2/T_TEST: ID,ANIO,SEQ — recuperado de la
+/// versión commiteada de la BD, git HEAD). Una tabla real con el mismo nombre
+/// pero otro esquema SOBREVIVE.
+///
+/// Nota: las tablas se crean ANTES de migrar — el runner solo ejecuta cada
+/// migración una vez (cuando aún no está registrada), así que 0014 se aplica en
+/// la primera ejecución, con las tablas ya presentes.
+#[test]
+#[serial]
+fn migracion_0014_no_borra_tablas_colisionantes() {
+    let (pool, _limpieza) = crear_bd_fresh();
+    let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+
+    let mut conn = pool.get().expect("conn");
+    // (a) T2 con ESQUEMA DISTINTO al residual → 0014 NO debe dropearla.
+    conn
+        .execute(
+            "CREATE TABLE T2 (id INTEGER PRIMARY KEY, nombre VARCHAR(100), fecha TIMESTAMP)",
+            (),
+        )
+        .expect("crear T2 colisionante con esquema distinto");
+    // (b) PROBE_T y T_TEST con el ESQUEMA RESIDUAL EXACTO → 0014 SÍ debe
+    //     dropearlas (patrón: PROBE_T H,D · T_TEST ID,ANIO,SEQ).
+    conn
+        .execute("CREATE TABLE PROBE_T (h INTEGER, d VARCHAR(50))", ())
+        .expect("crear PROBE_T residual");
+    conn
+        .execute(
+            "CREATE TABLE T_TEST (id INTEGER, anio INTEGER, seq INTEGER)",
+            (),
+        )
+        .expect("crear T_TEST residual");
+
+    run_migrations(&pool, &migrations_dir).expect("migrar con tablas de test presentes");
+
+    // PROBE_T y T_TEST (patrón exacto) eliminadas por 0014.
+    for t in ["PROBE_T", "T_TEST"] {
+        assert!(
+            !existe_objeto(
+                &pool,
+                "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = ? AND RDB$SYSTEM_FLAG = 0",
+                t
+            ),
+            "0014 debe dropear {t} con el esquema residual exacto"
+        );
+    }
+    // La T2 colisionante sobrevive.
+    assert!(
+        existe_objeto(
+            &pool,
+            "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = ? AND RDB$SYSTEM_FLAG = 0",
+            "T2"
+        ),
+        "0014 no debe dropear una T2 con esquema distinto al residual"
+    );
+
+    // Idempotente (2ª ejecución sin cambios).
+    run_migrations(&pool, &migrations_dir).expect("2ª ejecución no-op");
 }
 
 /// `has_initial_schema` debe exigir las 4 tablas núcleo (USUARIOS, AUTOS,
@@ -618,7 +832,7 @@ fn has_initial_schema_exige_las_4_tablas_nucleo() {
 /// Simula una instalación nueva que se interrumpió a mitad de 0001 (crash
 /// antes de registrar versiones): los guards de 0001 omiten las 6 sentencias
 /// ya aplicadas y crean el resto. El runner debe completar TODO, registrar las
-/// 11 versiones y quedar idempotente.
+/// 14 versiones y quedar idempotente.
 #[test]
 #[serial]
 fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
@@ -649,7 +863,7 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("el runner debe auto-reparar una instalación nueva a medias");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 11, "todas las versiones");
+    assert_eq!(versiones_aplicadas(&pool).len(), 14, "todas las versiones");
     // 0001 completo: la última tabla y su índice; 0002 completo.
     assert!(existe_objeto(
         &pool,
@@ -699,12 +913,12 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
         "IX_INSPECCIONES_ID_RENTA"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 11);
+    assert_eq!(versiones_aplicadas(&pool).len(), 14);
 }
 
 /// Simula una instalación nueva con 0001+0002 completos y un crash a mitad de
 /// 0003 y 0004 (backfills y DROP/CREATE de índices quedan pendientes). El
-/// runner debe completarlos con los guards, registrar las 11 versiones y
+/// runner debe completarlos con los guards, registrar las 14 versiones y
 /// quedar idempotente.
 #[test]
 #[serial]
@@ -745,7 +959,7 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("auto-reparar instalación a medias en 0003/0004");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 11);
+    assert_eq!(versiones_aplicadas(&pool).len(), 14);
     assert!(existe_objeto(
         &pool,
         "SELECT COUNT(*) FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = ?",
@@ -763,5 +977,5 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
         "IX_RENTAS_NO_CONTRATO"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 11);
+    assert_eq!(versiones_aplicadas(&pool).len(), 14);
 }
