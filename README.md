@@ -113,6 +113,8 @@ bun run tauri dev
 
 > ℹ️ Alternativamente las credenciales pueden pasarse por variables de entorno (ver `.env.example`) sin tocar `config.ini`.
 
+> 🪝 **Hook de pre-commit (husky)**: cada `git commit` ejecuta `bun run lint` (eslint sobre `src`). `bun` queda en el PATH de usuario al instalarlo; si un `git commit` falla con `bun: command not found`, abre una **terminal nueva** (el PATH se refresca al iniciarla) o añade `C:\Users\WinterOS\.bun\bin` al PATH de usuario. En casos excepcionales se puede omitir el hook con `git commit --no-verify`.
+
 ---
 
 ## 🗄️ Migraciones de base de datos
