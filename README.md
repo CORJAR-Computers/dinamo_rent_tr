@@ -169,7 +169,7 @@ Principio de la consolidación: **una columna de búsqueda = un solo índice** �
 
 ---
 
-## 🪟 Windows: exclusiones para builds sin `os error 32`
+## 🪟 Windows: exclusiones para builds estables (`os error 32` de cargo y `EBUSY` de Vite)
 
 > Aplica solo en máquinas Windows con Defender / índice de búsqueda activos; en Linux/macOS no hace falta.
 
@@ -252,6 +252,35 @@ done
 - `CARGO_INCREMENTAL=0`: silencia además los avisos no fatales del directorio incremental.
 - La limpieza de `.tmp*.temp-archive` + `sleep` deja que el lock transitorio se libere antes del reintento.
 - En la práctica el fallo aparece como mucho 2-3 veces seguidas (suele ser tras un build fresco después de inactividad) y el intento siguiente completa la suite.
+
+### 5) Vite dev server — crash del optimizer (`EBUSY` en `node_modules/.vite`)
+
+**Síntoma**: `bun run dev` (o `npm run dev`) crashea al **re-optimizar dependencias** (cambio de `bun.lock`, caché borrada o primer arranque tras clonar) con:
+
+```
+Error: EBUSY: resource busy or locked, rename '...node_modules\.vite\deps_ssr_temp_*' -> '...node_modules\.vite\deps_ssr'
+error: script "dev" exited with code 1
+```
+
+**Causa**: el optimizer de Vite escribe las dependencias pre-compiladas en un directorio temporal y lo **renombra** al final; Windows Defender / `SearchIndexer` abren archivos del árbol `node_modules\.vite` un instante y el `rename` falla con `EBUSY`. Es **el mismo mecanismo** del `os error 32` de cargo (§1/§2), pero sobre el caché de Vite en lugar de `target`.
+
+> **Segundo disparador (confirmado en pruebas)**: el `rename` también falla si se **relanza `bun run dev` inmediatamente después de matar el proceso anterior** (p. ej. `taskkill //F`, Ctrl+C y relanzar al instante, o cerrar y reabrir la terminal). Los workers de esbuild del Vite anterior mantienen handles abiertos sobre el árbol `.vite` durante unos segundos y bloquean el `rename` del optimizer del nuevo proceso. Con un arranque "en frío" (esperando a que mueran los procesos previos) el crash **no** se reproduce.
+
+**Solución** (la exclusión de todo el proyecto de las §1/§2 ya cubre `node_modules`; si solo se excluyó `src-tauri\target`, añadir):
+
+```powershell
+Add-MpPreference -ExclusionPath 'D:\dinamo_rent_tr\node_modules'
+```
+
+Y limpiar el caché que quedó a medias tras el crash:
+
+```bash
+rm -rf node_modules/.vite && bun run dev
+```
+
+**Workaround sin admin**: borrar `node_modules/.vite` y reintentar; la re-optimización completa en el 2º/3er intento (el error no es persistente, solo coincide con la ráfaga de escritura del optimizer). El crash **solo aparece con re-optimización forzada**; con el caché sano, `bun run dev` arranca normal.
+
+**Al relanzar Vite**: tras matar el proceso anterior (Ctrl+C, `taskkill` o cierre de terminal), espera **2-5 segundos** antes de lanzar `bun run dev` de nuevo para que los workers de esbuild liberen los handles de `node_modules/.vite` — o verifica que no quede ningún proceso del proyecto con `tasklist | findstr bun`.
 
 ---
 
