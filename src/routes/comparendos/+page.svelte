@@ -31,6 +31,20 @@
 
 	const sid = () => session.token ?? '';
 
+	// Agente SIMIT vacío (para parchear el estado en la UI sin backend): con
+	// startDelayMinutes 0 el subtítulo cae a «aún sin sincronizar» en vez de
+	// mostrar un valor configurado inventado.
+	const AGENTE_DEFAULT: InfoAgenteSimit = {
+		habilitado: true,
+		intervalHours: 2,
+		startDelayMinutes: 0,
+		ejecutando: false,
+		ultimaSincronizacion: null,
+		proximaSincronizacion: null,
+		ultimoResultado: null,
+		ultimoError: null
+	};
+
 	let comparendos = $state<Comparendo[]>([]);
 	let autos = $state<Auto[]>([]);
 	let lists = $state<BusinessLists | null>(null);
@@ -85,7 +99,7 @@
 		sincronizando = true;
 		try {
 			const resultado = await simitApi.sincronizarAhora(sid());
-			agente = { ...(agente ?? { habilitado: true, intervalHours: 2, ejecutando: false, ultimaSincronizacion: null, ultimoResultado: null, ultimoError: null }), ultimaSincronizacion: resultado.sincronizadoEn, ultimoResultado: resultado };
+			agente = { ...(agente ?? AGENTE_DEFAULT), ultimaSincronizacion: resultado.sincronizadoEn, ultimoResultado: resultado };
 			if (resultado.insertados > 0) {
 				toast.success(`Agente SIMIT: ${resultado.insertados} comparendo${resultado.insertados === 1 ? '' : 's'} nuevo${resultado.insertados === 1 ? '' : 's'} registrado${resultado.insertados === 1 ? '' : 's'}.`);
 			} else {
@@ -211,10 +225,12 @@
 		listen<ResultadoSincronizacion>('simit-sync-complete', (evt) => {
 			if (!activo) return;
 			const r = evt.payload;
-			agente = { ...(agente ?? { habilitado: true, intervalHours: 2, ejecutando: false, ultimaSincronizacion: null, ultimoResultado: null, ultimoError: null }), ultimaSincronizacion: r.sincronizadoEn, ultimoResultado: r };
+			agente = { ...(agente ?? AGENTE_DEFAULT), ultimaSincronizacion: r.sincronizadoEn, ultimoResultado: r };
 			if (r.insertados > 0) {
 				toast.success(`Agente SIMIT: ${r.insertados} comparendo${r.insertados === 1 ? '' : 's'} nuevo${r.insertados === 1 ? '' : 's'} registrado${r.insertados === 1 ? '' : 's'}.`);
 			}
+			// Refrescar estado del agente: el backend ya calculó la próxima corrida
+			cargarAgente();
 			cargar();
 		})
 			.then((u) => {
@@ -441,9 +457,13 @@
 						<p class="text-xs text-text-secondary">
 							Consulta automática de comparendos por placa · cada {agente.intervalHours} h
 							{#if agente.ultimaSincronizacion}
-								· última: {formatDate(agente.ultimaSincronizacion.slice(0, 10))} {agente.ultimaSincronizacion.slice(11, 16)}
-								{:else}
+								· última: {formatDate(agente.ultimaSincronizacion.slice(0, 10))} {agente.ultimaSincronizacion.slice(11, 16)}								{:else if !agente.ultimoError && agente.startDelayMinutes > 0}
+									· primera corrida en ~{agente.startDelayMinutes} min
+							{:else}
 								· aún sin sincronizar
+							{/if}
+							{#if agente.proximaSincronizacion}
+								· próxima: {agente.proximaSincronizacion.slice(11, 16)}
 							{/if}
 						</p>
 					</div>

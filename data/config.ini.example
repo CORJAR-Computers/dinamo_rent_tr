@@ -72,6 +72,7 @@ enabled = true
 interval_hours = 2
 polite_delay_ms = 2500
 report_dir = informes_simit
+start_delay_minutes = 10
 
 [ui]
 color_fondo = #f8fafc

@@ -11,7 +11,14 @@ export default defineConfig({
 		strictPort: true,
 		// Tauri espera un puerto fijo y no permite cambios aleatorios
 		watch: {
-			ignored: ['**/src-tauri/**']
+			ignored: [
+				'**/src-tauri/**',
+				// data/ contiene la BD Firebird dev, config.ini y los reportes del
+				// Agente SIMIT (data/informes_simit/*.html). Vite recarga la página
+				// completa al detectar cambios en esos archivos; excluirlos evita
+				// el reload en cada corrida SIMIT y al tocar config/BD en dev.
+				'**/data/**'
+			]
 		}
 	}
 });

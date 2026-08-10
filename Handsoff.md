@@ -163,24 +163,34 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   - Reporte: **HTML imprimible** en `data_dir/simit_report_dir/simit_AAAAMMDD_HHMM.html` con
     tarjetas de resumen, tabla (🆕 = nuevo en la BD) y errores por placa. `total_pendiente` =
     suma de **todos** los registros pendientes encontrados (no solo los nuevos).
-  - Scheduler: hilo de fondo lanzado en `setup()` de `lib.rs` — consulta **al arrancar** y
-    después cada `simit.interval_hours` (2 h); reintento a los 60 s solo si falla a nivel de BD;
-    errores por placa (SIMIT caído) se registran y la siguiente corrida es en el ciclo normal.
-    Emite `simit-sync-complete` con el `ResultadoSincronizacion` serializable.
+  - Scheduler: hilo de fondo lanzado en `setup()` de `lib.rs` — la **primera corrida** espera
+    `simit.start_delay_minutes` (default **10 min**; 0 = inmediata) para no competir con el
+    arranque de la app, y después corre cada `simit.interval_hours` (2 h). **Chequeo DNS previo**
+    a cada corrida (`portal_simit_accesible()`, espejo de `scripts/check-simit.mjs`): si los
+    subdominios del portal no resuelven (SIMIT caído), la corrida se omite al instante y la
+    siguiente consulta es en el ciclo normal (evita timeouts de 30 s por placa). Reintento a los
+    60 s solo si falla a nivel de BD; errores por placa (SIMIT caído) se registran y la
+    siguiente corrida es en el ciclo normal. Emite `simit-sync-complete` con el
+    `ResultadoSincronizacion` serializable.
   - Concurrencia: claim **atómico** (`AtomicBool::compare_exchange`, `claimar()/liberar()`) para
     que la corrida programada y la manual nunca se solapen.
 - **Comandos:** `commands/simit.rs` — `simit_sync_status` (estado en memoria: habilitado,
   intervalHours, ejecutando, última sincronización + resultado/errores) y `simit_sync_now`
-  (async + `spawn_blocking`, las operaciones de BD son síncronas). Estado manejado por Tauri
-  vía `EstadoAgenteSimitManaged` (no amplía `AppState` → no toca los tests de integración).
+  (async + `spawn_blocking`, las operaciones de BD son síncronas). Ambos pasan por `run_sync`,
+  que incluye el **fast-fail DNS** (`portal_simit_accesible`): si el portal no resuelve,
+  «Sincronizar ahora» falla al instante con un mensaje claro en vez de gastar timeouts de 30 s
+  por placa. Estado manejado por Tauri vía `EstadoAgenteSimitManaged` (no amplía `AppState` →
+  no toca los tests de integración).
 - **Migración `0015_comparendo_numero_simit.sql`:** `comparendos.numero_comparendo VARCHAR(30)`
   + índice `IX_COMPARENDOS_NUMERO` (guards RDB$, idempotente). **YA aplicada a la BD dev**
   (vía test temporal `aplicar_migraciones_dev_temporal.rs`, eliminado después).
 - **Config `[simit]`** (defaults en `core/config.rs` + `data/config.ini.example`): `enabled=true`,
-  `interval_hours=2`, `polite_delay_ms=2500`, `report_dir=informes_simit`.
-- **Frontend:** `api.ts` (`simitApi` + tipos `RegistroSimit`/`ResultadoSincronizacion`/`InfoAgenteSimit`),
-  `+page.svelte` de comparendos: panel con estado y última corrida, botón «Sincronizar ahora»,
-  «Descargar Excel» (reusa `exceljs`, columna «Nuevo»), escucha de `simit-sync-complete` con
+  `interval_hours=2`, `polite_delay_ms=2500`, `report_dir=informes_simit`,
+  `start_delay_minutes=10` (retraso de la primera corrida tras el arranque; 0 = inmediata).
+- **Frontend:** `api.ts` (`simitApi` + tipos `RegistroSimit`/`ResultadoSincronizacion`/`InfoAgenteSimit`,
+  con `startDelayMinutes` y `proximaSincronizacion`), `+page.svelte` de comparendos: panel con
+  estado, última y **próxima corrida** (primera corrida tras `startDelayMinutes`), botón
+  «Sincronizar ahora», «Descargar Excel» (reusa `exceljs`, columna «Nuevo»), escucha de `simit-sync-complete` con
   cleanup (`UnlistenFn`), y el formulario conserva `numeroComparendo` al editar (no rompe la deduplicación).
 - **Tests:** 9 unit en `services/simit.rs` (sha256, primos, formato del JSON de verificación,
   PoW → nonces válidos crecientes, mapeo de estados, parseo de fechas/horas incl. ISO con `T`,

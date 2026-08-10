@@ -948,8 +948,12 @@ export interface EventoLogSimit {
 export interface InfoAgenteSimit {
 	habilitado: boolean;
 	intervalHours: number;
+	/** Minutos de retraso de la primera corrida tras el arranque (0 = inmediata) */
+	startDelayMinutes: number;
 	ejecutando: boolean;
 	ultimaSincronizacion: string | null;
+	/** Próxima corrida programada (RFC3339 local) calculada por el backend */
+	proximaSincronizacion: string | null;
 	ultimoResultado: ResultadoSincronizacion | null;
 	ultimoError: string | null;
 }

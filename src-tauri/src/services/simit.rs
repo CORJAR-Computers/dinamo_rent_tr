@@ -28,6 +28,7 @@
 //! pueden cambiar el contrato; el agente reintenta en cada ciclo y registra
 //! los errores por placa sin abortar el resto de la sincronización.
 
+use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -929,6 +930,8 @@ pub struct EstadoAgenteSimit {
 #[derive(Debug, Clone, Default)]
 struct EstadoAgenteSimitInner {
     ultima_sincronizacion: Option<String>,
+    /// Próxima corrida programada (RFC3339 local); la mantiene el scheduler
+    proxima_sincronizacion: Option<String>,
     ultimo_resultado: Option<ResultadoSincronizacion>,
     ultimo_error: Option<String>,
 }
@@ -939,8 +942,12 @@ struct EstadoAgenteSimitInner {
 pub struct InfoAgenteSimit {
     pub habilitado: bool,
     pub interval_hours: u64,
+    /// Minutos de retraso de la primera corrida tras el arranque (0 = inmediata)
+    pub start_delay_minutes: u64,
     pub ejecutando: bool,
     pub ultima_sincronizacion: Option<String>,
+    /// Próxima corrida programada (RFC3339 local) — la mantiene el scheduler
+    pub proxima_sincronizacion: Option<String>,
     pub ultimo_resultado: Option<ResultadoSincronizacion>,
     pub ultimo_error: Option<String>,
 }
@@ -968,8 +975,10 @@ impl EstadoAgenteSimit {
         InfoAgenteSimit {
             habilitado: cfg.simit_enabled,
             interval_hours: cfg.simit_interval_hours,
+            start_delay_minutes: cfg.simit_start_delay_minutes,
             ejecutando: self.esta_ejecutando(),
             ultima_sincronizacion: interno.ultima_sincronizacion.clone(),
+            proxima_sincronizacion: interno.proxima_sincronizacion.clone(),
             ultimo_resultado: interno.ultimo_resultado.clone(),
             ultimo_error: interno.ultimo_error.clone(),
         }
@@ -982,15 +991,29 @@ impl EstadoAgenteSimit {
         interno.ultimo_error = None;
     }
 
-    fn registrar_error(&self, error: &str) {
+    /// Registra el último error (visible en el panel). Lo usan el scheduler
+    /// (corrida omitida por DNS) y el comando manual (sync fallida).
+    pub(crate) fn registrar_error(&self, error: &str) {
         let mut interno = self.interno.lock().unwrap_or_else(|e| e.into_inner());
         interno.ultimo_error = Some(error.to_string());
+    }
+
+    /// Fija la próxima corrida programada (visible en el panel). Solo la
+    /// mantiene el scheduler; la sincronización manual no altera el ciclo.
+    fn fijar_proxima(&self, proxima: Option<String>) {
+        let mut interno = self.interno.lock().unwrap_or_else(|e| e.into_inner());
+        interno.proxima_sincronizacion = proxima;
     }
 }
 
 /// Ejecuta una sincronización y actualiza el estado del agente.
 /// Es la única entrada compartida por el scheduler y el comando manual.
 /// Si se proporciona `app`, emite eventos de progreso al frontend.
+///
+/// Fast-fail DNS: si el portal no resuelve, devuelve error al instante en vez
+/// de esperar el timeout HTTP (30 s) por placa. Cubre la sincronización manual
+/// («Sincronizar ahora»); el scheduler hace además su propio pre-check para no
+/// reintentar cada 60 s cuando el portal está caído.
 pub fn run_sync(
     pool: &Pool,
     cfg: &Arc<AppConfig>,
@@ -999,15 +1022,28 @@ pub fn run_sync(
 ) -> Result<ResultadoSincronizacion, AppError> {
     // Inicializar circuit breaker con configuración
     init_circuit_breaker(cfg.simit_circuit_breaker_threshold, cfg.simit_circuit_breaker_timeout_seconds);
-    
+
+    if !portal_simit_accesible() {
+        let msg = "El portal SIMIT no está accesible en este momento. Verifica tu conexión a internet e inténtalo más tarde.";
+        log::warn!("Agente SIMIT: {msg}");
+        return Err(AppError::Generic(msg.into()));
+    }
+
     let mut conn = pool.get()?;
     let resultado = sincronizar(&mut conn, cfg, app)?;
     estado.registrar_ok(resultado.clone());
     Ok(resultado)
 }
 
-/// Lanza el hilo de fondo del agente. Consulta al arrancar la app y después
-/// cada `interval_hours`.
+/// Lanza el hilo de fondo del agente. La **primera** corrida espera
+/// `simit.start_delay_minutes` (default 10 min; 0 = inmediata, comportamiento
+/// previo) para no competir con el arranque de la app (CPU del PoW + red).
+/// Después corre cada `simit.interval_hours`.
+///
+/// Chequeo DNS previo a cada corrida: si los subdominios del portal no
+/// resuelven (SIMIT caído, como el 10-08), la corrida se omite al instante en
+/// lugar de esperar el timeout HTTP (30 s) por placa, y la siguiente consulta
+/// ocurre en el ciclo normal.
 ///
 /// Reintento: si la sincronización falla a nivel de BD (no se pudo ni listar
 /// las placas), NO se marca la última ejecución y se reintenta en el siguiente
@@ -1021,38 +1057,89 @@ pub fn spawn_scheduler(
     estado: Arc<EstadoAgenteSimit>,
 ) {
     std::thread::spawn(move || {
+        // Referencia para el retraso inicial configurable (0 = inmediato)
+        let inicio = Instant::now();
         let mut ultima_ejecucion: Option<Instant> = None;
+        // Próxima corrida inicial (para el panel): tras el retraso configurable
+        if cfg.simit_enabled {
+            estado.fijar_proxima(Some(ahora_mas(
+                cfg.simit_start_delay_minutes.saturating_mul(60),
+            )));
+        }
         loop {
             if cfg.simit_enabled {
                 let debe_ejecutar = match ultima_ejecucion {
-                    None => true,
+                    None => inicio.elapsed()
+                        >= Duration::from_secs(cfg.simit_start_delay_minutes.saturating_mul(60)),
                     Some(t) => {
-                        t.elapsed() >= Duration::from_secs(cfg.simit_interval_hours.saturating_mul(3600))
+                        t.elapsed()
+                            >= Duration::from_secs(cfg.simit_interval_hours.saturating_mul(3600))
                     }
                 };
-                if debe_ejecutar && estado.claimar() {
-                    match run_sync(&pool, &cfg, &estado, Some(&app)) {
-                        Ok(resultado) => {
-                            ultima_ejecucion = Some(Instant::now());
-                            log::info!(
-                                "Agente SIMIT: sincronización OK — {} placas, {} nuevos",
-                                resultado.placas_consultadas,
-                                resultado.insertados
-                            );
-                            let _ = app.emit("simit-sync-complete", &resultado);
+                if debe_ejecutar {
+                    // Chequeo DNS previo: si el portal no resuelve, se omite la
+                    // corrida al instante (cada placa tardaría ~30 s en fallar
+                    // por timeout HTTP). La siguiente corrida vuelve al ciclo
+                    // normal (interval_hours), no al tick de 60 s.
+                    if portal_simit_accesible() {
+                        if estado.claimar() {
+                            match run_sync(&pool, &cfg, &estado, Some(&app)) {
+                            Ok(resultado) => {
+                                ultima_ejecucion = Some(Instant::now());
+                                estado.fijar_proxima(Some(ahora_mas(
+                                    cfg.simit_interval_hours.saturating_mul(3600),
+                                )));
+                                log::info!(
+                                    "Agente SIMIT: sincronización OK — {} placas, {} nuevos",
+                                    resultado.placas_consultadas,
+                                    resultado.insertados
+                                );
+                                let _ = app.emit("simit-sync-complete", &resultado);
+                            }
+                            Err(e) => {
+                                estado.registrar_error(&e.to_string());
+                                // Reintento en el siguiente tick (60 s)
+                                estado.fijar_proxima(Some(ahora_mas(60)));
+                                log::error!("Agente SIMIT: falló la sincronización: {e}");
+                                // No se marca ultima_ejecucion → reintento en el siguiente tick
+                            }
+                            }
+                            estado.liberar();
                         }
-                        Err(e) => {
-                            estado.registrar_error(&e.to_string());
-                            log::error!("Agente SIMIT: falló la sincronización: {e}");
-                            // No se marca ultima_ejecucion → reintento en el siguiente tick
-                        }
+                    } else {
+                        let msg = "Portal SIMIT inalcanzable (DNS) — corrida omitida. Reintento en el siguiente ciclo.";
+                        log::warn!("Agente SIMIT: {msg}");
+                        emitir_log(&app, LogLevel::Warn, msg, None, None);
+                        estado.registrar_error(msg);
+                        ultima_ejecucion = Some(Instant::now());
+                        estado.fijar_proxima(Some(ahora_mas(
+                            cfg.simit_interval_hours.saturating_mul(3600),
+                        )));
                     }
-                    estado.liberar();
                 }
             }
             std::thread::sleep(Duration::from_secs(60));
         }
     });
+}
+
+/// Chequeo DNS previo del portal SIMIT (espejo de `scripts/check-simit.mjs`):
+/// si los subdominios no resuelven (el 10-08 desaparecieron del DNS mientras
+/// el dominio raíz seguía vivo), la corrida se omite sin gastar timeouts HTTP.
+/// Usa el resolvedor del sistema (bloqueante pero rápido; corre en el hilo del
+/// scheduler, no en el de la UI).
+/// Hora local RFC3339 dentro de `secs` segundos (próxima corrida del panel)
+fn ahora_mas(secs: u64) -> String {
+    (Local::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339()
+}
+
+fn portal_simit_accesible() -> bool {
+    ["qxcaptcha.fcm.org.co", "consultasimit.fcm.org.co"]
+        .iter()
+        .all(|host| match (*host, 443u16).to_socket_addrs() {
+            Ok(mut addrs) => addrs.next().is_some(),
+            Err(_) => false,
+        })
 }
 
 // ─── DTOs del SIMIT ───────────────────────────────────────────────────────────

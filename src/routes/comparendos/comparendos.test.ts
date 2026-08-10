@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { tauri } from '../../test/tauri';
 import { session } from '$lib/stores/session.svelte';
-import type { Comparendo, ComparendoDatos, Auto, BusinessLists } from '$lib/api';
+import type { Comparendo, ComparendoDatos, Auto, BusinessLists, InfoAgenteSimit } from '$lib/api';
 import ComparendosPage from './+page.svelte';
 
 function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
@@ -21,6 +21,20 @@ function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
 		observaciones: 'Exceso de velocidad',
 		createdAt: null,
 		updatedAt: null,
+		...overrides
+	};
+}
+
+function infoAgente(overrides: Partial<InfoAgenteSimit> = {}): InfoAgenteSimit {
+	return {
+		habilitado: true,
+		intervalHours: 2,
+		startDelayMinutes: 10,
+		ejecutando: false,
+		ultimaSincronizacion: null,
+		proximaSincronizacion: '2026-08-10T18:45:00-05:00',
+		ultimoResultado: null,
+		ultimoError: null,
 		...overrides
 	};
 }
@@ -249,5 +263,51 @@ describe('página de Comparendos', () => {
 		await waitFor(() => expect(listar).toHaveBeenCalledTimes(2), { timeout: 2000 });
 		const args = listar.mock.calls[1][0] as { sessionId: string; estado: string | null };
 		expect(args.estado).toBe('Pagado');
+	});
+});
+
+describe('panel del Agente SIMIT', () => {
+	it('muestra «primera corrida en ~10 min» y «próxima: HH:MM» antes de la primera sincronización', async () => {
+		tauri.register('listar_comparendos', () => []);
+		tauri.register('simit_sync_status', () => infoAgente());
+
+		render(ComparendosPage);
+
+		expect(await screen.findByText('Agente SIMIT')).toBeInTheDocument();
+		expect(screen.getByText(/primera corrida en ~10 min/)).toBeInTheDocument();
+		expect(screen.getByText(/próxima: 18:45/)).toBeInTheDocument();
+	});
+
+	it('muestra «última» y «próxima» tras una corrida', async () => {
+		tauri.register('listar_comparendos', () => []);
+		tauri.register('simit_sync_status', () =>
+			infoAgente({
+				ultimaSincronizacion: '2026-08-10T18:09:00-05:00',
+				proximaSincronizacion: '2026-08-10T20:09:00-05:00'
+			})
+		);
+
+		render(ComparendosPage);
+
+		expect(await screen.findByText('Agente SIMIT')).toBeInTheDocument();
+		expect(screen.getByText(/última: .*18:09/)).toBeInTheDocument();
+		expect(screen.getByText(/próxima: 20:09/)).toBeInTheDocument();
+	});
+
+	it('muestra el último error y «aún sin sincronizar» cuando el portal no resuelve (DNS)', async () => {
+		tauri.register('listar_comparendos', () => []);
+		tauri.register('simit_sync_status', () =>
+			infoAgente({
+				ultimoError:
+					'Portal SIMIT inalcanzable (DNS) — corrida omitida. Reintento en el siguiente ciclo.',
+				proximaSincronizacion: '2026-08-10T20:09:00-05:00'
+			})
+		);
+
+		render(ComparendosPage);
+
+		expect(await screen.findByText(/Último error de sincronización/)).toBeInTheDocument();
+		expect(screen.getByText(/aún sin sincronizar/)).toBeInTheDocument();
+		expect(screen.queryByText(/primera corrida en ~10 min/)).not.toBeInTheDocument();
 	});
 });

@@ -67,6 +67,9 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
     ("simit", "timeout_seconds", "30"),
     ("simit", "circuit_breaker_threshold", "5"),
     ("simit", "circuit_breaker_timeout_seconds", "300"),
+    // Minutos a esperar tras el arranque antes de la primera corrida (0 = inmediata).
+    // Evita que el PoW/HTTP del agente compita con el inicio de la app.
+    ("simit", "start_delay_minutes", "10"),
     // [business]
     ("business", "alert_soat_days", "15"),
     ("business", "alert_tecno_mecanica_days", "15"),
@@ -162,6 +165,8 @@ pub struct AppConfig {
     pub simit_timeout_seconds: u64,
     pub simit_circuit_breaker_threshold: u32,
     pub simit_circuit_breaker_timeout_seconds: u64,
+    /// Retraso (minutos) de la primera corrida tras el arranque de la app
+    pub simit_start_delay_minutes: u64,
     // ── Business ──
     pub roles_con_informes: HashSet<String>,
     pub roles_con_usuarios: HashSet<String>,
@@ -265,6 +270,7 @@ impl AppConfig {
             simit_timeout_seconds: get_u64(&map, "simit", "timeout_seconds", 30),
             simit_circuit_breaker_threshold: get_u32(&map, "simit", "circuit_breaker_threshold", 5),
             simit_circuit_breaker_timeout_seconds: get_u64(&map, "simit", "circuit_breaker_timeout_seconds", 300),
+            simit_start_delay_minutes: get_u64(&map, "simit", "start_delay_minutes", 10),
             roles_con_informes: get_set(&map, "business", "roles_con_informes"),
             roles_con_usuarios: get_set(&map, "business", "roles_con_usuarios"),
             roles_usuarios: get_list(&map, "business", "roles_usuarios"),
@@ -507,5 +513,7 @@ mod tests {
         let ini = parse_ini(&text);
         assert_eq!(get_str(&ini, "business", "roles_con_informes", ""), "Administrador, Supervisor");
         assert_eq!(get_u64(&ini, "security", "session_timeout", 0), 3600);
+        // Retraso inicial del Agente SIMIT (10 min): no debe competir con el arranque
+        assert_eq!(get_u64(&ini, "simit", "start_delay_minutes", 0), 10);
     }
 }

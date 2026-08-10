@@ -61,6 +61,11 @@ pub async fn simit_sync_now(
 
     tauri::async_runtime::spawn_blocking(move || -> Result<ResultadoSincronizacion, AppError> {
         let resultado = crate::services::simit::run_sync(&pool, &cfg, &estado, Some(&app));
+        // Registrar el error en el estado (igual que el scheduler) para que el
+        // panel muestre por qué falló la última sincronización.
+        if let Err(e) = &resultado {
+            estado.registrar_error(&e.to_string());
+        }
         estado.liberar();
         resultado
     })
