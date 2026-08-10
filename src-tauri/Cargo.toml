@@ -42,6 +42,9 @@ r2d2_firebird = "0.27"
 rust_decimal = { version = "1", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
+# Cliente HTTP del Agente SIMIT (captcha PoW + consulta de comparendos por placa)
+ureq = { version = "2.12", features = ["json"] }
+
 # Criptografía y seguridad
 # - aes-gcm: cifrado PII nuevo formato `v1:` (AES-256-GCM) — ver core/crypto.rs
 # - cbc + aes: solo para desencriptar tokens Fernet legacy (AES-128-CBC). NO quitar.

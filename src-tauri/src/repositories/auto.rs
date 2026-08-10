@@ -347,6 +347,18 @@ impl AutoRepository {
         Ok(())
     }
 
+    /// Lista las placas de la flota que aún se operan (para el Agente SIMIT).
+    /// Excluye Vendido y Baja: no tiene sentido consultar comparendos de
+    /// vehículos que ya salieron de la flota.
+    pub fn placas_activas(conn: &mut PooledConnection) -> Result<Vec<String>, AppError> {
+        let rows: Vec<(String,)> = conn.query(
+            "SELECT placa FROM autos \
+             WHERE estado NOT IN ('Vendido', 'Baja') ORDER BY placa",
+            (),
+        )?;
+        Ok(rows.into_iter().map(|(p,)| p).collect())
+    }
+
     /// Total de vehículos
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
         let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM autos", ())?;

@@ -789,6 +789,7 @@ export interface Comparendo {
 	fechaInfraccion: string;
 	horaInfraccion: string;
 	monto: string;
+	numeroComparendo: string | null;
 	idRenta: number | null;
 	idCliente: number | null;
 	estado: string;
@@ -803,6 +804,7 @@ export interface ComparendoDatos {
 	fechaInfraccion: string;
 	horaInfraccion: string;
 	monto: string;
+	numeroComparendo?: string | null;
 	idRenta?: number | null;
 	idCliente?: number | null;
 	estado: string;
@@ -843,6 +845,62 @@ export const comparendoApi = {
 		invokeCmd<void>('eliminar_comparendo', { sessionId, id }),
 	totales: (sessionId: string) =>
 		invokeCmd<TotalesComparendos>('totales_comparendos', { sessionId })
+};
+
+// ─── Agente SIMIT (comparendos automáticos por placa) ─────────────────────────
+
+/** Registro de comparendo/multa tal como lo devuelve el SIMIT (services/simit.rs) */
+export interface RegistroSimit {
+	numero: string | null;
+	placa: string;
+	fechaInfraccion: string;
+	horaInfraccion: string;
+	monto: string;
+	estado: string;
+	organismo: string;
+	codigoInfraccion: string;
+	descripcion: string;
+	esComparendo: boolean;
+	/** true = se insertó en esta sincronización; false = ya estaba en la BD */
+	nuevo: boolean;
+}
+
+/** Error de una placa durante la sincronización */
+export interface ErrorPlacaSimit {
+	placa: string;
+	error: string;
+}
+
+/** Resultado de una sincronización con el SIMIT */
+export interface ResultadoSincronizacion {
+	sincronizadoEn: string;
+	placasConsultadas: number;
+	placasConError: number;
+	encontrados: number;
+	insertados: number;
+	duplicados: number;
+	totalPendiente: string;
+	registros: RegistroSimit[];
+	errores: ErrorPlacaSimit[];
+	reporteHtml: string | null;
+}
+
+/** Estado en memoria del agente (habilitado, intervalos, última corrida) */
+export interface InfoAgenteSimit {
+	habilitado: boolean;
+	intervalHours: number;
+	ejecutando: boolean;
+	ultimaSincronizacion: string | null;
+	ultimoResultado: ResultadoSincronizacion | null;
+	ultimoError: string | null;
+}
+
+export const simitApi = {
+	/** Estado del agente (se consulta al abrir la página) */
+	estado: (sessionId: string) => invokeCmd<InfoAgenteSimit>('simit_sync_status', { sessionId }),
+	/** Dispara una sincronización manual contra SIMIT */
+	sincronizarAhora: (sessionId: string) =>
+		invokeCmd<ResultadoSincronizacion>('simit_sync_now', { sessionId })
 };
 
 // ─── Comandos de Informes ───────────────────────────────────────────────────

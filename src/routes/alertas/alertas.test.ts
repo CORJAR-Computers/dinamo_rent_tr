@@ -103,6 +103,7 @@ function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
 		fechaInfraccion: '2026-08-01',
 		horaInfraccion: '14:30',
 		monto: '580000.00',
+		numeroComparendo: null,
 		idRenta: null,
 		idCliente: null,
 		estado: 'Pendiente',

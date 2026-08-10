@@ -66,6 +66,12 @@ max_login_attempts = 5
 max_login_attempts_in_window = 10
 session_timeout = 3600
 
+[simit]
+enabled = true
+interval_hours = 2
+polite_delay_ms = 2500
+report_dir = informes_simit
+
 [ui]
 color_fondo = #f8fafc
 color_primario = #1e40af

@@ -1,14 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+	import ExcelJS from 'exceljs';
 	import {
 		comparendoApi,
 		autoApi,
 		businessApi,
+		simitApi,
 		ApiError,
 		type Comparendo,
 		type ComparendoDatos,
 		type Auto,
-		type BusinessLists
+		type BusinessLists,
+		type InfoAgenteSimit,
+		type ResultadoSincronizacion
 	} from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -51,6 +56,94 @@
 	
 	let imprimirComparendo = $state<Comparendo | null>(null);
 
+	// ── Agente SIMIT ──
+	let agente = $state<InfoAgenteSimit | null>(null);
+	let sincronizando = $state(false);
+	let unlistenSimit: UnlistenFn | null = null;
+
+	async function cargarAgente() {
+		if (!haySesion()) return;
+		try {
+			agente = await simitApi.estado(sid());
+		} catch (e) {
+			// Sin backend Tauri (tests / standalone) o error transitorio → sin panel
+			agente = null;
+			if (!(e instanceof ApiError)) console.error('No se pudo consultar el estado del Agente SIMIT', e);
+		}
+	}
+
+	async function sincronizarAhora() {
+		if (sincronizando) return;
+		sincronizando = true;
+		try {
+			const resultado = await simitApi.sincronizarAhora(sid());
+			agente = { ...(agente ?? { habilitado: true, intervalHours: 2, ejecutando: false, ultimaSincronizacion: null, ultimoResultado: null, ultimoError: null }), ultimaSincronizacion: resultado.sincronizadoEn, ultimoResultado: resultado };
+			if (resultado.insertados > 0) {
+				toast.success(`Agente SIMIT: ${resultado.insertados} comparendo${resultado.insertados === 1 ? '' : 's'} nuevo${resultado.insertados === 1 ? '' : 's'} registrado${resultado.insertados === 1 ? '' : 's'}.`);
+			} else {
+				toast.success('Agente SIMIT: sincronización completada sin comparendos nuevos.');
+			}
+			await cargar();
+		} catch (e) {
+			toast.error(e instanceof ApiError ? e.message : 'No se pudo sincronizar con el SIMIT.');
+		} finally {
+			sincronizando = false;
+		}
+	}
+
+	async function descargarExcelSimit() {
+		const resultado = agente?.ultimoResultado;
+		if (!resultado || resultado.registros.length === 0) {
+			toast.error('No hay registros del SIMIT para exportar. Ejecuta primero una sincronización.');
+			return;
+		}
+		try {
+			const wb = new ExcelJS.Workbook();
+			const ws = wb.addWorksheet('Comparendos SIMIT');
+			ws.columns = Array.from({ length: 10 }, () => ({ width: 16 }));
+			ws.mergeCells(1, 1, 1, 10);
+			ws.getCell('A1').value = 'DINAMO RENT — REPORTE SIMIT';
+			ws.getCell('A1').font = { bold: true, size: 14 };
+			ws.mergeCells(2, 1, 2, 10);
+			ws.getCell('A2').value = `Sincronización: ${new Date(resultado.sincronizadoEn).toLocaleString('es-CO')}`;
+			ws.addRow([]);
+			const header = ['Placa', 'N° Comparendo', 'Fecha', 'Hora', 'Tipo', 'Infracción', 'Organismo', 'Valor', 'Estado', 'Nuevo'];
+			const headerRow = ws.addRow(header);
+			headerRow.eachCell((cell) => {
+				cell.font = { bold: true };
+				cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+			});
+			for (const r of resultado.registros) {
+				ws.addRow([
+					r.placa,
+					r.numero ?? '',
+					r.fechaInfraccion,
+					r.horaInfraccion,
+					r.esComparendo ? 'Comparendo' : 'Multa',
+					r.descripcion,
+					r.organismo,
+					parseFloat(r.monto) || 0,
+					r.estado,
+					r.nuevo ? 'Sí' : 'No'
+				]);
+			}
+			ws.addRow([]);
+			ws.addRow(['Total pendiente', `$${resultado.totalPendiente}`]);
+			const buffer = await wb.xlsx.writeBuffer();
+			const blob = new Blob([buffer], {
+				type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+			});
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `comparendos_simit_${resultado.sincronizadoEn.slice(0, 10)}.xlsx`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			toast.error(e instanceof Error ? 'No se pudo generar el Excel: ' + e.message : 'No se pudo generar el Excel.');
+		}
+	}
+
 	function defaultForm(): ComparendoDatos {
 		const hoy = new Date();
 		const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -59,6 +152,7 @@
 			fechaInfraccion: iso(hoy),
 			horaInfraccion: '',
 			monto: '',
+			numeroComparendo: null,
 			idRenta: null,
 			idCliente: null,
 			estado: 'Pendiente',
@@ -99,6 +193,33 @@
 			autos = [];
 		}
 		await cargar();
+		cargarAgente();
+	});
+
+	// El backend emite `simit-sync-complete` al terminar cada corrida
+	// (programada cada 2 h o manual) → refrescar lista y panel.
+	onMount(() => {
+		let activo = true;
+		listen<ResultadoSincronizacion>('simit-sync-complete', (evt) => {
+			if (!activo) return;
+			const r = evt.payload;
+			agente = { ...(agente ?? { habilitado: true, intervalHours: 2, ejecutando: false, ultimaSincronizacion: null, ultimoResultado: null, ultimoError: null }), ultimaSincronizacion: r.sincronizadoEn, ultimoResultado: r };
+			if (r.insertados > 0) {
+				toast.success(`Agente SIMIT: ${r.insertados} comparendo${r.insertados === 1 ? '' : 's'} nuevo${r.insertados === 1 ? '' : 's'} registrado${r.insertados === 1 ? '' : 's'}.`);
+			}
+			cargar();
+		})
+			.then((u) => {
+				if (activo) unlistenSimit = u;
+				else u();
+			})
+			.catch(() => {
+				// Sin runtime Tauri (tests / vite standalone): no hay evento de sincronización.
+			});
+		return () => {
+			activo = false;
+			unlistenSimit?.();
+		};
 	});
 
 	let primerCiclo = true;
@@ -130,6 +251,8 @@
 			fechaInfraccion: c.fechaInfraccion,
 			horaInfraccion: c.horaInfraccion,
 			monto: c.monto,
+			// Conserva el número oficial (Agente SIMIT) al editar, para no romper la deduplicación
+			numeroComparendo: c.numeroComparendo ?? null,
 			idRenta: c.idRenta,
 			idCliente: c.idCliente,
 			estado: c.estado,
@@ -250,6 +373,95 @@
 			Registrar Comparendo
 		</button>
 	</div>
+
+	<!-- Agente SIMIT: consulta automática de comparendos por placa -->
+	{#if agente}
+		<div class="card p-4 space-y-3">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="flex items-center gap-3">
+					<div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" /></svg>
+					</div>
+					<div>
+						<p class="font-semibold text-text-primary">Agente SIMIT</p>
+						<p class="text-xs text-text-secondary">
+							Consulta automática de comparendos por placa · cada {agente.intervalHours} h
+							{#if agente.ultimaSincronizacion}
+								· última: {formatDate(agente.ultimaSincronizacion.slice(0, 10))} {agente.ultimaSincronizacion.slice(11, 16)}
+								{:else}
+								· aún sin sincronizar
+							{/if}
+						</p>
+					</div>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if agente.ejecutando || sincronizando}
+						<span class="inline-flex items-center gap-2 text-xs font-semibold text-primary">
+							<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+							Consultando SIMIT...
+						</span>
+					{:else if !agente.habilitado}
+						<span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold text-text-secondary border-border">Deshabilitado en config.ini</span>
+					{/if}
+					<button class="btn-ghost" onclick={descargarExcelSimit} disabled={!agente.ultimoResultado || agente.ultimoResultado.registros.length === 0}>
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+						Descargar Excel
+					</button>
+					<button class="btn-primary" onclick={sincronizarAhora} disabled={sincronizando || agente.ejecutando}>
+						{#if sincronizando || agente.ejecutando}
+							<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+							Sincronizando...
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+							Sincronizar ahora
+						{/if}
+					</button>
+				</div>
+			</div>
+
+			{#if agente.ultimoResultado}
+				{@const r = agente.ultimoResultado}
+				<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+					<span class="text-text-secondary">
+						Placas consultadas: <strong class="text-text-primary tabular-nums">{r.placasConsultadas}</strong>
+					</span>
+					<span class="text-text-secondary">
+						Encontrados: <strong class="text-text-primary tabular-nums">{r.encontrados}</strong>
+					</span>
+					<span class="text-text-secondary">
+						Nuevos en la BD: <strong class="text-exito tabular-nums">{r.insertados}</strong>
+					</span>
+					<span class="text-text-secondary">
+						Ya registrados: <strong class="text-text-primary tabular-nums">{r.duplicados}</strong>
+					</span>
+					{#if r.errores.length > 0}
+						<span class="text-text-secondary">
+							Placas con error: <strong class="text-peligro tabular-nums">{r.errores.length}</strong>
+						</span>
+					{/if}
+					<span class="text-text-secondary">
+						Total pendiente: <strong class="text-alerta tabular-nums">{formatCOP(r.totalPendiente)}</strong>
+					</span>
+				</div>
+				{#if r.reporteHtml}
+					<p class="text-[11px] text-text-secondary font-mono truncate" title={r.reporteHtml}>
+						Reporte HTML: {r.reporteHtml}
+					</p>
+				{/if}
+				{#if r.errores.length > 0}
+					<div class="rounded-lg bg-peligro/10 border border-peligro/25 px-3 py-2 text-[11px] text-peligro max-h-24 overflow-y-auto">
+						{#each r.errores as e}
+							<p>• {e.placa}: {e.error}</p>
+						{/each}
+					</div>
+				{/if}
+			{:else if agente.ultimoError}
+				<p class="text-xs text-peligro">
+					Último error de sincronización: {agente.ultimoError}
+				</p>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Filtros -->
 	<div class="flex flex-wrap items-center gap-3">

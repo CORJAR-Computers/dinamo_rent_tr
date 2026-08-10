@@ -70,6 +70,10 @@ pub fn run() {
                 pii_key: std::sync::Mutex::new(config.db_encryption_key.clone()),
             };
             app.manage(state);
+
+            // ── Estado en memoria del Agente SIMIT (comparendos automáticos) ──
+            let simit_estado = std::sync::Arc::new(services::simit::EstadoAgenteSimit::default());
+            app.manage(services::simit::EstadoAgenteSimitManaged(simit_estado.clone()));
             // Flag de frontend listo para el diálogo de confirmación de cierre
             // (evita bloquear la X antes de que el webview escuche el evento).
             app.manage(commands::app::FrontendListo(
@@ -78,6 +82,15 @@ pub fn run() {
             // Sincronizar tracker de intentos fallidos desde la BD (restaura bloqueos)
             let managed_state = app.state::<AppState>();
             AuthService::sync_tracker_from_db(&managed_state);
+
+            // ── Agente SIMIT: consulta automática de comparendos en segundo plano ──
+            // Consulta al arrancar y después cada `simit.interval_hours` (2 h).
+            services::simit::spawn_scheduler(
+                app.handle().clone(),
+                pool.clone(),
+                config.clone(),
+                simit_estado,
+            );
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -159,6 +172,8 @@ pub fn run() {
             commands::comparendo::marcar_pagado_comparendo,
             commands::comparendo::eliminar_comparendo,
             commands::comparendo::totales_comparendos,
+            commands::simit::simit_sync_status,
+            commands::simit::simit_sync_now,
             commands::reserva::listar_reservas,
             commands::reserva::proximas_reservas,
             commands::reserva::obtener_reserva,

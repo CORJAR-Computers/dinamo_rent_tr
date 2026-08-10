@@ -230,7 +230,7 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
     run_migrations(&pool, &migrations_dir)
         .expect("la migración debe auto-reparar la BD parcial");
 
-    // Las 14 migraciones quedan registradas.
+    // Las 15 migraciones quedan registradas.
     let aplicadas = versiones_aplicadas(&pool);
     for v in [
         "0001_initial_schema.sql",
@@ -247,6 +247,7 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
         "0012_consolidar_indices_simples.sql",
         "0013_consolidar_indices_auditoria.sql",
         "0014_limpiar_tablas_tests.sql",
+        "0015_comparendo_numero_simit.sql",
     ] {
         assert!(
             aplicadas.contains(&v.to_string()),
@@ -382,6 +383,13 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
         "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
         "IX_AUDITORIA_USUARIO_FECHA"
     ));
+    // 0015 agrega la columna numero_comparendo para la deduplicación SIMIT.
+    assert!(existe_columna(&pool, "COMPARENDOS", "NUMERO_COMPARENDO"));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_COMPARENDOS_NUMERO"
+    ));
     // 0014 no deja tablas residuales de test en la copia de dev (la BD dev ya
     // quedó limpia al aplicar 0014 en el arranque real; una copia de una BD que
     // aún las tuviera las eliminaría — el DROP del patrón exacto se ejercita en
@@ -427,6 +435,7 @@ fn migraciones_sobre_bd_ya_migrada_son_no_op() {
     assert_eq!(versiones_aplicadas(&pool), antes);
     assert_eq!(contar_triggers_updated_at(&pool), 9);
     assert_eq!(contar_chk(&pool), 5);
+    assert!(existe_columna(&pool, "COMPARENDOS", "NUMERO_COMPARENDO"));
 }
 
 /// Borra el directorio temporal al salir (panic-safe).
@@ -531,7 +540,7 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
     let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
 
     run_migrations(&pool, &migrations_dir)
-        .expect("las 14 migraciones deben aplicar sobre una BD vacía");
+        .expect("las 15 migraciones deben aplicar sobre una BD vacía");
 
     let aplicadas = versiones_aplicadas(&pool);
     for v in [
@@ -545,12 +554,20 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
         "0012_consolidar_indices_simples.sql",
         "0013_consolidar_indices_auditoria.sql",
         "0014_limpiar_tablas_tests.sql",
+        "0015_comparendo_numero_simit.sql",
     ] {
         assert!(
             aplicadas.contains(&v.to_string()),
             "falta registrar {v} en BD nueva; registradas: {aplicadas:?}"
         );
     }
+    // 0015: columna de número oficial (deduplicación del Agente SIMIT).
+    assert!(existe_columna(&pool, "COMPARENDOS", "NUMERO_COMPARENDO"));
+    assert!(existe_objeto(
+        &pool,
+        "SELECT COUNT(*) FROM RDB$INDICES WHERE RDB$INDEX_NAME = ?",
+        "IX_COMPARENDOS_NUMERO"
+    ));
     assert!(existe_columna(&pool, "RENTAS", "UPDATED_AT"));
     assert!(existe_columna(&pool, "RENTAS", "NO_CONTRATO"));
     assert!(existe_columna(&pool, "RENTAS", "ANIO_CONTRATO"));
@@ -863,7 +880,7 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("el runner debe auto-reparar una instalación nueva a medias");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 14, "todas las versiones");
+    assert_eq!(versiones_aplicadas(&pool).len(), 15, "todas las versiones");
     // 0001 completo: la última tabla y su índice; 0002 completo.
     assert!(existe_objeto(
         &pool,
@@ -913,7 +930,7 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
         "IX_INSPECCIONES_ID_RENTA"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 14);
+    assert_eq!(versiones_aplicadas(&pool).len(), 15);
 }
 
 /// Simula una instalación nueva con 0001+0002 completos y un crash a mitad de
@@ -959,7 +976,7 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("auto-reparar instalación a medias en 0003/0004");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 14);
+    assert_eq!(versiones_aplicadas(&pool).len(), 15);
     assert!(existe_objeto(
         &pool,
         "SELECT COUNT(*) FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = ?",
@@ -977,5 +994,5 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
         "IX_RENTAS_NO_CONTRATO"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 14);
+    assert_eq!(versiones_aplicadas(&pool).len(), 15);
 }

@@ -57,6 +57,11 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
     // [ui]
     ("ui", "color_primario", "#1e40af"),
     ("ui", "color_fondo", "#f8fafc"),
+    // [simit] — Agente de consulta automática de comparendos en SIMIT
+    ("simit", "enabled", "true"),
+    ("simit", "interval_hours", "2"),
+    ("simit", "polite_delay_ms", "2500"),
+    ("simit", "report_dir", "informes_simit"),
     // [business]
     ("business", "alert_soat_days", "15"),
     ("business", "alert_tecno_mecanica_days", "15"),
@@ -142,6 +147,11 @@ pub struct AppConfig {
     pub login_rate_limit_window: u64,
     pub max_login_attempts_in_window: u32,
     pub db_encryption_key: String,
+    // ── Simit (agente de comparendos) ──
+    pub simit_enabled: bool,
+    pub simit_interval_hours: u64,
+    pub simit_polite_delay_ms: u64,
+    pub simit_report_dir: PathBuf,
     // ── Business ──
     pub roles_con_informes: HashSet<String>,
     pub roles_con_usuarios: HashSet<String>,
@@ -231,6 +241,15 @@ impl AppConfig {
                 10,
             ),
             db_encryption_key: get_str(&map, "security", "db_encryption_key", ""),
+            simit_enabled: get_bool(&map, "simit", "enabled", true),
+            simit_interval_hours: get_u64(&map, "simit", "interval_hours", 2),
+            simit_polite_delay_ms: get_u64(&map, "simit", "polite_delay_ms", 2500),
+            simit_report_dir: PathBuf::from(get_str(
+                &map,
+                "simit",
+                "report_dir",
+                "informes_simit",
+            )),
             roles_con_informes: get_set(&map, "business", "roles_con_informes"),
             roles_con_usuarios: get_set(&map, "business", "roles_con_usuarios"),
             roles_usuarios: get_list(&map, "business", "roles_usuarios"),
@@ -364,6 +383,13 @@ fn get_u32(map: &IniMap, section: &str, key: &str, fallback: u32) -> u32 {
     map.get(section)
         .and_then(|s| s.get(key))
         .and_then(|v| v.trim().parse::<u32>().ok())
+        .unwrap_or(fallback)
+}
+
+fn get_bool(map: &IniMap, section: &str, key: &str, fallback: bool) -> bool {
+    map.get(section)
+        .and_then(|s| s.get(key))
+        .and_then(|v| v.trim().parse::<bool>().ok())
         .unwrap_or(fallback)
 }
 

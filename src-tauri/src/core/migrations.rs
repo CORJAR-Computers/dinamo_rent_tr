@@ -47,10 +47,11 @@
 //! `DEFAULT 'x--y'`) truncaría la línea y rompería la migración silenciosamente.
 //! Evitar `--` dentro de los literales y validar con los tests de migraciones.
 //!
-//! # Serie actual: 0001-0014
+//! # Serie actual: 0001-0015
 //!
 //! 0001-0009 esquema + funciones (0001-0004 idempotentes, 0005-0009 auto-reparables),
-//! 0010-0013 consolidación de índices, 0014 limpieza de tablas residuales de test.
+//! 0010-0013 consolidación de índices, 0014 limpieza de tablas residuales de test,
+//! 0015 columna numero_comparendo (deduplicación del Agente SIMIT).
 
 use std::path::Path;
 

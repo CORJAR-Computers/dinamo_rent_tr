@@ -24,6 +24,8 @@ pub struct Comparendo {
     pub hora_infraccion: String,
     /// Monto como string (decimal exacto)
     pub monto: String,
+    /// Número oficial del comparendo (fuente SIMIT o registro manual)
+    pub numero_comparendo: Option<String>,
     pub id_renta: Option<i64>,
     pub id_cliente: Option<i64>,
     pub estado: String,
@@ -40,6 +42,8 @@ pub struct ComparendoDatos {
     pub fecha_infraccion: String,
     pub hora_infraccion: String,
     pub monto: String,
+    /// Número oficial del comparendo (opcional; usado para deduplicar SIMIT)
+    pub numero_comparendo: Option<String>,
     pub id_renta: Option<i64>,
     pub id_cliente: Option<i64>,
     pub estado: String,
@@ -59,7 +63,7 @@ macro_rules! params {
 pub const SELECT_COLS: &str = "\
     c.id, c.placa, COALESCE(a.marca || ' ' || a.modelo, ''), \
     CAST(c.fecha_infraccion AS VARCHAR(10)), CAST(c.hora_infraccion AS VARCHAR(13)), \
-    CAST(c.monto AS VARCHAR(12)), c.id_renta, c.id_cliente, c.estado, \
+    CAST(c.monto AS VARCHAR(12)), c.numero_comparendo, c.id_renta, c.id_cliente, c.estado, \
     CAST(c.observaciones AS VARCHAR(2000)), \
     CAST(c.created_at AS VARCHAR(30)), CAST(c.updated_at AS VARCHAR(30))";
 
@@ -72,6 +76,7 @@ pub type ComparendoRow = (
     String,
     String,
     String,
+    Option<String>,
     Option<i64>,
     Option<i64>,
     String,
@@ -88,12 +93,13 @@ fn from_row(r: ComparendoRow) -> Comparendo {
         fecha_infraccion: r.3,
         hora_infraccion: r.4.split(':').take(2).collect::<Vec<_>>().join(":"),
         monto: r.5,
-        id_renta: r.6,
-        id_cliente: r.7,
-        estado: r.8,
-        observaciones: r.9,
-        created_at: r.10,
-        updated_at: r.11,
+        numero_comparendo: r.6,
+        id_renta: r.7,
+        id_cliente: r.8,
+        estado: r.9,
+        observaciones: r.10,
+        created_at: r.11,
+        updated_at: r.12,
     }
 }
 
@@ -190,13 +196,15 @@ impl ComparendoRepository {
         let (id,): (i64,) = conn
             .execute_returnable(
                 "INSERT INTO comparendos \
-                    (placa, fecha_infraccion, hora_infraccion, monto, id_renta, id_cliente, estado, observaciones) \
-                 VALUES (?, ?, ?, CAST(? AS DECIMAL(12,2)), ?, ?, ?, ?) RETURNING id",
+                    (placa, fecha_infraccion, hora_infraccion, monto, numero_comparendo, \
+                     id_renta, id_cliente, estado, observaciones) \
+                 VALUES (?, ?, ?, CAST(? AS DECIMAL(12,2)), ?, ?, ?, ?, ?) RETURNING id",
                 params![
                     d.placa.to_string(),
                     parse_fecha(&d.fecha_infraccion)?,
                     parse_hora(&d.hora_infraccion)?,
                     d.monto.to_string(),
+                    opt_str(&d.numero_comparendo),
                     d.id_renta,
                     d.id_cliente,
                     d.estado.to_string(),
@@ -211,14 +219,15 @@ impl ComparendoRepository {
     pub fn actualizar(conn: &mut PooledConnection, id: i64, d: &ComparendoDatos) -> Result<(), AppError> {
         conn.execute(
             "UPDATE comparendos SET placa = ?, fecha_infraccion = ?, hora_infraccion = ?, \
-             monto = CAST(? AS DECIMAL(12,2)), id_renta = ?, id_cliente = ?, estado = ?, \
-             observaciones = ?, updated_at = CURRENT_TIMESTAMP \
+             monto = CAST(? AS DECIMAL(12,2)), numero_comparendo = ?, id_renta = ?, \
+             id_cliente = ?, estado = ?, observaciones = ?, updated_at = CURRENT_TIMESTAMP \
              WHERE id = ?",
             params![
                 d.placa.to_string(),
                 parse_fecha(&d.fecha_infraccion)?,
                 parse_hora(&d.hora_infraccion)?,
                 d.monto.to_string(),
+                opt_str(&d.numero_comparendo),
                 d.id_renta,
                 d.id_cliente,
                 d.estado.to_string(),
@@ -249,6 +258,45 @@ impl ComparendoRepository {
         )
         .map_err(map_fb_error)?;
         Ok(())
+    }
+
+    /// ¿Existe un comparendo activo con ese número oficial? (deduplicación SIMIT)
+    pub fn existe_por_numero(conn: &mut PooledConnection, numero: &str) -> Result<bool, AppError> {
+        let count: Option<(i64,)> = conn.query_first(
+            "SELECT COUNT(*) FROM comparendos \
+             WHERE numero_comparendo = ? AND deleted_at IS NULL",
+            (numero.trim().to_string(),),
+        )?;
+        Ok(count.map(|(c,)| c).unwrap_or(0) > 0)
+    }
+
+    /// Marca como pagado los comparendos activos con ese número oficial que
+    /// aún estén pendientes (el Agente SIMIT converge la BD con el SIMIT).
+    pub fn marcar_pagado_por_numero(conn: &mut PooledConnection, numero: &str) -> Result<(), AppError> {
+        conn.execute(
+            "UPDATE comparendos SET estado = 'Pagado', updated_at = CURRENT_TIMESTAMP \
+             WHERE numero_comparendo = ? AND estado <> 'Pagado' AND deleted_at IS NULL",
+            (numero.trim().to_string(),),
+        )
+        .map_err(map_fb_error)?;
+        Ok(())
+    }
+
+    /// ¿Existe un comparendo activo con la misma placa, fecha y monto?
+    /// Fallback de deduplicación cuando no hay número oficial.
+    pub fn existe_duplicado(
+        conn: &mut PooledConnection,
+        placa: &str,
+        fecha: &str,
+        monto: &str,
+    ) -> Result<bool, AppError> {
+        let count: Option<(i64,)> = conn.query_first(
+            "SELECT COUNT(*) FROM comparendos \
+             WHERE placa = ? AND fecha_infraccion = ? AND monto = CAST(? AS DECIMAL(12,2)) \
+               AND deleted_at IS NULL",
+            (placa.to_string(), parse_fecha(fecha)?, monto.to_string()),
+        )?;
+        Ok(count.map(|(c,)| c).unwrap_or(0) > 0)
     }
 
     /// Total de comparendos registrados

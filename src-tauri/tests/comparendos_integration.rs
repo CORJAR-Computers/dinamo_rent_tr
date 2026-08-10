@@ -47,6 +47,7 @@ fn datos_comparendo(placa: &str, monto: &str) -> ComparendoDatos {
         fecha_infraccion: hoy.format("%Y-%m-%d").to_string(),
         hora_infraccion: "14:30".into(),
         monto: monto.into(),
+        numero_comparendo: None,
         id_renta: None,
         id_cliente: None,
         estado: "Pendiente".into(),
@@ -196,4 +197,86 @@ fn comparendo_totales() {
 
     ComparendoService::eliminar(&mut conn, c1.id).expect("eliminar c1");
     ComparendoService::eliminar(&mut conn, c2.id).expect("eliminar c2");
+}
+
+#[test]
+#[serial]
+fn comparendo_numero_oficial_y_dedup() {
+    // Verifica el número oficial (fuente SIMIT): round-trip del campo y los
+    // métodos de deduplicación que usa el Agente SIMIT.
+    use dinamo_rent_lib::repositories::comparendo::ComparendoRepository;
+
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        eprintln!("Sin autos en la BD de dev — test omitido");
+        return;
+    };
+
+    let mut datos = datos_comparendo(&placa, "320000");
+    datos.numero_comparendo = Some("TEST-250010000000999".into());
+    let creado = ComparendoService::crear(&mut conn, cfg, datos.clone()).expect("crear");
+    assert_eq!(
+        creado.numero_comparendo.as_deref(),
+        Some("TEST-250010000000999"),
+        "el número viaja hasta la fila serializable"
+    );
+
+    // Dedup por número (el caso real del agente: mismo número → no re-insertar)
+    assert!(
+        ComparendoRepository::existe_por_numero(&mut conn, "TEST-250010000000999").expect("num"),
+        "el número ya existe en la BD"
+    );
+    assert!(
+        !ComparendoRepository::existe_por_numero(&mut conn, "TEST-999").expect("num 2"),
+        "número distinto no existe"
+    );
+
+    // Dedup por placa + fecha + monto (fallback sin número)
+    assert!(
+        ComparendoRepository::existe_duplicado(
+            &mut conn,
+            &placa,
+            &datos.fecha_infraccion,
+            "320000.00"
+        )
+        .expect("dup"),
+        "misma placa/fecha/monto → duplicado"
+    );
+    assert!(
+        !ComparendoRepository::existe_duplicado(
+            &mut conn,
+            &placa,
+            &datos.fecha_infraccion,
+            "1.00"
+        )
+        .expect("dup 2"),
+        "monto distinto → no duplicado"
+    );
+
+    // El número se conserva al editar
+    datos.monto = "340000".into();
+    let actualizado =
+        ComparendoService::actualizar(&mut conn, cfg, creado.id, datos).expect("actualizar");
+    assert_eq!(
+        actualizado.numero_comparendo.as_deref(),
+        Some("TEST-250010000000999"),
+        "el número no se pierde al actualizar"
+    );
+
+    // Sincronización de estado: el SIMIT reporta pagado → la BD converge
+    // (solo toca registros pendientes con ese número).
+    ComparendoRepository::marcar_pagado_por_numero(&mut conn, "TEST-250010000000999")
+        .expect("marcar por número");
+    let obtenido = ComparendoService::obtener(&mut conn, creado.id).expect("obtener");
+    assert_eq!(obtenido.estado, "Pagado", "estado sincronizado desde el número");
+
+    ComparendoService::eliminar(&mut conn, creado.id).expect("eliminar");
+    assert!(
+        !ComparendoRepository::existe_por_numero(&mut conn, "TEST-250010000000999")
+            .expect("num after delete"),
+        "soft-delete excluye el número (dedup solo sobre activos)"
+    );
 }

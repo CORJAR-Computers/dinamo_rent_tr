@@ -14,6 +14,7 @@ pub mod mantenimiento;
 pub mod pii;
 pub mod reserva;
 pub mod renta;
+pub mod simit;
 pub mod usuario;
 
 use crate::core::error::{AppError, ErrorPayload};
