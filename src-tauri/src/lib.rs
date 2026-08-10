@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use services::auth::AuthService;
 use services::AppState;
+use tauri::Emitter;
 use tauri::Manager;
 
 use crate::core::config::AppConfig;
@@ -69,6 +70,11 @@ pub fn run() {
                 pii_key: std::sync::Mutex::new(config.db_encryption_key.clone()),
             };
             app.manage(state);
+            // Flag de frontend listo para el diálogo de confirmación de cierre
+            // (evita bloquear la X antes de que el webview escuche el evento).
+            app.manage(commands::app::FrontendListo(
+                std::sync::atomic::AtomicBool::new(false),
+            ));
             // Sincronizar tracker de intentos fallidos desde la BD (restaura bloqueos)
             let managed_state = app.state::<AppState>();
             AuthService::sync_tracker_from_db(&managed_state);
@@ -82,7 +88,30 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // Confirmación de cierre: el botón X de la ventana NO cierra de
+            // inmediato. Se previene el cierre y se emite `app-close-requested`
+            // al frontend, que muestra «¿Está seguro de cerrar la aplicación?».
+            // Si el usuario confirma, el comando `confirmar_cierre` destruye la
+            // ventana con destroy() (que no vuelve a disparar CloseRequested).
+            // Solo se previene cuando el frontend confirmó que escucha el evento
+            // (FrontendListo); si aún no está listo, se permite el cierre normal
+            // para no dejar la ventana permanentemente bloqueada.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let listo = window
+                    .app_handle()
+                    .try_state::<commands::app::FrontendListo>()
+                    .map(|s| s.0.load(std::sync::atomic::Ordering::SeqCst))
+                    .unwrap_or(false);
+                if listo {
+                    api.prevent_close();
+                    let _ = window.emit("app-close-requested", ());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
+            commands::app::confirmar_cierre,
+            commands::app::app_frontend_lista,
             commands::auditoria::listar_auditoria,
             commands::auditoria::acciones_auditoria,
             commands::auditoria::usuarios_auditoria,

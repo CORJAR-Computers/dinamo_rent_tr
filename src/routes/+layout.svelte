@@ -10,6 +10,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import AtajosModal, { esAtajoAyuda } from '$lib/components/AtajosModal.svelte';
 	import PaletaComandos, { esAtajoPaleta } from '$lib/components/PaletaComandos.svelte';
+	import ConfirmarCierre from '$lib/components/ConfirmarCierre.svelte';
 
 	// Props de SvelteKit (snippet de la página hija)
 	let { children } = $props();
@@ -217,7 +218,11 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 	}
 </script>
 
-<Toast />	<svelte:window onkeydown={onGlobalKeydown} />
+<Toast />
+<!-- Confirmación al pulsar la X de la ventana (Sí/No). Se monta a nivel raíz,
+     fuera del if/else de sesión, para cubrir también login / cambiar-password. -->
+<ConfirmarCierre />
+<svelte:window onkeydown={onGlobalKeydown} />
 
 <svelte:head>
 	<meta name="theme-color" content={darkMode ? '#0b1220' : '#f5f7fb'} />

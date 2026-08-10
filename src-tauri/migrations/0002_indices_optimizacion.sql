@@ -5,6 +5,9 @@
 -- BLOCK + EXECUTE STATEMENT) para auto-reparar una instalación que quedó a
 -- medias (índice creado pero migración sin registrar): al reintentar se omite
 -- lo ya creado y se crea lo que falta.
+--
+-- Consolidado en 0011: IDX_MANTENIMIENTO_PLACA se eliminó de aquí (redundante
+-- con el índice automático de la FK mantenimiento.placa → RDB$FOREIGN34).
 
 -- Optimización de búsquedas por placa
 EXECUTE BLOCK
@@ -19,13 +22,6 @@ AS
 BEGIN
   IF (NOT EXISTS(SELECT 1 FROM RDB$INDICES WHERE RDB$INDEX_NAME = 'IDX_PAGOS_FECHA')) THEN
     EXECUTE STATEMENT 'CREATE INDEX IDX_PAGOS_FECHA ON PAGOS (fecha)';
-END;
-
-EXECUTE BLOCK
-AS
-BEGIN
-  IF (NOT EXISTS(SELECT 1 FROM RDB$INDICES WHERE RDB$INDEX_NAME = 'IDX_MANTENIMIENTO_PLACA')) THEN
-    EXECUTE STATEMENT 'CREATE INDEX IDX_MANTENIMIENTO_PLACA ON MANTENIMIENTO_VEHICULOS (placa)';
 END;
 
 -- Optimización de informe mensual (rango de fechas)

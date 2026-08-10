@@ -115,6 +115,59 @@ bun run tauri dev
 
 ---
 
+## 🪟 Windows: exclusiones para builds sin `os error 32`
+
+> Aplica solo en máquinas Windows con Defender / índice de búsqueda activos; en Linux/macOS no hace falta.
+
+**Síntoma**: `error: failed to build archive at ...rlib ... (os error 32)` al compilar con cargo (típicamente en el crate `tauri`) dentro de `src-tauri\target`. La causa: Windows Defender (escaneo en tiempo real) y/o el índice de búsqueda (`SearchIndexer`) abren los archivos temporales `.tmp*.temp-archive` que `rustc` crea y borra, bloqueándolos un instante.
+
+**Solución**: excluir la carpeta del proyecto de ambos componentes. Reemplazar `D:\dinamo_rent_tr` por la ruta real del repo en cada máquina.
+
+### 1) Windows Defender — exclusión de ruta
+
+GUI: **Seguridad de Windows → Protección contra virus y amenazas → Administrar la configuración → Exclusiones → Agregar o quitar exclusiones → + Agregar exclusión → Carpeta** → `D:\dinamo_rent_tr\src-tauri\target`.
+
+O en PowerShell **como administrador**:
+
+```powershell
+Add-MpPreference -ExclusionPath 'D:\dinamo_rent_tr\src-tauri\target'
+# Opcional: excluir todo el proyecto (cubre target, node_modules y la BD)
+Add-MpPreference -ExclusionPath 'D:\dinamo_rent_tr'
+
+# Verificar (requiere admin)
+Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+```
+
+### 2) Windows Search (índice) — carpeta excluida
+
+GUI: **Configuración → Privacidad y seguridad → Búsqueda en Windows → Excluir carpetas → Agregar** → `D:\dinamo_rent_tr`.
+
+O por PowerShell (por usuario, sin admin; escribe en el crawl scope del índice):
+
+```powershell
+$base = 'HKCU:\SOFTWARE\Microsoft\Windows Search\CrawlScopeManager\Windows\DefaultGatherManager\AppScope'
+$guid = [Guid]::NewGuid().ToString('B').ToUpper()
+New-Item -Path "$base\$guid" -Force | Out-Null
+New-ItemProperty -Path "$base\$guid" -Name 'URLOrPath' -Value 'file:///D:\dinamo_rent_tr\' -PropertyType String -Force | Out-Null
+New-ItemProperty -Path "$base\$guid" -Name 'ScopeType' -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path "$base\$guid" -Name 'Attributes' -Value 0 -PropertyType DWord -Force | Out-Null
+# Reiniciar el índice para que aplique de inmediato (requiere admin):
+# Restart-Service WSearch -Force
+```
+
+### 3) Verificación
+
+Con ambas exclusiones aplicadas, el ciclo completo debe compilar sin el error:
+
+```bash
+cd src-tauri && cargo test   # build de tests + suite completa
+cd .. && npm run tauri dev   # build + arranque de la app
+```
+
+> ℹ️ **Nota**: un `os error 32` en un *note* del directorio incremental (`target/debug/incremental`) es **no fatal** (cargo solo descarta ese caché y sigue); suele ser el índice tocando el directorio justo tras compilar. Para silenciarlo: `CARGO_INCREMENTAL=0 cargo build` (o `cargo test`).
+
+---
+
 ## 🔒 Seguridad
 
 El sistema cifra datos PII de clientes (cédula, teléfono, licencia) con **AES-256-GCM** y aplica **Argon2id** para hashes de contraseñas. Ver detalles técnicos y políticas en:

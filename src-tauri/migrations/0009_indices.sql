@@ -3,33 +3,27 @@
 --
 -- Verificación de índices solicitados vs. existentes (0001 + 0002):
 --
--- 1. inspecciones.id_renta — NO existe índice en 0001 ni 0002. Se crea.
---    Justificación: cada renta consulta sus inspecciones via
---    `WHERE id_renta = ?` (repositories/renta.rs::inspecciones_de). Sin índice,
---    Firebird hace un full table scan de inspecciones por cada renta.
+-- 1. inspecciones.id_renta — NO hay índice manual en 0001 ni 0002, pero la
+--    FK inspecciones.id_renta → rentas crea automáticamente RDB$FOREIGN42
+--    sobre la misma columna (el planner ya la usa). Por eso NO se crea
+--    ningún índice manual aquí (una versión anterior creaba
+--    IX_INSPECCIONES_ID_RENTA sin notar el de la FK; la consolidación 0011
+--    lo elimina de las BDs existentes).
 --
 -- 2. rentas(fecha_recogida, fecha_retorno) — YA EXISTE como idx_rentas_fechas
---    (0001_initial_schema.sql línea 178). No se recrea.
+--    (0001_initial_schema.sql). No se recrea.
 --
 -- 3. mantenimiento_vehiculos(fecha) — la columna se llama pieza_varias_fecha
 --    (no 'fecha'), y YA EXISTE como IDX_MANTENIMIENTO_FECHA
---    (0002_indices_optimizacion.sql línea 11). No se recrea.
+--    (0002_indices_optimizacion.sql). No se recrea.
 --
 -- 4. auditoria(usuario, fecha_hora) — la columna se llama fecha (no
 --    'fecha_hora'), y YA EXISTE como ix_auditoria_usuario_fecha
---    (0001_initial_schema.sql línea 40). No se recrea.
+--    (0001_initial_schema.sql). No se recrea.
 --
--- IDEMPOTENCIA: el CREATE INDEX va guardado contra RDB$INDICES (EXECUTE BLOCK
--- + EXECUTE STATEMENT) para auto-reparar BD con aplicación parcial previa.
+-- Consolidación de índices redundantes (ix_ vs IDX_ vs índice de la FK):
+-- 0010_dedup_indices.sql y 0011_consolidar_indices.sql.
 
-EXECUTE BLOCK
-AS
-BEGIN
-  IF (NOT EXISTS(SELECT 1 FROM RDB$INDICES WHERE RDB$INDEX_NAME = 'IX_INSPECCIONES_ID_RENTA')) THEN
-    EXECUTE STATEMENT 'CREATE INDEX ix_inspecciones_id_renta ON inspecciones (id_renta)';
-END;
-
--- La deduplicación de estos índices redundantes (ix_ vs IDX_ sobre las mismas
--- columnas) se hace en 0010_dedup_indices.sql: DROP condicional que solo
--- elimina el IX_* de 0001 si el IDX_* de 0002 existe (verificado con SET PLAN
--- ON: el planner usa el índice de la FK a AUTOS, no estos índices).
+-- (Sin CREATE INDEX en esta migración: tras la consolidación 0011 no queda
+-- ningún índice pendiente que crear — los análisis de esta migración concluyen
+-- que todo lo solicitado ya existía o lo cubre el índice automático de la FK.)

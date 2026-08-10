@@ -1,5 +1,6 @@
 //! commands/ — Wrappers #[tauri::command] (thin: validan sesión/RBAC, llaman servicio, mapean error)
 
+pub mod app;
 pub mod auditoria;
 pub mod auth;
 pub mod auto;
