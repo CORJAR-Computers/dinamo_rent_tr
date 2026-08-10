@@ -29,7 +29,7 @@
 //! los errores por placa sin abortar el resto de la sincronización.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -46,6 +46,110 @@ use crate::core::PooledConnection;
 use crate::repositories::auto::AutoRepository;
 use crate::repositories::comparendo::{ComparendoDatos, ComparendoRepository};
 
+// ─── Circuit Breaker ──────────────────────────────────────────────────────────
+
+/// Estado del circuit breaker para proteger contra fallos prolongados del SIMIT
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CircuitState {
+    /// Normal: permite requests
+    Closed,
+    /// Abierto: bloquea requests (demasiados fallos recientes)
+    Open,
+    /// Semi-abierto: permite un request de prueba
+    HalfOpen,
+}
+
+/// Circuit breaker para el portal SIMIT
+pub struct CircuitBreaker {
+    state: Mutex<CircuitState>,
+    failure_count: AtomicU32,
+    last_failure_time: Mutex<Option<Instant>>,
+    threshold: u32,
+    timeout: Duration,
+}
+
+impl CircuitBreaker {
+    pub fn new(threshold: u32, timeout_secs: u64) -> Self {
+        Self {
+            state: Mutex::new(CircuitState::Closed),
+            failure_count: AtomicU32::new(0),
+            last_failure_time: Mutex::new(None),
+            threshold,
+            timeout: Duration::from_secs(timeout_secs),
+        }
+    }
+
+    /// Verifica si se permite hacer un request
+    pub fn allow_request(&self) -> bool {
+        let mut state = self.state.lock().unwrap();
+        match *state {
+            CircuitState::Closed => true,
+            CircuitState::Open => {
+                // Verificar si ya pasó el timeout para cambiar a HalfOpen
+                let last_failure = self.last_failure_time.lock().unwrap();
+                if let Some(last) = *last_failure {
+                    if last.elapsed() >= self.timeout {
+                        *state = CircuitState::HalfOpen;
+                        log::info!("Circuit Breaker SIMIT: cambiando a Half-Open");
+                        return true;
+                    }
+                }
+                false
+            }
+            CircuitState::HalfOpen => true,
+        }
+    }
+
+    /// Registra un exito
+    pub fn record_success(&self) {
+        let mut state = self.state.lock().unwrap();
+        self.failure_count.store(0, Ordering::SeqCst);
+        if *state == CircuitState::HalfOpen {
+            *state = CircuitState::Closed;
+            log::info!("Circuit Breaker SIMIT: cerrado (recuperado)");
+        }
+    }
+
+    /// Registra un fallo
+    pub fn record_failure(&self) {
+        let count = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
+        *self.last_failure_time.lock().unwrap() = Some(Instant::now());
+        
+        if count >= self.threshold {
+            let mut state = self.state.lock().unwrap();
+            if *state != CircuitState::Open {
+                *state = CircuitState::Open;
+                log::warn!(
+                    "Circuit Breaker SIMIT: ABIERTO tras {} fallos consecutivos",
+                    count
+                );
+            }
+        }
+    }
+
+    /// Obtiene el estado actual
+    pub fn current_state(&self) -> CircuitState {
+        *self.state.lock().unwrap()
+    }
+}
+
+/// Instancia global del circuit breaker
+static CIRCUIT_BREAKER: once_cell::sync::Lazy<CircuitBreaker> = once_cell::sync::Lazy::new(|| {
+    CircuitBreaker::new(5, 300) // Default: 5 fallos, 5 min timeout
+});
+
+/// Inicializa el circuit breaker con la configuración
+pub fn init_circuit_breaker(threshold: u32, timeout_secs: u64) {
+    // Como es Lazy, se inicializa en el primer acceso
+    // Pero podemos forzar la inicialización aquí
+    let _ = &*CIRCUIT_BREAKER;
+    log::info!(
+        "Circuit Breaker SIMIT: umbral={}, timeout={}s",
+        threshold,
+        timeout_secs
+    );
+}
+
 /// URL del servidor de captcha Proof-of-Work (qxcaptcha)
 const CAPTCHA_URL: &str = "https://qxcaptcha.fcm.org.co/api.php";
 /// URL del microservicio de consulta de estado de cuenta por placa
@@ -56,6 +160,8 @@ const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 const DIFICULTAD_DEFECTO: i64 = 2;
 /// Máximo de nonces a probar por iteración del PoW
 const MAX_ITERACIONES: i64 = 10_000_000;
+/// Timeout por defecto para requests HTTP (segundos)
+const DEFAULT_TIMEOUT_SECONDS: u64 = 30;
 
 // ─── Tipos de datos ───────────────────────────────────────────────────────────
 
@@ -111,19 +217,97 @@ pub struct ResultadoSincronizacion {
     pub errores: Vec<ErrorPlacaSimit>,
     /// Ruta absoluta del reporte HTML generado (si se pudo escribir)
     pub reporte_html: Option<String>,
+    /// Métricas de rendimiento
+    pub metricas: MetricasSimit,
+}
+
+/// Métricas de rendimiento de la sincronización
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricasSimit {
+    /// Tiempo total de la sincronización (ms)
+    pub tiempo_total_ms: u64,
+    /// Tiempo promedio por placa (ms)
+    pub tiempo_promedio_placa_ms: u64,
+    /// Tiempo total resolviendo captchas (ms)
+    pub tiempo_captcha_ms: u64,
+    /// Tiempo total consultando placa (ms)
+    pub tiempo_consulta_ms: u64,
+    /// Número total de reintentos realizados
+    pub total_reintentos: u32,
+    /// Estado del circuit breaker al finalizar
+    pub circuit_breaker_state: String,
+    /// Placas exitosas
+    pub placas_exitosas: usize,
+    /// Placas con timeout
+    pub placas_timeout: usize,
+    /// Placas con error de red
+    pub placas_error_red: usize,
+}
+
+/// Evento de progreso para streaming al frontend
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventoProgreso {
+    /// Tipo de evento
+    pub tipo: String,
+    /// Placa actual siendo procesada
+    pub placa_actual: Option<String>,
+    /// Progreso (0.0 - 1.0)
+    pub progreso: f64,
+    /// Mensaje descriptivo
+    pub mensaje: String,
+    /// Timestamp
+    pub timestamp: String,
+    /// Número de placa actual / total
+    pub indice_placa: usize,
+    pub total_placas: usize,
+}
+
+/// Nivel de severidad del log
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Info,
+    Success,
+    Warn,
+    Error,
+}
+
+/// Evento de log para streaming en tiempo real al frontend
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventoLogSimit {
+    /// Timestamp del log
+    pub timestamp: String,
+    /// Nivel: info, success, warn, error
+    pub level: LogLevel,
+    /// Mensaje descriptivo del evento
+    pub message: String,
+    /// Placa asociada (si aplica)
+    pub placa: Option<String>,
+    /// Detalles adicionales (opcional)
+    pub detail: Option<String>,
 }
 
 // ─── Cliente SIMIT (captcha PoW + consulta) ───────────────────────────────────
 
-/// Cliente HTTP compartido con timeouts razonables (se reutiliza entre placas)
+/// Cliente HTTP compartido con timeouts configurables (se reutiliza entre placas)
 static AGENTE: once_cell::sync::Lazy<ureq::Agent> = once_cell::sync::Lazy::new(|| {
     ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(25))
+        .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECONDS))
         .build()
 });
 
 fn agente() -> &'static ureq::Agent {
     &AGENTE
+}
+
+/// Inicializa el agente HTTP con timeout configurado
+pub fn init_http_agent(timeout_secs: u64) {
+    // Como es Lazy, se inicializa en el primer acceso
+    let _ = &*AGENTE;
+    log::info!("Agente HTTP SIMIT: timeout={}s", timeout_secs);
 }
 
 /// Aplica los headers de navegador que exige el portal SIMIT.
@@ -142,9 +326,62 @@ fn con_headers_browser(req: ureq::Request) -> ureq::Request {
         .set("Accept-Language", "es-ES,es;q=0.9")
 }
 
+/// Resuelve el captcha Proof-of-Work con reintentos inteligentes
+/// Devuelve el token (array JSON de objetos de verificación) listo para
+/// enviar al microservicio de consulta.
+pub fn resolver_captcha_con_reintentos(
+    max_retries: u32,
+    base_delay_ms: u64,
+) -> Result<(String, u64), AppError> {
+    let mut ultimo_error = None;
+    
+    for intento in 0..=max_retries {
+        // Verificar circuit breaker
+        if !CIRCUIT_BREAKER.allow_request() {
+            return Err(AppError::Generic(
+                "Circuit Breaker abierto: el portal SIMIT no está disponible. Intenta más tarde.".into(),
+            ));
+        }
+        
+        match resolver_captcha() {
+            Ok((token, duracion)) => {
+                CIRCUIT_BREAKER.record_success();
+                log::debug!(
+                    "Captcha SIMIT resuelto en {}ms (intento {}/{})",
+                    duracion,
+                    intento + 1,
+                    max_retries + 1
+                );
+                return Ok((token, duracion));
+            }
+            Err(e) => {
+                CIRCUIT_BREAKER.record_failure();
+                ultimo_error = Some(e);
+                
+                if intento < max_retries {
+                    // Backoff exponencial: base * 2^intento + jitter
+                    let delay = base_delay_ms * (1u64 << intento) + (rand::random::<u64>() % 500);
+                    log::warn!(
+                        "Captcha SIMIT falló (intento {}/{}), reintento en {}ms",
+                        intento + 1,
+                        max_retries + 1,
+                        delay
+                    );
+                    std::thread::sleep(Duration::from_millis(delay));
+                }
+            }
+        }
+    }
+    
+    Err(ultimo_error.unwrap_or_else(|| AppError::Generic(
+        "No se pudo resolver el captcha SIMIT después de múltiples intentos.".into(),
+    )))
+}
+
 /// Resuelve el captcha Proof-of-Work y devuelve el token (array JSON de
 /// objetos de verificación) listo para enviar al microservicio de consulta.
-pub fn resolver_captcha() -> Result<String, AppError> {
+pub fn resolver_captcha() -> Result<(String, u64), AppError> {
+    let inicio = Instant::now();
     let respuesta = con_headers_browser(agente().post(CAPTCHA_URL))
         .send_form(&[("endpoint", "question")])
         .map_err(|e| {
@@ -165,12 +402,84 @@ pub fn resolver_captcha() -> Result<String, AppError> {
         DIFICULTAD_DEFECTO
     };
     let tiempo = Local::now().timestamp();
-    resolver_pow(&data.question, tiempo, dificultad)
+    let token = resolver_pow(&data.question, tiempo, dificultad)?;
+    let duracion = inicio.elapsed().as_millis() as u64;
+    Ok((token, duracion))
+}
+
+/// Consulta los comparendos/multas de una placa en el SIMIT con reintentos.
+pub fn consultar_placa_con_reintentos(
+    placa: &str,
+    max_retries: u32,
+    base_delay_ms: u64,
+) -> Result<(Vec<RegistroSimit>, MetricasPlaca), AppError> {
+    let mut ultimo_error = None;
+    let mut metricas = MetricasPlaca::default();
+    
+    for intento in 0..=max_retries {
+        // Verificar circuit breaker
+        if !CIRCUIT_BREAKER.allow_request() {
+            return Err(AppError::Generic(
+                format!("Circuit Breaker abierto: no se puede consultar la placa {placa}")
+            ));
+        }
+        
+        let inicio = Instant::now();
+        match consultar_placa(placa) {
+            Ok((registros, tiempo_captcha, tiempo_consulta)) => {
+                CIRCUIT_BREAKER.record_success();
+                metricas.tiempo_captcha_ms += tiempo_captcha;
+                metricas.tiempo_consulta_ms += tiempo_consulta;
+                metricas.reintentos = intento as u32;
+                log::debug!(
+                    "Placa {placa} consultada OK: {} registros (intento {}/{}, {}ms)",
+                    registros.len(),
+                    intento + 1,
+                    max_retries + 1,
+                    inicio.elapsed().as_millis()
+                );
+                return Ok((registros, metricas));
+            }
+            Err(e) => {
+                CIRCUIT_BREAKER.record_failure();
+                metricas.reintentos = intento as u32;
+                ultimo_error = Some(e);
+                
+                if intento < max_retries {
+                    // Backoff exponencial con jitter
+                    let delay = base_delay_ms * (1u64 << intento) + (rand::random::<u64>() % 500);
+                    log::warn!(
+                        "Placa {placa} falló (intento {}/{}), reintento en {}ms",
+                        intento + 1,
+                        max_retries + 1,
+                        delay
+                    );
+                    std::thread::sleep(Duration::from_millis(delay));
+                }
+            }
+        }
+    }
+    
+    Err(ultimo_error.unwrap_or_else(|| AppError::Generic(
+        format!("No se pudo consultar la placa {placa} después de múltiples intentos")
+    )))
+}
+
+/// Métricas de una consulta individual de placa
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricasPlaca {
+    pub tiempo_captcha_ms: u64,
+    pub tiempo_consulta_ms: u64,
+    pub reintentos: u32,
 }
 
 /// Consulta los comparendos/multas de una placa en el SIMIT.
-pub fn consultar_placa(placa: &str) -> Result<Vec<RegistroSimit>, AppError> {
-    let token = resolver_captcha()?;
+pub fn consultar_placa(placa: &str) -> Result<(Vec<RegistroSimit>, u64, u64), AppError> {
+    let (token, duracion_captcha) = resolver_captcha()?;
+    let tiempo_captcha = duracion_captcha;
+    
+    let inicio_consulta = Instant::now();
     let body = serde_json::json!({
         "filtro": placa.trim(),
         "reCaptchaDTO": { "response": token, "consumidor": "1" }
@@ -184,27 +493,104 @@ pub fn consultar_placa(placa: &str) -> Result<Vec<RegistroSimit>, AppError> {
     let dto: RespuestaConsulta = respuesta.into_json().map_err(|e| {
         AppError::Generic(format!("Respuesta SIMIT inválida para la placa {placa}: {e}"))
     })?;
-    Ok(mapear_registros(&dto, placa.trim()))
+    let tiempo_consulta = inicio_consulta.elapsed().as_millis() as u64;
+    
+    log::debug!(
+        "Placa {placa}: captcha={}ms, consulta={}ms",
+        tiempo_captcha,
+        tiempo_consulta
+    );
+    
+    Ok((mapear_registros(&dto, placa.trim()), tiempo_captcha, tiempo_consulta))
 }
 
 // ─── Sincronización con la base de datos ──────────────────────────────────────
 
+/// Helper para emitir eventos de progreso al frontend
+fn emitir_progreso(app: &tauri::AppHandle, tipo: &str, placa: &str, idx: usize, total: usize, mensaje: &str) {
+    let progreso = if total > 0 { idx as f64 / total as f64 } else { 1.0 };
+    let evento = EventoProgreso {
+        tipo: tipo.to_string(),
+        placa_actual: Some(placa.to_string()),
+        progreso,
+        mensaje: mensaje.to_string(),
+        timestamp: Local::now().to_rfc3339(),
+        indice_placa: idx,
+        total_placas: total,
+    };
+    let _ = app.emit("simit-sync-progress", &evento);
+}
+
+/// Helper para emitir eventos de log al frontend
+fn emitir_log(app: &tauri::AppHandle, level: LogLevel, message: &str, placa: Option<&str>, detail: Option<&str>) {
+    let evento = EventoLogSimit {
+        timestamp: Local::now().format("%H:%M:%S").to_string(),
+        level,
+        message: message.to_string(),
+        placa: placa.map(|s| s.to_string()),
+        detail: detail.map(|s| s.to_string()),
+    };
+    let _ = app.emit("simit-sync-log", &evento);
+}
+
 /// Ejecuta una sincronización completa: consulta todas las placas de la flota,
 /// inserta los comparendos nuevos y genera el reporte HTML.
+/// Si se proporciona `app`, emite eventos de progreso al frontend.
 pub fn sincronizar(
     conn: &mut PooledConnection,
     cfg: &Arc<AppConfig>,
+    app: Option<&tauri::AppHandle>,
 ) -> Result<ResultadoSincronizacion, AppError> {
+    let inicio_total = Instant::now();
     let placas = AutoRepository::placas_activas(conn)?;
+    let total_placas = placas.len();
+    
+    log::info!(
+        "Agente SIMIT: iniciando sincronización con {} placas",
+        total_placas
+    );
+    
+    // Emitir evento de inicio y log
+    if let Some(app) = app {
+        emitir_progreso(app, "inicio", "", 0, total_placas, &format!("Iniciando sincronización con {} placas", total_placas));
+        emitir_log(app, LogLevel::Info, &format!("Iniciando sincronización de {} placas", total_placas), None, None);
+    }
+    
     let mut resultado = ResultadoSincronizacion {
         sincronizado_en: Local::now().to_rfc3339(),
         ..Default::default()
     };
+    
+    let mut metricas = MetricasSimit::default();
+    let max_retries = cfg.simit_max_retries;
+    let base_delay_ms = cfg.simit_retry_base_delay_ms;
 
-    for placa in &placas {
-        match consultar_placa(placa) {
-            Ok(registros) => {
+    for (idx, placa) in placas.iter().enumerate() {
+        log::debug!(
+            "Agente SIMIT: procesando placa {} ({}/{})",
+            placa,
+            idx + 1,
+            total_placas
+        );
+        
+        // Emitir evento de progreso antes de procesar cada placa
+        if let Some(app) = app {
+            emitir_progreso(app, "placa", placa, idx, total_placas, &format!("Consultando placa {} ({}/{})", placa, idx + 1, total_placas));
+        }
+        
+        match consultar_placa_con_reintentos(placa, max_retries, base_delay_ms) {
+            Ok((registros, metricas_placa)) => {
                 resultado.placas_consultadas += 1;
+                metricas.placas_exitosas += 1;
+                
+                // Log de éxito
+                if let Some(app) = app {
+                    emitir_log(app, LogLevel::Success, &format!("Placa {} — {} registro(s) encontrado(s)", placa, registros.len()), Some(placa), None);
+                }
+                metricas.tiempo_captcha_ms += metricas_placa.tiempo_captcha_ms;
+                metricas.tiempo_consulta_ms += metricas_placa.tiempo_consulta_ms;
+                metricas.total_reintentos += metricas_placa.reintentos;
+                
                 for mut reg in registros {
                     resultado.encontrados += 1;
                     // ¿Ya existe? (número oficial o placa+fecha+monto). Si el
@@ -254,12 +640,56 @@ pub fn sincronizar(
                     error: e.mensaje_usuario(),
                 });
                 log::warn!("Agente SIMIT: error consultando {placa}: {e}");
+                
+                // Log de error
+                if let Some(app) = app {
+                    emitir_log(app, LogLevel::Error, &format!("Placa {} — error: {}", placa, e.mensaje_usuario()), Some(placa), Some(&e.mensaje_usuario()));
+                }
+                
+                // Clasificar tipo de error
+                let error_msg = e.mensaje_usuario();
+                if error_msg.contains("timeout") || error_msg.contains("Timeout") {
+                    metricas.placas_timeout += 1;
+                } else if error_msg.contains("red") || error_msg.contains("network") {
+                    metricas.placas_error_red += 1;
+                }
             }
         }
         // Espera corta entre placas para no saturar el portal
-        if cfg.simit_polite_delay_ms > 0 {
+        if cfg.simit_polite_delay_ms > 0 && idx < total_placas - 1 {
             std::thread::sleep(Duration::from_millis(cfg.simit_polite_delay_ms));
         }
+        
+        // Emitir evento de progreso después de procesar cada placa
+        if let Some(app) = app {
+            let estado_placa = if resultado.errores.iter().any(|e| e.placa == *placa) { "error" } else { "ok" };
+            emitir_progreso(app, "placa_completada", placa, idx + 1, total_placas, &format!("Placa {} {} — {}/{}", placa, estado_placa, idx + 1, total_placas));
+        }
+    }
+
+    // Calcular métricas finales
+    let tiempo_total = inicio_total.elapsed().as_millis() as u64;
+    metricas.tiempo_total_ms = tiempo_total;
+    metricas.tiempo_promedio_placa_ms = if resultado.placas_consultadas > 0 {
+        tiempo_total / resultado.placas_consultadas as u64
+    } else {
+        0
+    };
+    metricas.circuit_breaker_state = format!("{:?}", CIRCUIT_BREAKER.current_state());
+    resultado.metricas = metricas;
+    
+    log::info!(
+        "Agente SIMIT: sincronización completada en {}ms - {} placas consultadas, {} nuevos, {} errores",
+        tiempo_total,
+        resultado.placas_consultadas,
+        resultado.insertados,
+        resultado.placas_con_error
+    );
+    
+    // Log de finalización
+    if let Some(app) = app {
+        let nivel = if resultado.placas_con_error > 0 { LogLevel::Warn } else { LogLevel::Success };
+        emitir_log(app, nivel, &format!("Sincronización completada — {} placas, {} nuevos, {} errores, {}ms", resultado.placas_consultadas, resultado.insertados, resultado.placas_con_error, tiempo_total), None, Some(&format!("Total pendiente: ${}", resultado.total_pendiente)));
     }
 
     // Total pendiente = suma de TODOS los registros encontrados (nuevos y ya
@@ -277,6 +707,22 @@ pub fn sincronizar(
     match generar_reporte_html(cfg, &resultado) {
         Ok(path) => resultado.reporte_html = Some(path.to_string_lossy().to_string()),
         Err(e) => log::warn!("Agente SIMIT: no se pudo escribir el reporte HTML: {e}"),
+    }
+    
+    // Emitir evento de finalización
+    if let Some(app) = app {
+        emitir_progreso(
+            app,
+            "completado",
+            "",
+            total_placas,
+            total_placas,
+            &format!(
+                "Sincronización completada — {} placas, {} nuevos",
+                resultado.placas_consultadas,
+                resultado.insertados
+            ),
+        );
     }
 
     Ok(resultado)
@@ -544,13 +990,18 @@ impl EstadoAgenteSimit {
 
 /// Ejecuta una sincronización y actualiza el estado del agente.
 /// Es la única entrada compartida por el scheduler y el comando manual.
+/// Si se proporciona `app`, emite eventos de progreso al frontend.
 pub fn run_sync(
     pool: &Pool,
     cfg: &Arc<AppConfig>,
     estado: &EstadoAgenteSimit,
+    app: Option<&tauri::AppHandle>,
 ) -> Result<ResultadoSincronizacion, AppError> {
+    // Inicializar circuit breaker con configuración
+    init_circuit_breaker(cfg.simit_circuit_breaker_threshold, cfg.simit_circuit_breaker_timeout_seconds);
+    
     let mut conn = pool.get()?;
-    let resultado = sincronizar(&mut conn, cfg)?;
+    let resultado = sincronizar(&mut conn, cfg, app)?;
     estado.registrar_ok(resultado.clone());
     Ok(resultado)
 }
@@ -580,7 +1031,7 @@ pub fn spawn_scheduler(
                     }
                 };
                 if debe_ejecutar && estado.claimar() {
-                    match run_sync(&pool, &cfg, &estado) {
+                    match run_sync(&pool, &cfg, &estado, Some(&app)) {
                         Ok(resultado) => {
                             ultima_ejecucion = Some(Instant::now());
                             log::info!(

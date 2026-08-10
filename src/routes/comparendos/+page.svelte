@@ -13,7 +13,9 @@
 		type Auto,
 		type BusinessLists,
 		type InfoAgenteSimit,
-		type ResultadoSincronizacion
+		type ResultadoSincronizacion,
+		type EventoProgresoSimit,
+		type EventoLogSimit
 	} from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -60,6 +62,12 @@
 	let agente = $state<InfoAgenteSimit | null>(null);
 	let sincronizando = $state(false);
 	let unlistenSimit: UnlistenFn | null = null;
+	let mostrarMetricas = $state(false);
+	let progreso = $state<EventoProgresoSimit | null>(null);
+	let unlistenProgreso: UnlistenFn | null = null;
+	let logs = $state<EventoLogSimit[]>([]);
+	let unlistenLogs: UnlistenFn | null = null;
+	let mostrarLogs = $state(false);
 
 	async function cargarAgente() {
 		if (!haySesion()) return;
@@ -219,6 +227,52 @@
 		return () => {
 			activo = false;
 			unlistenSimit?.();
+		};
+	});
+
+	// Escuchar eventos de progreso de sincronización SIMIT
+	onMount(() => {
+		let activo = true;
+		listen<EventoProgresoSimit>('simit-sync-progress', (evt) => {
+			if (!activo) return;
+			progreso = evt.payload;
+			// Limpiar progreso cuando se completa
+			if (evt.payload.tipo === 'completado') {
+				setTimeout(() => { progreso = null; }, 2000);
+			}
+		})
+			.then((u) => {
+				if (activo) unlistenProgreso = u;
+				else u();
+			})
+			.catch(() => {
+				// Sin runtime Tauri (tests / vite standalone): no hay evento de progreso.
+			});
+		return () => {
+			activo = false;
+			unlistenProgreso?.();
+		};
+	});
+
+	// Escuchar eventos de log en tiempo real
+	onMount(() => {
+		let activo = true;
+		listen<EventoLogSimit>('simit-sync-log', (evt) => {
+			if (!activo) return;
+			logs = [...logs.slice(-99), evt.payload]; // Mantener últimos 100 logs
+			// Auto-mostrar logs cuando empieza la sincronización
+			if (logs.length === 1) mostrarLogs = true;
+		})
+			.then((u) => {
+				if (activo) unlistenLogs = u;
+				else u();
+			})
+			.catch(() => {
+				// Sin runtime Tauri (tests / vite standalone): no hay evento de logs.
+			});
+		return () => {
+			activo = false;
+			unlistenLogs?.();
 		};
 	});
 
@@ -396,10 +450,27 @@
 				</div>
 				<div class="flex items-center gap-2">
 					{#if agente.ejecutando || sincronizando}
-						<span class="inline-flex items-center gap-2 text-xs font-semibold text-primary">
-							<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-							Consultando SIMIT...
+						<div class="flex flex-col gap-2">
+							<span class="inline-flex items-center gap-2 text-xs font-semibold text-primary">
+								<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+							{#if progreso}
+								Consultando SIMIT... {progreso.indicePlaca}/{progreso.totalPlacas}
+							{:else}
+								Consultando SIMIT...
+							{/if}
 						</span>
+						{#if progreso && progreso.tipo !== 'inicio'}
+							<div class="w-full bg-primary/10 rounded-full h-2 overflow-hidden">
+								<div
+									class="bg-primary h-full transition-all duration-500 ease-out rounded-full"
+									style="width: {Math.max(2, (progreso.indicePlaca / Math.max(1, progreso.totalPlacas)) * 100)}%"
+								></div>
+							</div>
+							<p class="text-[10px] text-text-secondary truncate" title={progreso.mensaje}>
+								{progreso.mensaje}
+							</p>
+						{/if}
+					</div>
 					{:else if !agente.habilitado}
 						<span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold text-text-secondary border-border">Deshabilitado en config.ini</span>
 					{/if}
@@ -419,47 +490,127 @@
 				</div>
 			</div>
 
-			{#if agente.ultimoResultado}
-				{@const r = agente.ultimoResultado}
-				<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
-					<span class="text-text-secondary">
-						Placas consultadas: <strong class="text-text-primary tabular-nums">{r.placasConsultadas}</strong>
-					</span>
-					<span class="text-text-secondary">
-						Encontrados: <strong class="text-text-primary tabular-nums">{r.encontrados}</strong>
-					</span>
-					<span class="text-text-secondary">
-						Nuevos en la BD: <strong class="text-exito tabular-nums">{r.insertados}</strong>
-					</span>
-					<span class="text-text-secondary">
-						Ya registrados: <strong class="text-text-primary tabular-nums">{r.duplicados}</strong>
-					</span>
-					{#if r.errores.length > 0}
-						<span class="text-text-secondary">
-							Placas con error: <strong class="text-peligro tabular-nums">{r.errores.length}</strong>
-						</span>
-					{/if}
-					<span class="text-text-secondary">
-						Total pendiente: <strong class="text-alerta tabular-nums">{formatCOP(r.totalPendiente)}</strong>
-					</span>
-				</div>
-				{#if r.reporteHtml}
-					<p class="text-[11px] text-text-secondary font-mono truncate" title={r.reporteHtml}>
-						Reporte HTML: {r.reporteHtml}
-					</p>
-				{/if}
+		{#if agente.ultimoResultado}
+			{@const r = agente.ultimoResultado}
+			<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+				<span class="text-text-secondary">
+					Placas consultadas: <strong class="text-text-primary tabular-nums">{r.placasConsultadas}</strong>
+				</span>
+				<span class="text-text-secondary">
+					Encontrados: <strong class="text-text-primary tabular-nums">{r.encontrados}</strong>
+				</span>
+				<span class="text-text-secondary">
+					Nuevos en la BD: <strong class="text-exito tabular-nums">{r.insertados}</strong>
+				</span>
+				<span class="text-text-secondary">
+					Ya registrados: <strong class="text-text-primary tabular-nums">{r.duplicados}</strong>
+				</span>
 				{#if r.errores.length > 0}
-					<div class="rounded-lg bg-peligro/10 border border-peligro/25 px-3 py-2 text-[11px] text-peligro max-h-24 overflow-y-auto">
-						{#each r.errores as e}
-							<p>• {e.placa}: {e.error}</p>
-						{/each}
-					</div>
+					<span class="text-text-secondary">
+						Placas con error: <strong class="text-peligro tabular-nums">{r.errores.length}</strong>
+					</span>
 				{/if}
-			{:else if agente.ultimoError}
-				<p class="text-xs text-peligro">
-					Último error de sincronización: {agente.ultimoError}
+				<span class="text-text-secondary">
+					Total pendiente: <strong class="text-alerta tabular-nums">{formatCOP(r.totalPendiente)}</strong>
+				</span>
+				{#if r.metricas}
+					<button
+						class="text-primary hover:text-primary/80 transition-colors underline"
+						onclick={() => (mostrarMetricas = !mostrarMetricas)}
+					>
+						{mostrarMetricas ? 'Ocultar métricas' : 'Ver métricas'}
+					</button>
+					{#if logs.length > 0}
+						<button
+							class="text-primary hover:text-primary/80 transition-colors underline"
+							onclick={() => (mostrarLogs = !mostrarLogs)}
+						>
+							{mostrarLogs ? 'Ocultar logs' : `Ver logs (${logs.length})`}
+						</button>
+					{/if}
+				{/if}
+			</div>
+			{#if r.reporteHtml}
+				<p class="text-[11px] text-text-secondary font-mono truncate" title={r.reporteHtml}>
+					Reporte HTML: {r.reporteHtml}
 				</p>
 			{/if}
+			{#if mostrarMetricas && r.metricas}
+				<div class="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+					<p class="text-xs font-semibold text-primary mb-2">📊 Métricas de Rendimiento</p>
+					<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+						<div>
+							<span class="text-text-secondary">Tiempo total:</span>
+							<span class="font-semibold text-text-primary ml-1">{(r.metricas.tiempoTotalMs / 1000).toFixed(1)}s</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Promedio/placa:</span>
+							<span class="font-semibold text-text-primary ml-1">{r.metricas.tiempoPromedioPlacaMs}ms</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Tiempo captcha:</span>
+							<span class="font-semibold text-text-primary ml-1">{(r.metricas.tiempoCaptchaMs / 1000).toFixed(1)}s</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Tiempo consulta:</span>
+							<span class="font-semibold text-text-primary ml-1">{(r.metricas.tiempoConsultaMs / 1000).toFixed(1)}s</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Reintentos:</span>
+							<span class="font-semibold text-text-primary ml-1">{r.metricas.totalReintentos}</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Circuit Breaker:</span>
+							<span class="font-semibold ml-1 {r.metricas.circuitBreakerState === 'Closed' ? 'text-exito' : 'text-alerta'}">{r.metricas.circuitBreakerState}</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Placas timeout:</span>
+							<span class="font-semibold text-text-primary ml-1">{r.metricas.placasTimeout}</span>
+						</div>
+						<div>
+							<span class="text-text-secondary">Errores red:</span>
+							<span class="font-semibold text-text-primary ml-1">{r.metricas.placasErrorRed}</span>
+						</div>
+					</div>					</div>
+				{/if}
+				{#if mostrarLogs && logs.length > 0}
+					<div class="mt-3 rounded-lg border border-border overflow-hidden">
+						<div class="flex items-center justify-between px-3 py-2 bg-primary/5 border-b border-border">
+							<span class="text-xs font-semibold text-primary">📋 Logs en tiempo real</span>
+							<button class="text-[10px] text-text-secondary hover:text-primary" onclick={() => { logs = []; mostrarLogs = false; }}>
+								Limpiar
+							</button>
+						</div>
+						<div class="max-h-48 overflow-y-auto bg-gray-900 p-2 font-mono text-[11px] space-y-0.5">
+							{#each logs as log}
+								<div class="flex items-start gap-2">
+									<span class="text-gray-500 shrink-0">{log.timestamp}</span>
+									<span class="shrink-0 w-12 text-center font-bold"
+									class:text-blue-400={log.level === 'info'}
+									class:text-green-400={log.level === 'success'}
+									class:text-yellow-400={log.level === 'warn'}
+									class:text-red-400={log.level === 'error'}
+								>
+									{log.level.toUpperCase()}
+								</span>
+								<span class="text-gray-300 break-all">{log.message}</span>
+							</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+				{#if r.errores.length > 0}
+				<div class="rounded-lg bg-peligro/10 border border-peligro/25 px-3 py-2 text-[11px] text-peligro max-h-24 overflow-y-auto">
+					{#each r.errores as e}
+						<p>• {e.placa}: {e.error}</p>
+					{/each}
+				</div>
+			{/if}
+		{:else if agente.ultimoError}
+			<p class="text-xs text-peligro">
+				Último error de sincronización: {agente.ultimoError}
+			</p>
+		{/if}
 		</div>
 	{/if}
 

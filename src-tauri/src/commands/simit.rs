@@ -60,7 +60,7 @@ pub async fn simit_sync_now(
     }
 
     tauri::async_runtime::spawn_blocking(move || -> Result<ResultadoSincronizacion, AppError> {
-        let resultado = crate::services::simit::run_sync(&pool, &cfg, &estado);
+        let resultado = crate::services::simit::run_sync(&pool, &cfg, &estado, Some(&app));
         estado.liberar();
         resultado
     })

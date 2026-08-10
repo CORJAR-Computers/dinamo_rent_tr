@@ -871,6 +871,28 @@ export interface ErrorPlacaSimit {
 	error: string;
 }
 
+/** Métricas de rendimiento de la sincronización */
+export interface MetricasSimit {
+	/** Tiempo total de la sincronización (ms) */
+	tiempoTotalMs: number;
+	/** Tiempo promedio por placa (ms) */
+	tiempoPromedioPlacaMs: number;
+	/** Tiempo total resolviendo captchas (ms) */
+	tiempoCaptchaMs: number;
+	/** Tiempo total consultando placa (ms) */
+	tiempoConsultaMs: number;
+	/** Número total de reintentos realizados */
+	totalReintentos: number;
+	/** Estado del circuit breaker al finalizar */
+	circuitBreakerState: string;
+	/** Placas exitosas */
+	placasExitosas: number;
+	/** Placas con timeout */
+	placasTimeout: number;
+	/** Placas con error de red */
+	placasErrorRed: number;
+}
+
 /** Resultado de una sincronización con el SIMIT */
 export interface ResultadoSincronizacion {
 	sincronizadoEn: string;
@@ -883,6 +905,43 @@ export interface ResultadoSincronizacion {
 	registros: RegistroSimit[];
 	errores: ErrorPlacaSimit[];
 	reporteHtml: string | null;
+	/** Métricas de rendimiento */
+	metricas: MetricasSimit;
+}
+
+/** Evento de progreso durante la sincronización */
+export interface EventoProgresoSimit {
+	/** Tipo de evento: inicio, placa, placa_completada, completado */
+	tipo: string;
+	/** Placa actual siendo procesada */
+	placaActual: string | null;
+	/** Progreso (0.0 - 1.0) */
+	progreso: number;
+	/** Mensaje descriptivo */
+	mensaje: string;
+	/** Timestamp */
+	timestamp: string;
+	/** Número de placa actual */
+	indicePlaca: number;
+	/** Total de placas */
+	totalPlacas: number;
+}
+
+/** Nivel de severidad del log SIMIT */
+export type LogLevelSimit = 'info' | 'success' | 'warn' | 'error';
+
+/** Evento de log en tiempo real durante la sincronización */
+export interface EventoLogSimit {
+	/** Timestamp del log (HH:MM:SS) */
+	timestamp: string;
+	/** Nivel de severidad */
+	level: LogLevelSimit;
+	/** Mensaje descriptivo */
+	message: string;
+	/** Placa asociada (si aplica) */
+	placa: string | null;
+	/** Detalles adicionales */
+	detail: string | null;
 }
 
 /** Estado en memoria del agente (habilitado, intervalos, última corrida) */
