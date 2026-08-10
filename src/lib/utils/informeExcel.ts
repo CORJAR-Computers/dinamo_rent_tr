@@ -197,7 +197,7 @@ export function construirLibroInforme(informe: InformeMensual, periodo: string):
 	ws.columns = ANCHOS_COLUMNAS.map((w) => ({ width: w }));
 
 	// ── Volcado de filas + estilos por celda ──
-	filas.forEach((fila, r) => {
+	filas.forEach((fila) => {
 		const row = ws.addRow(aplanar(fila));
 		fila.forEach((celda, c) => {
 			if (typeof celda !== 'object' || !celda.estilo) return;

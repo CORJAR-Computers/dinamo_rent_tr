@@ -57,6 +57,19 @@ describe('formatDate', () => {
 		expect(formatDate(undefined)).toBe('—');
 		expect(formatDate('no-es-fecha')).toBe('—');
 	});
+
+	it('interpreta YYYY-MM-DD como fecha local (regresión zona horaria)', () => {
+		// Regresión: `new Date('2026-08-10')` se trataba como medianoche UTC y
+		// en zonas con offset negativo (Bogotá, UTC-5) mostraba "9 de ago" en
+		// lugar de "10 de ago" (afectaba al panel del Agente SIMIT y a cualquier
+		// fecha ISO de la app).
+		const out = formatDate('2026-08-10');
+		expect(out).toContain('10 de ago');
+		expect(out).not.toContain('9 de ago');
+		// Invariante independiente de la zona horaria del entorno: formatear la
+		// fecha ISO debe dar el mismo resultado que formatear el Date local.
+		expect(formatDate('2026-08-10')).toBe(formatDate(new Date(2026, 7, 10)));
+	});
 });
 
 describe('formatDateTime', () => {
@@ -70,6 +83,13 @@ describe('formatDateTime', () => {
 
 	it('devuelve — para nulos', () => {
 		expect(formatDateTime(null)).toBe('—');
+	});
+
+	it('no retrocede el día con una fecha sin hora (regresión zona horaria)', () => {
+		const out = formatDateTime('2026-08-10');
+		expect(out).toContain('10 de ago');
+		expect(out).not.toContain('9 de ago');
+		expect(formatDateTime('2026-08-10')).toBe(formatDateTime(new Date(2026, 7, 10)));
 	});
 });
 

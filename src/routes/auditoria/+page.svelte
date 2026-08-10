@@ -78,10 +78,10 @@
 	let primerEfecto = true;
 	$effect(() => {
 		const term = busqueda;
-		const u = usuarioFiltro;
-		const a = accionFiltro;
-		const d = fechaDesde;
-		const h = fechaHasta;
+		const _u = usuarioFiltro;
+		const _a = accionFiltro;
+		const _d = fechaDesde;
+		const _h = fechaHasta;
 		if (primerEfecto) {
 			primerEfecto = false;
 			return;

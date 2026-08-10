@@ -225,8 +225,8 @@
 	let primerCiclo = true;
 	$effect(() => {
 		const term = busqueda;
-		const est = estadoFiltro;
-		const plac = placaFiltro;
+		const _est = estadoFiltro;
+		const _plac = placaFiltro;
 		if (primerCiclo) {
 			primerCiclo = false;
 			return;

@@ -24,6 +24,7 @@ alert_tecno_mecanica_days = 15
 estados_auto = Disponible, Rentado, Mantenimiento, Vendido, Baja
 estados_cliente = Activo, Inactivo, Lista Negra, VIP
 estados_reserva = Pendiente, Confirmada, Cancelada, Completada
+impuesto_porcentaje = 19
 km_alert_aceite = 500
 nivel_tanque = Lleno, 3/4, 1/2, 1/4, Reserva
 roles_con_informes = Administrador, Supervisor

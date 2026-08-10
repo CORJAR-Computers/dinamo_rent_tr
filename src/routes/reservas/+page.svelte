@@ -180,7 +180,7 @@
 	let primerCiclo = true;
 	$effect(() => {
 		const term = busqueda;
-		const est = estadoFiltro;
+		const _est = estadoFiltro;
 		if (primerCiclo) {
 			primerCiclo = false;
 			cargar();

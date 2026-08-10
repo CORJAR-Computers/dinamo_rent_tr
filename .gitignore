@@ -25,6 +25,9 @@ src-tauri/gen/
 data/*.fdb
 data/*.fdb.bak
 
+# Reportes generados por el Agente SIMIT (runtime)
+data/informes_simit/
+
 # Config con secretos (usar config.ini.example)
 data/config.ini
 
@@ -48,6 +51,9 @@ static/preview-shots/*.pdf
 # Temporales de impresión
 .tmp-print/
 scripts/.tmp-*
+
+# Copia anidada del repo (artefacto accidental; ver git log -- Dinamo_Rent_tr)
+/dinamo_rent_tr/
 
 # Vite timestamps
 vite.config.js.timestamp-*

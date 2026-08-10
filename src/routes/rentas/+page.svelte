@@ -1136,11 +1136,7 @@
 	{#snippet children()}
 		{#if imprimirRenta}
 			<AvisoImpresion />
-			<OrdenRenta 
-				renta={imprimirRenta} 
-				cliente={clientes.find(c => c.cliente.id === imprimirRenta?.idCliente)?.cliente}
-				auto={autos.find(a => a.placa === imprimirRenta?.placa)}
-			/>
+			<OrdenRenta renta={imprimirRenta} />
 		{/if}
 	{/snippet}
 

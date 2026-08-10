@@ -27,7 +27,7 @@
 		error = '';
 		try {
 			informe = await informeApi.mensual(sid(), fechaInicio, fechaFin);
-		} catch (e) {
+		} catch {
 			error = 'No se pudo calcular el informe del mes.';
 			informe = null;
 		} finally {

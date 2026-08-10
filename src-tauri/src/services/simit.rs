@@ -10,6 +10,9 @@
 //! # Contrato del API (ingeniería inversa del portal, ver manavarrp/SimitConsulta)
 //! 1. `POST https://qxcaptcha.fcm.org.co/api.php` con form `endpoint=question`
 //!    → `{ error: false, data: { question, recommended_difficulty } }`
+//!    Headers obligatorios en AMBOS endpoints: `Origin: https://www.fcm.org.co`,
+//!    `Referer: https://www.fcm.org.co/` (+ User-Agent de navegador). Sin
+//!    Origin/Referer el microservicio responde HTTP 401 "Autenticación fallida".
 //! 2. Resolver el Proof-of-Work: buscar `difficulty` nonces primos cuyo
 //!    SHA256 de `{"question":q,"time":t,"nonce":n}` empiece con `0000`.
 //!    El token es el array JSON de esos objetos de verificación.
@@ -123,12 +126,26 @@ fn agente() -> &'static ureq::Agent {
     &AGENTE
 }
 
+/// Aplica los headers de navegador que exige el portal SIMIT.
+///
+/// Sin `Origin` y `Referer` el microservicio responde HTTP 401
+/// ("Autenticación fallida: Acceso denegado...") — verificado contra el
+/// portal real el 10-08 y documentado en la referencia manavarrp/SimitConsulta
+/// (ServiceExtensions: "Sin Origin y Referer el servidor rechaza la petición").
+/// NO se envían headers `Sec-Fetch-*` ni `sec-ch-ua*`: la referencia advierte
+/// que esos hacen que el servidor bloquee la conexión (ureq no los añade).
+fn con_headers_browser(req: ureq::Request) -> ureq::Request {
+    req.set("User-Agent", USER_AGENT)
+        .set("Origin", "https://www.fcm.org.co")
+        .set("Referer", "https://www.fcm.org.co/")
+        .set("Accept", "*/*")
+        .set("Accept-Language", "es-ES,es;q=0.9")
+}
+
 /// Resuelve el captcha Proof-of-Work y devuelve el token (array JSON de
 /// objetos de verificación) listo para enviar al microservicio de consulta.
 pub fn resolver_captcha() -> Result<String, AppError> {
-    let respuesta = agente()
-        .post(CAPTCHA_URL)
-        .set("User-Agent", USER_AGENT)
+    let respuesta = con_headers_browser(agente().post(CAPTCHA_URL))
         .send_form(&[("endpoint", "question")])
         .map_err(|e| {
             AppError::Generic(format!("No se pudo contactar el captcha SIMIT (qxcaptcha): {e}"))
@@ -158,9 +175,7 @@ pub fn consultar_placa(placa: &str) -> Result<Vec<RegistroSimit>, AppError> {
         "filtro": placa.trim(),
         "reCaptchaDTO": { "response": token, "consumidor": "1" }
     });
-    let respuesta = agente()
-        .post(CONSULTA_URL)
-        .set("User-Agent", USER_AGENT)
+    let respuesta = con_headers_browser(agente().post(CONSULTA_URL))
         .set("Content-Type", "application/json")
         .send_json(body)
         .map_err(|e| {

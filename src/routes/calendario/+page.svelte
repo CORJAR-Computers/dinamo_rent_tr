@@ -84,7 +84,7 @@
 			]);
 			rentas = r.filter((x) => x.fechaRetorno >= limiteInf);
 			reservas = rs.filter((x) => x.fechaRetorno >= limiteInf);
-		} catch (e) {
+		} catch {
 			toast.error('No se pudieron cargar los datos del calendario.');
 		} finally {
 			loading = false;

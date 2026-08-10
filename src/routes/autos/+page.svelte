@@ -113,7 +113,7 @@
 	let primerCiclo = true;
 	$effect(() => {
 		const term = busqueda;
-		const est = estadoFiltro;
+		const _est = estadoFiltro;
 		if (primerCiclo) {
 			primerCiclo = false;
 			cargar();
@@ -233,9 +233,6 @@
 		if (dias <= 15) return 'text-alerta border-alerta/30 bg-alerta/10';
 		return 'text-text-secondary border-border bg-alt-row/60';
 	}
-
-	const criticalAlertas = $derived(alertas.filter((a) => a.critica));
-	const proximasAlertas = $derived(alertas.filter((a) => !a.critica));
 
 	// Filas para la tabla (cast a Record para DataTable genérico)
 	const tablaAutos = $derived(autos as unknown as Record<string, unknown>[]);

@@ -120,8 +120,8 @@
 	let primerCiclo = true;
 	$effect(() => {
 		const term = busqueda;
-		const plac = placaFiltro;
-		const tip = tipoFiltro;
+		const _plac = placaFiltro;
+		const _tip = tipoFiltro;
 		if (primerCiclo) {
 			primerCiclo = false;
 			cargarTodo();

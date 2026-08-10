@@ -3,14 +3,12 @@
 	// Diseño compacto: debe caber en UNA sola hoja carta. La compresión de
 	// impresión vive en app.css (@media print) vía .orden-carta; el estilo de
 	// aquí es el que se ve en pantalla (vista previa) y en papel.
-	import type { Renta, Cliente, Auto } from '$lib/api';
+	import type { Renta } from '$lib/api';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
 
-	let {
-		renta,
-		cliente,
-		auto
-	}: { renta: Renta; cliente?: Cliente; auto?: Auto } = $props();
+	// El cliente y el vehículo se muestran desde `renta` (nombreCliente, vehiculo,
+	// placa — ya denormalizados por el backend); no se necesitan props aparte.
+	let { renta }: { renta: Renta } = $props();
 
 	const hoy = new Date().toLocaleDateString('es-CO', {
 		year: 'numeric',

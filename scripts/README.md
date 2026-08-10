@@ -1,3 +1,49 @@
+# Chequeo del portal SIMIT
+
+`scripts/check-simit.mjs` comprueba en un comando el estado de los dos servicios
+que usa el **Agente SIMIT** (`src-tauri/src/services/simit.rs`), para saber
+cuándo reintentar la verificación end-to-end **sin recrear tests temporales**:
+
+```bash
+node scripts/check-simit.mjs
+# o:
+npm run check:simit
+```
+
+## Qué comprueba
+
+| Paso | Verificación |
+| ---- | ------------ |
+| Captcha | POST `qxcaptcha.fcm.org.co/api.php` (endpoint=question) y resuelve el **Proof-of-Work** (mismo algoritmo que el backend: nonces primos con SHA256 `0000…`, token 1:1) |
+| Página | GET `consultasimit.fcm.org.co` (código HTTP) |
+| Consulta | POST del endpoint de estado de cuenta **sin token** → clasifica por la firma del gateway (401 `codigo:5` = portal caído, 503 = caído) |
+| Sonda E2E | si el microservicio no está claramente caído, resuelve el captcha real y consulta una **placa de prueba** con el token (solo si el paso anterior no es concluyente) |
+
+### Opciones
+
+- `--placa <PLACA>` — placa para la sonda E2E (default `AAA000`, env `SIMIT_PLACA`).
+- `--timeout <ms>` — timeout por petición (default `15000`, env `SIMIT_TIMEOUT_MS`).
+- `--solo-captcha` / `--solo-micro` — comprueba solo un servicio.
+- `--json` — salida JSON (para scripts/CI).
+- `--ayuda` — muestra la ayuda.
+
+### Códigos de salida
+
+| Código | Significado |
+| ------ | ----------- |
+| 0      | SIMIT operativo (captcha + microservicio listos para E2E) |
+| 1      | error técnico (red, timeout) |
+| 2      | SIMIT caído (captcha o microservicio no operativo) |
+
+Útil en scripts: `node scripts/check-simit.mjs && echo "E2E lista"`.
+
+> **Firma de gateway caído**: el portal responde `401 {"codigo":5,"descripcion":
+> "Autenticación fallida: Acceso denegado..."}` a **cualquier** petición (con o sin
+> token) y la página principal da `503 Server-unavailable!` — fallo del gateway de
+> seguridad externo, no del contrato de la app.
+
+---
+
 # Verificación de paginación
 
 Script reutilizable para comprobar que los documentos imprimibles de la app

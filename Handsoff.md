@@ -1,6 +1,49 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-09** · Estado: **todos los módulos operativos, validación verde**
+> Última actualización: **2026-08-10** · Estado: **todos los módulos operativos, validación verde**
+
+> **Revisión visual en la app real (10-08, noche):** se lanzó el binario Tauri (debug) con
+> WebView2 remote-debugging y se revisaron los pendientes vía CDP (script
+> `scripts/review-pendientes.mjs`, capturas en `static/preview-shots/revision-*.png`):
+> (1) ✅ **modal de inspección de rentas** (Salida y Entrada) abre y conmuta bien (renta #18);
+> (2) ✅ **calendario** carga sin errores; (3) ✅ **panel Agente SIMIT** operativo con estado real
+> (última corrida 10-08 08:46, reporte HTML generado, errores 401 por placa — portal caído,
+> esperado). Audit: 0 desbordes de layout, 0 imágenes rotas, 0 errores de consola.
+> 🐛 **bug de zona horaria encontrado y corregido**: `formatDate`/`formatDateTime` usaban
+> `new Date('YYYY-MM-DD')`, que interpreta la fecha como medianoche UTC y en Bogotá (UTC-5)
+> retrocedía un día («9 de ago» en vez de «10 de ago») → afectaba al panel SIMIT y a cualquier
+> fecha ISO de la app. Fix: helper `parseDate` en `src/lib/utils/format.ts` que construye las
+> fechas sin hora como **hora local** (tests: +2 de regresión en `format.test.ts`, invariante
+> independiente de la zona horaria del entorno; suite 192/192, `check` 0/0, `lint` 0).
+
+> **Reintento SIMIT (10-08, tarde):** se recreó el test temporal y se re-verificó con el código ya
+> corregido (headers Origin/Referer). El **microservicio de consulta sigue caído**: captcha PoW OK,
+> consulta 401 de gateway en todas las placas, página principal 503, `simit2.fcm.org.co` 503 y
+> `smbackoffice.fcm.org.co` inalcanzable → toda la infra SIMIT está caída salvo el captcha. BONUS:
+> el preflight OPTIONS del endpoint expone un **WADL** (Jersey 2.32) que confirma el contrato del
+> microservicio: recurso único `estadocuenta/consulta` POST JSON (método `findEstadoCuenta`), sin
+> parámetros de auth en la API → el 401 viene de un gateway de seguridad EXTERNO que no logra
+> «definir la política de seguridad» (coherente con el 503 general). La E2E sigue pendiente solo
+> por disponibilidad del servidor.
+
+> **Validación SIMIT contra el portal real (10-08, mañana):** por primera vez se probó el flujo HTTP
+> real (el captcha qxcaptcha volvió a responder; el microservicio de consulta NO). Resultados:
+> (1) ✅ el **captcha PoW se resuelve** contra el servidor real — el riesgo de **TLS fingerprinting NO
+> se materializó** (probado con ureq/rustls, Node/undici y curl); (2) ✅ el **formato del token es 1:1
+> con la referencia** manavarrp/SimitConsulta (`HashHelper.cs` + `captcha.ts`: orden
+> question/time/nonce, array JSON, epoch UTC — verificado con test temporal y replicado en Node);
+> (3) 🐛 **bug de contrato encontrado y corregido**: faltaban los headers `Origin: https://www.fcm.org.co`
+> y `Referer: https://www.fcm.org.co/` (+ `Accept`, `Accept-Language`) que la referencia documenta como
+> obligatorios («Sin Origin y Referer el servidor rechaza la petición») → añadidos en
+> `services/simit.rs` (`con_headers_browser()`, aplicado a captcha y consulta; 9/9 tests unitarios
+> verdes); (4) ❌ el **microservicio de consulta sigue caído**: página principal `503
+> Server-unavailable!` y el endpoint de consulta responde `401 {"codigo":5,"descripcion":"Autenticación
+> fallida: Acceso denegado. No se puede definir la política de seguridad."}` a **CUALQUIER** petición
+> (con token válido de Rust, de Node/undici, o sin token) → fallo del gateway/auth, NO del contrato.
+> La verificación end-to-end (insertar/dedup, sync de estado, reporte HTML, Excel) sigue pendiente
+> hasta que el microservicio vuelva. Nota del gateway: expone auth por headers `token`/`ticket`
+> (CORS `Access-Control-Allow-Headers`) y setea cookies ADC (`ADC_CONN_*`/`ADC_REQ_*`) — posible
+> requisito adicional cuando el servicio esté arriba. Ver §3 (tarea PRIMERO en curso).
 
 > **Agente SIMIT (09-08, tarde):** nuevo agente que consulta los comparendos/multas de toda la
 > flota en el portal del SIMIT cada 2 h (configurable en `[simit]` de `config.ini`) mientras la
@@ -62,7 +105,7 @@ Proyecto de renta de vehículos: frontend **SvelteKit 5** (`src/`), backend **Ta
 | `cargo test` (Rust) | ✅ unit (32, incl. 9 del Agente SIMIT) + integraciones por módulo (comparendos ahora 4) |
 | `cargo check --tests` | ✅ 0 errores |
 | `cargo clippy --lib` | ✅ código nuevo limpio; quedan 6 warnings pre-existentes (migrations.rs ×2, informe.rs ×1, renta.rs ×2, services/renta.rs ×1) |
-| `npm run lint` | ⚠️ **ROTO de antes** — ver §3 (eslint.config.js, plugin @typescript-eslint) |
+| `npm run lint` | ✅ **0 problemas** (config corregida el 10-08 — ver §3) |
 
 **Regla crítica de rsfbclient:** solo implementa `FromRow` para tuplas de **≤26 elementos**
 y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en dos consultas
@@ -145,11 +188,12 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   (round-trip de `numero_comparendo`, dedup por número y placa+fecha+monto, sync de estado,
   soft-delete excluye del dedup) · frontend: factories de `comparendos.test.ts` y
   `alertas.test.ts` actualizados con `numeroComparendo`.
-- **Advertencia (crítica para mañana):** el portal SIMIT estuvo **caído durante el desarrollo**, así
-  que `resolver_captcha`/`consultar_placa` NO se ejecutaron contra el servidor real. Contrato
-  implementado 1:1 del proyecto `manavarrp/SimitConsulta` (C#/.NET, PoW idéntico). Riesgos: el
-  servidor de captcha puede rechazar TLS no-navegador (fingerprinting; el proyecto de referencia
-  lo resuelve desde el frontend con TLS real de Chrome) y los endpoints pueden cambiar. Ver §3.
+- **Validación real del 10-08 (ver nota al inicio):** probado el flujo HTTP por primera vez.
+  ✅ Captcha PoW aceptado (sin TLS fingerprinting — ureq/rustls basta; verificado también con
+  Node/undici y curl). ✅ Token 1:1 con la referencia. 🐛 **Bug corregido:** faltaban los headers
+  `Origin`/`Referer` (+`Accept`/`Accept-Language`) — ahora `con_headers_browser()` en
+  `services/simit.rs`. ❌ El **microservicio de consulta sigue caído** (401 de gateway a toda
+  petición + 503 en la página principal) → la sincronización end-to-end sigue pendiente. Ver §3.
 
 ### ✅ Alertas (`/alertas`)
 - **Sin backend nuevo:** consolida `autoApi.alertas` (vencimientos SOAT/tecno-mecánica/extintor/
@@ -220,22 +264,42 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 ## 3. Pendiente / mejoras sugeridas
 
-- [ ] **PRIMERO — Probar el Agente SIMIT contra el portal real** (estaba caído el 09-08). Ejecutar
-      `npm run tauri dev`, esperar la primera corrida automática (o botón «Sincronizar ahora» en
-      `/comparendos`) y verificar: (1) el captcha PoW es aceptado (si el servidor rechaza el
-      token por TLS fingerprinting, habrá que resolverlo — opciones: configurar `ureq` con
-      otro backend TLS o mover la resolución al webview); (2) los comparendos reales se
-      insertan/dedupan bien y el estado Pagado se sincroniza; (3) el reporte HTML sale en
-      `data/informes_simit/` y el Excel descarga. Revisar también el panel en **Tauri**
-      (aún no revisado visualmente en la app real).
-- [ ] **Arreglar `npm run lint` (roto de ANTES, no por el agente):** `eslint.config.js` usa reglas
-      `@typescript-eslint/*` en el bloque «Reglas custom» sin declarar el plugin en ese mismo
-      objeto (flat config scoping) → «could not find plugin '@typescript-eslint'» en cualquier
-      `.svelte`. Para arreglarlo de verdad hay que además declarar los globals del navegador
-      (`setTimeout`, `URL`, `document`, `console`, `Blob`… — hoy dan `no-undef`) y limpiar la
-      deuda (p. ej. `est`/`plac` sin usar en `$effect` de `+page.svelte` de comparendos). El
-      pre-commit (`bun run lint`) falla mientras tanto → `git commit --no-verify`.
-- [ ] **Configurar `business.impuesto_porcentaje`** en el `config.ini` real de producción (dev usa 19).
+- [ ] **PRIMERO — Probar el Agente SIMIT contra el portal real (en curso).** El 10-08 se probó el
+      flujo HTTP real por primera vez (el captcha qxcaptcha volvió a estar arriba):
+      (1) ✅ **captcha PoW aceptado** — el riesgo de TLS fingerprinting NO se materializó (probado
+      con ureq/rustls, Node/undici y curl); (2) ✅ **token 1:1 con la referencia** (HashHelper.cs /
+      captcha.ts de manavarrp/SimitConsulta) y **bug de contrato corregido** (faltaban
+      `Origin`/`Referer`/`Accept`/`Accept-Language` → `con_headers_browser()` en services/simit.rs);
+      (3) ❌ **el microservicio de consulta sigue caído** (re-verificado 10-08 tarde con el código
+      corregido): responde 401 «Autenticación fallida...» (código 5) de gateway a CUALQUIER petición
+      (con token válido de Rust/Node o sin token) y la página principal da 503 «Server-unavailable!»;
+      el WADL del endpoint (Jersey 2.32) confirma el contrato POST JSON sin auth en la API — el 401
+      es del gateway externo. Cuando el microservicio vuelva: ejecutar
+      `npm run tauri dev` → «Sincronizar ahora» en `/comparendos` y verificar insertar/dedup, sync
+      de estado a Pagado, reporte HTML en `data/informes_simit/` y descarga del Excel; revisar el
+      panel en **Tauri** (aún no revisado visualmente en la app real). Reintento rápido: recrear el
+      test temporal (patrón `simit_portal_real_temporal.rs`, eliminado tras la validación) o el
+      script `scripts/simit-real-test.mjs` (también eliminado); el diagnóstico del 401 está
+      documentado en la nota de la portada.
+- [x] **Arreglar `npm run lint` (hecho 10-08):** `eslint.config.js` corregido — (1) el plugin
+      `@typescript-eslint` se declara en TODOS los bloques que usan sus reglas (custom y tests;
+      flat config scoping — causa del «could not find plugin»); (2) globals de navegador vía el
+      paquete `globals` (añadido a devDependencies) para `.ts`/`.svelte` y globals node para
+      `src/test/**`; (3) `no-undef` off en TS/Svelte (svelte-check cubre la detección; sin eso,
+      las runes `$state`/`$effect` y el genérico `T` de DataTable daban no-undef); (4)
+      `no-unused-vars` del core off (el de `@typescript-eslint` ya lo cubre respetando `^_`);
+      (5) `.eslintignore` eliminado (deprecado; patrones ya en `ignores`). Deuda limpiada:
+      vars de suscripción de `$effect` renombradas a `_est`/`_plac`/… (convención ya usada en
+      rentas), `catch (e)` → `catch {}`, y muertos eliminados (import `onMount` de Modal,
+      props `cliente`/`auto` de OrdenRenta + su caller en rentas, deriveds sin uso en autos,
+      arg `r` de informeExcel). Validación: `npm run lint` 0 problemas, `npm run check` 0/0,
+      `npm run test` 190/190, `npm run build` ✅ — el pre-commit (`bun run lint`) ya no bloquea.
+- [x] **Configurar `business.impuesto_porcentaje`** en el `config.ini` real de producción (dev usa 19).
+      *Hecho (10-08): el config real (`%APPDATA%\com.corjar.dinamorent\config.ini`) ya trae
+      `impuesto_porcentaje = 19` en `[business]` (auto-generado con los defaults) y la app lo lee al
+      arrancar. Para CAMBIAR la tasa en producción: editar esa clave en `[business]` del config.ini y
+      reiniciar la app (sin rebuild; `AppConfig::save()` preserva la clave — no la pisa). Se documentó
+      también en `data/config.ini.example`.*
 - [x] **Auditar índices** de `mantenimiento_vehiculos` y `informes` para los filtros por rango de
       fechas (pagos.fecha, reservas.fecha_recogida, gastos.fecha, comparendos.fecha_infraccion).
       *Hecho en 0010-0013 (dedup + consolidación; los `IDX_*_FECHA` de 0002 se conservan porque no
