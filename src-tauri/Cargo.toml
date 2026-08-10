@@ -19,6 +19,14 @@ path = "src/bin/dev_reset_admin.rs"
 # como defense-in-depth.
 required-features = ["dev"]
 
+[[bin]]
+name = "rotate_pii_key"
+path = "src/bin/rotate_pii_key.rs"
+# Herramienta de mantenimiento (SECURITY.md §2.1): rota la clave PII
+# re-cifrando las columnas de clientes. Sólo se construye con `--features dev`
+# para no llegar al bundle de release.
+required-features = ["dev"]
+
 [features]
 default = []
 # Feature de desarrollo: habilita el binario `dev_reset_admin`.

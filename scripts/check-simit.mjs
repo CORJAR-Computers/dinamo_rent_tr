@@ -19,6 +19,7 @@
 // Códigos de salida: 0 = todo operativo · 1 = error técnico · 2 = SIMIT caído.
 
 import { createHash } from 'node:crypto';
+import { promises as dns } from 'node:dns';
 
 // ─── Contrato del SIMIT (espejo de services/simit.rs) ────────────────────────
 
@@ -39,6 +40,47 @@ const HEADERS_BROWSER = {
 };
 const DIFICULTAD_DEFECTO = 2;
 const MAX_ITERACIONES = 10_000_000;
+
+// ─── Chequeo DNS previo ──────────────────────────────────────────────────────
+//
+// El 10-08 el portal SIMIT dejó de resolver (`EAI_AGAIN` en qxcaptcha y
+// consultasimit) mientras el dominio raíz seguía vivo. Este chequeo distingue
+// "subdominios sin resolver" de "portal caído" o "error técnico": si los
+// hostnames no resuelven, la E2E es imposible y el diagnóstico lo dice claro.
+
+const HOSTS_SIMIT = ['qxcaptcha.fcm.org.co', 'consultasimit.fcm.org.co'];
+const DNS_TIMEOUT_MS = 3000;
+
+function lookupConTimeout(host) {
+	return new Promise((resolve) => {
+		const t = setTimeout(() => resolve({ host, ok: null, motivo: 'timeout' }), DNS_TIMEOUT_MS);
+		dns
+			.lookup(host, { verbatim: true })
+			.then(({ address, family }) => resolve({ host, ok: true, ip: address, family }))
+			.catch((e) => resolve({ host, ok: false, motivo: e.code ?? e.message }))
+			.finally(() => clearTimeout(t));
+	});
+}
+
+async function comprobarDns() {
+	if (!QUIET) console.log('\n[DNS] resolución de los subdominios SIMIT');
+	const resultados = await Promise.all(HOSTS_SIMIT.map(lookupConTimeout));
+	let algunoResuelve = false;
+	for (const r of resultados) {
+		if (r.ok === true) {
+			algunoResuelve = true;
+			statusLine(r.host, true, `${r.ip} (IPv${r.family})`);
+		} else if (r.ok === null) {
+			statusLine(r.host, null, `sin respuesta (timeout ${DNS_TIMEOUT_MS} ms)`);
+		} else {
+			statusLine(r.host, false, `no resuelve (${r.motivo})`);
+		}
+	}
+	return {
+		ok: algunoResuelve,
+		hosts: resultados.map((r) => ({ host: r.host, ok: r.ok, ip: r.ip ?? null, motivo: r.motivo ?? null }))
+	};
+}
 
 // ─── Utilidades HTTP ──────────────────────────────────────────────────────────
 
@@ -253,12 +295,12 @@ saber cuándo reintentar la verificación end-to-end del Agente SIMIT.
 Opciones:
   --placa <PLACA>     Placa de prueba para la sonda E2E (default: AAA000, env SIMIT_PLACA)
   --timeout <ms>      Timeout por petición (default: 15000, env SIMIT_TIMEOUT_MS)
-  --solo-captcha      Solo comprueba el captcha
-  --solo-micro        Solo comprueba el microservicio (sin sonda E2E)
+  --solo-captcha      Solo comprueba el captcha (sin chequeo DNS ni microservicio)
+  --solo-micro        Solo comprueba el microservicio (sin chequeo DNS ni sonda E2E)
   --json              Salida JSON (para scripts/CI)
   --ayuda, -h         Muestra esta ayuda
 
-Códigos de salida: 0 = operativo · 1 = error técnico · 2 = SIMIT caído`);
+Códigos de salida: 0 = operativo · 1 = error técnico/DNS caído · 2 = SIMIT caído`);
 }
 
 const args = process.argv.slice(2);
@@ -275,7 +317,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 QUIET = opciones.json; // en modo --json solo se imprime el JSON final
-const reporte = { fecha: new Date().toISOString(), placa: opciones.placa, captcha: null, microservicio: null, resultado: null };
+const reporte = { fecha: new Date().toISOString(), placa: opciones.placa, dns: null, captcha: null, microservicio: null, resultado: null };
 
 try {
 	if (!opciones.json) {
@@ -283,10 +325,18 @@ try {
 		console.log(`⏱  ${new Date().toLocaleString('es-CO')}`);
 	}
 
+	// 0) DNS previo (se omite con --solo-*): si los subdominios no resuelven,
+	//    la E2E es imposible y el diagnóstico lo dice claro.
+	const conDns = !opciones.soloCaptcha && !opciones.soloMicro;
+	reporte.dns = conDns ? await comprobarDns() : { ok: true, hosts: [] };
+	const hayDnsFallido = conDns && !reporte.dns.ok;
+
 	const conCaptcha = !opciones.soloMicro;
 	const conMicro = !opciones.soloCaptcha;
 
-	if (conCaptcha) {
+	// Si el DNS no resuelve, la E2E es imposible: el resto de chequeos HTTP
+	// fallarían con el mismo EAI_AGAIN (ruido redundante). Se saltan.
+	if (!hayDnsFallido && conCaptcha) {
 		reporte.captcha = await comprobarCaptcha(opciones.timeoutMs);
 		if (!opciones.json && reporte.captcha.ok) {
 			statusLine('Captcha operativo', true, reporte.captcha.detalle);
@@ -295,7 +345,7 @@ try {
 		}
 	}
 
-	if (conMicro) {
+	if (!hayDnsFallido && conMicro) {
 		const r = await comprobarMicroservicio(opciones.timeoutMs, opciones.placa, conCaptcha);
 		reporte.microservicio = r;
 	}
@@ -304,11 +354,14 @@ try {
 	const captchaOk = !conCaptcha || reporte.captcha?.ok === true;
 	const microUp = reporte.microservicio?.up;
 	const hayErrorTecnico =
+		hayDnsFallido ||
 		(conCaptcha && reporte.captcha?.ok === false && reporte.captcha?.motivo?.startsWith('error de red')) ||
 		(conMicro && reporte.microservicio?.firma === 'red');
 
-	// Orden importa: un error técnico de red es distinto de "servicio caído".
-	if (hayErrorTecnico) {
+	// Orden importa: el DNS caído es distinto de "servicio caído".
+	if (hayDnsFallido) {
+		reporte.resultado = 'dns_caido';
+	} else if (hayErrorTecnico) {
 		reporte.resultado = 'error_tecnico';
 	} else if (conCaptcha && reporte.captcha?.ok === false) {
 		reporte.resultado = 'captcha_caido';
@@ -328,6 +381,7 @@ try {
 			operativo: '✓ SIMIT OPERATIVO — la E2E se puede reintentar',
 			captcha_caido: '✗ Captcha NO operativo',
 			micro_caido: '✗ Microservicio NO operativo (portal caído)',
+			dns_caido: '✗ Subdominios SIMIT sin resolución DNS — el portal no es alcanzable (no es un fallo de la app)',
 			error_tecnico: '? Error técnico de red — reintentar más tarde',
 			indefinido: '? Estado indefinido — revisar salida'
 		}[reporte.resultado];

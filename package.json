@@ -18,6 +18,7 @@
 		"tauri": "tauri",
 	"verificar:paginacion": "node scripts/verificar-paginacion.mjs",
 	"smoke:app": "node scripts/smoke-test-app.mjs",
+	"watch:simit": "node scripts/watch-simit.mjs",
 	"check:simit": "node scripts/check-simit.mjs",
 		"lint": "eslint src --ext .ts,.svelte",
 		"lint:fix": "eslint src --ext .ts,.svelte --fix",

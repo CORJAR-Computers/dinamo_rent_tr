@@ -24,6 +24,10 @@ src-tauri/gen/
 # Base de datos Firebird (NUNCA commitear)
 data/*.fdb
 data/*.fdb.bak
+data/*.fdb.pre-rotation.bak
+
+# Logs del vigilante del portal SIMIT (watch-simit)
+data/simit_watch/
 
 # Reportes generados por el Agente SIMIT (runtime)
 data/informes_simit/

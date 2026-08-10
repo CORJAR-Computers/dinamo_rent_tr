@@ -86,25 +86,19 @@ chmod 600 /tmp/new_key.txt
 
 #### Paso 2 — Script de rotación
 
-La rotación implica **descifrar cada fila PII con la clave vieja y re-cifrarla con la nueva**. El backend expone el comando Tauri interno `rotate_pii_key(old_key, new_key)` (ver `src-tauri/src/services/security.rs`), o puede ejecutarse vía CLI de mantenimiento:
+La rotación implica **descifrar cada fila PII con la clave vieja y re-cifrarla con la nueva**. El repo incluye el bin de mantenimiento `rotate_pii_key` (`src-tauri/src/bin/rotate_pii_key.rs`), que re-cifra las columnas PII de `clientes` (Fernet legacy → AES-GCM `v1:`) en una transacción y aborta si la clave vieja no descifra algún token:
 
 ```bash
-# Detener la aplicación primero.
-# Ejecutar la rotación (la app debe estar detenida para evitar escrituras concurrentes):
-cargo run --bin dinamo-rotate-keys -- \
-  --old-key "$(cat data/.old_key)" \
+# Detener la aplicación primero (evita escrituras concurrentes).
+cargo run --features dev --bin rotate_pii_key -- \
+  --old-key "CLAVE_VIEJA" \
   --new-key "$NEW_KEY" \
-  --config data/config.ini
+  --db "ruta/al/dinamo_rent_v3.fdb"
 ```
 
-> ⚠️ Si el binario `dinamo-rotate-keys` no existe todavía en tu versión, implementar la rotación como transacción SQL:
->
-> ```sql
-> -- Para cada tabla con columnas cifradas (clientes, licencias, etc.):
-> -- 1. UPDATE temporal descifrando con clave vieja
-> -- 2. UPDATE re-cifrando con clave nueva
-> -- Esto debe hacerse en bloque Rust que use aes-gcm y maneje nonces.
-> ```
+> ⚠️ Hacer backup previo (§2.1 Paso 0) y ejecutar UNA vez por cada instalación
+> (dev y producción), cada una con su `--db`. El bin solo se construye con
+> `--features dev` para no llegar al bundle de release.
 
 #### Paso 3 — Actualizar `config.ini`
 
@@ -228,21 +222,21 @@ Esto constituye un incidente **Critical** (CVSS ~9.1) bajo RGPD/Ley 1581 de Colo
 4. ✅ Creado `scripts/sanitize-repo.sh` para `git rm --cached` y purga del historial con `git filter-repo`.
 5. ✅ Esta documentación (`SECURITY.md`) describe el procedimiento completo de rotación.
 
-### 4.4 Mitigación pendiente — ACCIÓN REQUERIDA del operador
+### 4.4 Mitigación aplicada posteriormente (2026-08-10)
 
-⚠️ **El operador del sistema debe ejecutar manualmente** (no se puede automatizar):
+6. ✅ **Historial Git purgado** (2026-08-10) con `git filter-repo` (invert-paths + replace-text) y force-push.
+7. ✅ **Clave PII rotada** (2026-08-10): nueva clave generada con `openssl rand -base64 32`, los 42 clientes re-cifrados (Fernet → AES-GCM v1:) en las BDs de dev y producción con `rotate_pii_key`, y `db_encryption_key` actualizada en ambos `config.ini` (dev y `%APPDATA%`). Verificación OK: la app lista los clientes sin PII oculto y sin errores.
 
-1. **Rotar la clave PII** siguiendo el procedimiento de §2 (generar nueva clave, descifrar + re-cifrar, actualizar `config.ini`, verificar).
-2. **Purgar el historial Git** con `git filter-repo` (§2.5) en todos los remotos.
-3. **Forzar re-clone** en todos los entornos de desarrollo/CI.
-4. **Cambiar la contraseña `sysdba`** de Firebird si existe cualquier despliegue en modo server (en embedded no aplica).
-5. **Revisar logs de auditoría** en busca de accesos sospechosos posteriores a la fecha de exposición.
-6. Si la BD contiene datos reales de clientes y hubo acceso no autorizado al repo, considerar **notificación a la SIC** (Superintendencia de Industria y Comercio de Colombia) bajo la Ley 1581.
+### 4.5 Pendientes del operador
 
-### 4.5 Fecha del hallazgo
+1. ⚠️ **Cambiar la contraseña `sysdba`** de Firebird si existe cualquier despliegue en modo server (en embedded no aplica).
+2. ⚠️ **Revisar logs de auditoría** en busca de accesos sospechosos posteriores a la fecha de exposición (2026-08-09).
+3. ⚠️ Si la BD contiene datos reales de clientes y hubo acceso no autorizado al repo, considerar **notificación a la SIC** (Superintendencia de Industria y Comercio de Colombia) bajo la Ley 1581.
+
+### 4.6 Fecha del hallazgo
 
 - Detectado: 2026-08-09 (Grupo A — Saneamiento del repo).
-- Estado: mitigación técnica aplicada; rotación de clave y purga de historial **PENDIENTES** (requieren acción humana).
+- Estado: mitigación técnica + rotación de clave + purga de historial **COMPLETADOS** (2026-08-10).
 
 ---
 

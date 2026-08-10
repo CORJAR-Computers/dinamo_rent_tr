@@ -14,6 +14,7 @@ npm run check:simit
 
 | Paso | Verificación |
 | ---- | ------------ |
+| **DNS** | **previo**: resuelve `qxcaptcha.fcm.org.co` y `consultasimit.fcm.org.co` (módulo `dns` de Node). Si no resuelven → `dns_caido` (el 10-08 los subdominios desaparecieron del DNS mientras el dominio raíz seguía vivo) |
 | Captcha | POST `qxcaptcha.fcm.org.co/api.php` (endpoint=question) y resuelve el **Proof-of-Work** (mismo algoritmo que el backend: nonces primos con SHA256 `0000…`, token 1:1) |
 | Página | GET `consultasimit.fcm.org.co` (código HTTP) |
 | Consulta | POST del endpoint de estado de cuenta **sin token** → clasifica por la firma del gateway (401 `codigo:5` = portal caído, 503 = caído) |
@@ -23,7 +24,7 @@ npm run check:simit
 
 - `--placa <PLACA>` — placa para la sonda E2E (default `AAA000`, env `SIMIT_PLACA`).
 - `--timeout <ms>` — timeout por petición (default `15000`, env `SIMIT_TIMEOUT_MS`).
-- `--solo-captcha` / `--solo-micro` — comprueba solo un servicio.
+- `--solo-captcha` / `--solo-micro` — comprueba solo un servicio (omite el chequeo DNS previo).
 - `--json` — salida JSON (para scripts/CI).
 - `--ayuda` — muestra la ayuda.
 
@@ -32,7 +33,7 @@ npm run check:simit
 | Código | Significado |
 | ------ | ----------- |
 | 0      | SIMIT operativo (captcha + microservicio listos para E2E) |
-| 1      | error técnico (red, timeout) |
+| 1      | error técnico (red, timeout) **o DNS caído** (`dns_caido`) |
 | 2      | SIMIT caído (captcha o microservicio no operativo) |
 
 Útil en scripts: `node scripts/check-simit.mjs && echo "E2E lista"`.
@@ -41,6 +42,48 @@ npm run check:simit
 > "Autenticación fallida: Acceso denegado..."}` a **cualquier** petición (con o sin
 > token) y la página principal da `503 Server-unavailable!` — fallo del gateway de
 > seguridad externo, no del contrato de la app.
+
+---
+
+# Vigilante del portal SIMIT
+
+`scripts/watch-simit.mjs` re-ejecuta `check-simit.mjs` **cada 2 horas** (default;
+intervalo de sincronización del Agente SIMIT) hasta que el portal vuelva a estar
+operativo, sin intervención manual. Pensado para el corte del 10-08 en que los
+subdominios `qxcaptcha`/`consultasimit` dejaron de resolver en DNS.
+
+```bash
+npm run watch:simit
+# o:
+node scripts/watch-simit.mjs [--interval 2] [--max-horas 168]
+```
+
+**Comportamiento:**
+
+- Cada intento ejecuta `check-simit.mjs --json` y lo registra (timestamp +
+  resultado) en `data/simit_watch/watch.log` (gitignored).
+- Mientras el portal siga caído o el DNS sin resolver, sigue esperando e
+  imprimiendo el estado de cada intento.
+- En cuanto el chequeo devuelva **0 (SIMIT operativo)**, imprime el aviso y
+  termina con código **0** — la E2E se puede reintentar.
+- `Ctrl+C` detiene el vigilante en cualquier momento (el log queda guardado).
+
+### Opciones
+
+- `--interval <horas>` — intervalo entre chequeos (default `2`, env `SIMIT_WATCH_INTERVAL_H`).
+- `--max-horas <n>` — tiempo máximo total de vigilancia (default `168` = 7 días, env
+  `SIMIT_WATCH_MAX_H`). `0` = sin límite.
+- `--json` — solo salida JSON del último intento (para CI/scripts).
+
+### Códigos de salida
+
+| Código | Significado |
+| ------ | ----------- |
+| 0      | el portal SIMIT volvió a estar operativo (y `watch.log` tiene el historial) |
+| 1      | se alcanzó `--max-horas` sin recuperación, o error inesperado |
+
+> El log de sesión vive en `data/simit_watch/watch.log` (fuera de git) para
+> revisar el historial de intentos en cualquier momento.
 
 ---
 
