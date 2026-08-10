@@ -327,4 +327,19 @@ describe('panel del Agente SIMIT', () => {
 		expect(screen.queryByText(/primera corrida en/)).not.toBeInTheDocument();
 		expect(screen.getByText(/próxima: 18:20/)).toBeInTheDocument();
 	});
+
+	it('muestra el badge «Deshabilitado en config.ini» cuando habilitado es false', async () => {
+		tauri.register('listar_comparendos', () => []);
+		tauri.register('simit_sync_status', () => infoAgente({ habilitado: false }));
+
+		render(ComparendosPage);
+
+		expect(await screen.findByText('Agente SIMIT')).toBeInTheDocument();
+		expect(screen.getByText('Deshabilitado en config.ini')).toBeInTheDocument();
+		// El badge sustituye al spinner de «Consultando SIMIT...»
+		expect(screen.queryByText(/Consultando SIMIT/)).not.toBeInTheDocument();
+		// Los botones de acción siguen visibles para la sincronización manual
+		expect(screen.getByRole('button', { name: 'Sincronizar ahora' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Descargar Excel' })).toBeInTheDocument();
+	});
 });
