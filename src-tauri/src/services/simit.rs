@@ -789,6 +789,19 @@ pub fn sincronizar(
                 
                 for mut reg in registros {
                     resultado.encontrados += 1;
+                    // Fecha inválida → se omite el registro (no aborta la placa).
+                    // Va ANTES de ya_existe: existe_duplicado llama parse_fecha
+                    // y una fecha malformada (p.ej. sin número oficial) abortaría
+                    // toda la sincronización en vez de omitir el registro.
+                    if NaiveDate::parse_from_str(&reg.fecha_infraccion, "%Y-%m-%d").is_err() {
+                        log::warn!(
+                            "Agente SIMIT: fecha inválida para {} ({}), registro omitido",
+                            reg.placa,
+                            reg.fecha_infraccion
+                        );
+                        resultado.duplicados += 1;
+                        continue;
+                    }
                     // ¿Ya existe? (número oficial o placa+fecha+monto). Si el
                     // SIMIT reporta pagado un comparendo ya registrado, se
                     // sincroniza el estado (la BD converge con el SIMIT).
@@ -800,16 +813,6 @@ pub fn sincronizar(
                         }
                         resultado.duplicados += 1;
                         resultado.registros.push(reg);
-                        continue;
-                    }
-                    // Fecha inválida → se omite el registro (no aborta la placa)
-                    if NaiveDate::parse_from_str(&reg.fecha_infraccion, "%Y-%m-%d").is_err() {
-                        log::warn!(
-                            "Agente SIMIT: fecha inválida para {} ({}), registro omitido",
-                            reg.placa,
-                            reg.fecha_infraccion
-                        );
-                        resultado.duplicados += 1;
                         continue;
                     }
                     let datos = ComparendoDatos {
@@ -1450,7 +1453,8 @@ fn mapear_estado(estado: Option<&str>) -> String {
 }
 
 /// Extrae fecha (AAAA-MM-DD) y hora (HH:MM) de formatos como
-/// "2026-01-15", "2026-01-15 14:30:00" o ISO con 'T'.
+/// "2026-01-15", "2026-01-15 14:30:00", ISO con 'T' o DD/MM/YYYY
+/// ("27/01/2025" — el SIMIT envía fechaComparendo en formato latino).
 fn parsear_fecha_hora(raw: &str) -> (String, String) {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -1459,7 +1463,7 @@ fn parsear_fecha_hora(raw: &str) -> (String, String) {
     // Separa fecha y hora por 'T' (ISO) o por espacio; la hora puede traer
     // un 'T' o espacios sobrantes que se recortan antes de tomar HH:MM.
     let mut partes = raw.splitn(2, ['T', ' ']);
-    let fecha = partes.next().unwrap_or("").trim().to_string();
+    let fecha_raw = partes.next().unwrap_or("").trim();
     let hora_raw = partes.next().unwrap_or("").trim();
     let hora: String = hora_raw
         .trim_start_matches(|c: char| !c.is_ascii_digit())
@@ -1467,6 +1471,21 @@ fn parsear_fecha_hora(raw: &str) -> (String, String) {
         .take(5)
         .collect();
     let hora = if hora.is_empty() { "00:00".into() } else { hora };
+    // Normaliza DD/MM/YYYY → AAAA-MM-DD (dominio en ISO). ISO y variantes
+    // con separadores '-' pasan sin cambios (bytes[2] != '/').
+    let fecha = if fecha_raw.len() == 10
+        && fecha_raw.as_bytes().get(2) == Some(&b'/')
+        && fecha_raw.as_bytes().get(5) == Some(&b'/')
+    {
+        format!(
+            "{}-{}-{}",
+            &fecha_raw[6..10],
+            &fecha_raw[3..5],
+            &fecha_raw[0..2]
+        )
+    } else {
+        fecha_raw.to_string()
+    };
     (fecha, hora)
 }
 
@@ -1611,10 +1630,20 @@ mod tests {
             parsear_fecha_hora("2026-01-15T08:05:00"),
             ("2026-01-15".into(), "08:05".into())
         );
+        // El SIMIT envía fechaComparendo en formato latino DD/MM/YYYY
+        assert_eq!(
+            parsear_fecha_hora("27/01/2025"),
+            ("2025-01-27".into(), "00:00".into())
+        );
+        assert_eq!(
+            parsear_fecha_hora("02/02/2026 14:30:00"),
+            ("2026-02-02".into(), "14:30".into())
+        );
     }
 
     #[test]
     fn mapeo_respuesta_completa() {
+        // FechaComparendo en formato real del SIMIT (latino DD/MM/YYYY)
         let json = r#"{
             "multas": [
                 {
@@ -1622,7 +1651,7 @@ mod tests {
                     "numeroComparendo": "250010000000123",
                     "valorPagar": 580000.5,
                     "estadoComparendo": "PENDIENTE",
-                    "fechaComparendo": "2026-03-12 09:15:00",
+                    "fechaComparendo": "12/03/2026 09:15:00",
                     "organismoTransito": "Medellín",
                     "infracciones": [
                         { "codigoInfraccion": "C24", "descripcionInfraccion": "Exceso de velocidad" }
