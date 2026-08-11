@@ -12,6 +12,23 @@ use crate::core::PooledConnection;
 
 use serde::Serialize;
 
+/// Responsable del vehículo el día de la infracción — cruce con `rentas`:
+/// la renta del mismo vehículo cuyo rango [fecha_recogida, devolución real (o
+/// retorno)] contiene la fecha de la infracción. Se calcula en el SELECT (no
+/// se persiste); `id_renta`/`id_cliente` de `comparendos` quedan libres.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponsableComparendo {
+    pub id_renta: i64,
+    pub nombre_cliente: String,
+    /// Número de contrato (secuencia anual; formatear con `anio_contrato`)
+    pub no_contrato: i64,
+    pub anio_contrato: i64,
+    pub fecha_recogida: String,
+    pub fecha_retorno: String,
+    pub estado_renta: String,
+}
+
 /// Comparendo completo (serializable al frontend, camelCase)
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +49,8 @@ pub struct Comparendo {
     pub observaciones: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    /// Quién tenía el vehículo el día de la infracción (cruce con rentas)
+    pub responsable: Option<ResponsableComparendo>,
 }
 
 /// Datos de entrada para crear/actualizar (validados por el servicio)
@@ -59,15 +78,52 @@ macro_rules! params {
     };
 }
 
-/// Orden de columnas del SELECT de comparendos (debe coincidir con `ComparendoRow`)
-pub const SELECT_COLS: &str = "\
-    c.id, c.placa, COALESCE(a.marca || ' ' || a.modelo, ''), \
-    CAST(c.fecha_infraccion AS VARCHAR(10)), CAST(c.hora_infraccion AS VARCHAR(13)), \
-    CAST(c.monto AS VARCHAR(12)), c.numero_comparendo, c.id_renta, c.id_cliente, c.estado, \
-    CAST(c.observaciones AS VARCHAR(2000)), \
-    CAST(c.created_at AS VARCHAR(30)), CAST(c.updated_at AS VARCHAR(30))";
+/// SELECT interno del cruce con rentas (columnas con prefijos y alias).
+/// Mantener alineado con `SELECT_COLS_CRUCE_OUTER` y `ComparendoRow`.
+pub const SELECT_COLS_CRUCE: &str = "\
+    c.id, c.placa, COALESCE(a.marca || ' ' || a.modelo, '') AS vehiculo, \
+    CAST(c.fecha_infraccion AS VARCHAR(10)) AS fecha_infraccion, \
+    CAST(c.hora_infraccion AS VARCHAR(13)) AS hora_infraccion, \
+    CAST(c.monto AS VARCHAR(12)) AS monto, c.numero_comparendo, c.id_renta, c.id_cliente, c.estado, \
+    CAST(c.observaciones AS VARCHAR(2000)) AS observaciones, \
+    CAST(c.created_at AS VARCHAR(30)) AS created_at, CAST(c.updated_at AS VARCHAR(30)) AS updated_at";
 
-/// Fila de SELECT de comparendos (tupla — mantener alineada con `SELECT_COLS`)
+/// SELECT externo del cruce (columnas sin prefijos + campos `resp_*` del
+/// responsable). Mantener alineado con `SELECT_COLS_CRUCE` y `ComparendoRow`.
+pub const SELECT_COLS_CRUCE_OUTER: &str = "\
+    id, placa, vehiculo, fecha_infraccion, hora_infraccion, monto, numero_comparendo, \
+    id_renta, id_cliente, estado, observaciones, created_at, updated_at, \
+    resp_id, resp_nombre, resp_contrato, resp_anio, resp_recogida, resp_retorno, resp_estado";
+
+/// Construye el SELECT de comparendos con el cruce de responsabilidad: para
+/// cada comparendo se busca la renta del mismo vehículo cuyo rango
+/// [fecha_recogida, devolución real o retorno] contiene la fecha de la
+/// infracción. `ROW_NUMBER()` deduplica por si hubiera más de una (se queda
+/// con la de recogida más reciente). `condiciones` se inyecta en el WHERE
+/// interno (empieza con AND) y `orden` en el ORDER BY externo.
+fn sql_con_responsable(condiciones: &str, orden: &str) -> String {
+    format!(
+        "SELECT {SELECT_COLS_CRUCE_OUTER} FROM ( \
+         SELECT {SELECT_COLS_CRUCE}, \
+                resp.id AS resp_id, resp.nombre_cliente AS resp_nombre, \
+                resp.no_contrato AS resp_contrato, resp.anio_contrato AS resp_anio, \
+                CAST(resp.fecha_recogida AS VARCHAR(10)) AS resp_recogida, \
+                CAST(resp.fecha_retorno AS VARCHAR(10)) AS resp_retorno, \
+                resp.estado AS resp_estado, \
+                ROW_NUMBER() OVER (PARTITION BY c.id ORDER BY resp.fecha_recogida DESC) AS resp_rn \
+         FROM comparendos c \
+         LEFT JOIN autos a ON a.placa = c.placa \
+         LEFT JOIN rentas resp ON resp.placa = c.placa \
+              AND c.fecha_infraccion BETWEEN resp.fecha_recogida \
+                  AND COALESCE(resp.fecha_devolucion_real, resp.fecha_retorno) \
+              AND resp.deleted_at IS NULL AND resp.estado <> 'Cancelada' \
+         WHERE c.deleted_at IS NULL {condiciones} \
+         ) c2 WHERE c2.resp_rn = 1 {orden}"
+    )
+}
+
+/// Fila de SELECT de comparendos + cruce (tupla — mantener alineada con
+/// `SELECT_COLS_CRUCE`/`SELECT_COLS_CRUCE_OUTER`)
 #[allow(clippy::type_complexity)]
 pub type ComparendoRow = (
     i64,
@@ -80,6 +136,14 @@ pub type ComparendoRow = (
     Option<i64>,
     Option<i64>,
     String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    // ── cruce de responsabilidad (resp_*) ──
+    Option<i64>,
+    Option<String>,
+    Option<i64>,
+    Option<i64>,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -100,6 +164,15 @@ fn from_row(r: ComparendoRow) -> Comparendo {
         observaciones: r.10,
         created_at: r.11,
         updated_at: r.12,
+        responsable: r.13.map(|id_renta| ResponsableComparendo {
+            id_renta,
+            nombre_cliente: r.14.unwrap_or_default(),
+            no_contrato: r.15.unwrap_or(0),
+            anio_contrato: r.16.unwrap_or(0),
+            fecha_recogida: r.17.unwrap_or_default(),
+            fecha_retorno: r.18.unwrap_or_default(),
+            estado_renta: r.19.unwrap_or_default(),
+        }),
     }
 }
 
@@ -122,72 +195,51 @@ fn map_fb_error(e: rsfbclient::FbError) -> AppError {
 pub struct ComparendoRepository;
 
 impl ComparendoRepository {
-    /// Lista todos los comparendos (más recientes primero por fecha e id)
+    /// Lista todos los comparendos (más recientes primero por fecha e id),
+    /// con el responsable del vehículo el día de la infracción
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Comparendo>, AppError> {
-        let rows: Vec<ComparendoRow> = conn.query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM comparendos c \
-                 LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE c.deleted_at IS NULL \
-                 ORDER BY c.fecha_infraccion DESC, c.id DESC"
-            ),
-            (),
-        )?;
+        let sql =
+            sql_con_responsable("", "ORDER BY c2.fecha_infraccion DESC, c2.id DESC");
+        let rows: Vec<ComparendoRow> = conn.query(&sql, ())?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
     /// Busca comparendos por placa u observaciones (insensible a mayúsculas)
     pub fn buscar(conn: &mut PooledConnection, term: &str) -> Result<Vec<Comparendo>, AppError> {
         let like = format!("%{}%", term.trim());
-        let rows: Vec<ComparendoRow> = conn.query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM comparendos c \
-                 LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE c.deleted_at IS NULL \
-                   AND (UPPER(c.placa) LIKE UPPER(?) \
-                        OR UPPER(COALESCE(c.observaciones, '')) LIKE UPPER(?)) \
-                 ORDER BY c.fecha_infraccion DESC, c.id DESC"
-            ),
-            (like.clone(), like),
-        )?;
+        let sql = sql_con_responsable(
+            "AND (UPPER(c.placa) LIKE UPPER(?) \
+             OR UPPER(COALESCE(c.observaciones, '')) LIKE UPPER(?))",
+            "ORDER BY c2.fecha_infraccion DESC, c2.id DESC",
+        );
+        let rows: Vec<ComparendoRow> = conn.query(&sql, (like.clone(), like))?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
-    /// Filtra por placa exacta (historial de un vehículo)
+    /// Filtra por placa exacta (historial de un vehículo), con el responsable
     pub fn obtener_por_placa(conn: &mut PooledConnection, placa: &str) -> Result<Vec<Comparendo>, AppError> {
-        let rows: Vec<ComparendoRow> = conn.query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM comparendos c \
-                 LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE c.placa = ? AND c.deleted_at IS NULL ORDER BY c.fecha_infraccion DESC, c.id DESC"
-            ),
-            (placa.to_string(),),
-        )?;
+        let sql = sql_con_responsable(
+            "AND c.placa = ?",
+            "ORDER BY c2.fecha_infraccion DESC, c2.id DESC",
+        );
+        let rows: Vec<ComparendoRow> = conn.query(&sql, (placa.to_string(),))?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
-    /// Filtra por estado exacto (Pendiente / Pagado)
+    /// Filtra por estado exacto (Pendiente / Pagado), con el responsable
     pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Comparendo>, AppError> {
-        let rows: Vec<ComparendoRow> = conn.query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM comparendos c \
-                 LEFT JOIN autos a ON a.placa = c.placa \
-                 WHERE c.estado = ? AND c.deleted_at IS NULL ORDER BY c.fecha_infraccion DESC, c.id DESC"
-            ),
-            (estado.to_string(),),
-        )?;
+        let sql = sql_con_responsable(
+            "AND c.estado = ?",
+            "ORDER BY c2.fecha_infraccion DESC, c2.id DESC",
+        );
+        let rows: Vec<ComparendoRow> = conn.query(&sql, (estado.to_string(),))?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
-    /// Obtiene un comparendo por id
+    /// Obtiene un comparendo por id (con el responsable del día)
     pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Comparendo>, AppError> {
-        let row: Option<ComparendoRow> = conn.query_first(
-            &format!(
-                "SELECT {SELECT_COLS} FROM comparendos c \
-                 LEFT JOIN autos a ON a.placa = c.placa WHERE c.id = ? AND c.deleted_at IS NULL"
-            ),
-            (id,),
-        )?;
+        let sql = sql_con_responsable("AND c.id = ?", "");
+        let row: Option<ComparendoRow> = conn.query_first(&sql, (id,))?;
         Ok(row.map(from_row))
     }
 

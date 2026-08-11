@@ -21,6 +21,7 @@ function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
 		observaciones: 'Exceso de velocidad',
 		createdAt: null,
 		updatedAt: null,
+		responsable: null,
 		...overrides
 	};
 }
@@ -121,6 +122,29 @@ describe('página de Comparendos', () => {
 		expect(screen.getAllByText('Pendiente').length).toBeGreaterThan(0);
 		expect(screen.getAllByText('Pagado').length).toBeGreaterThan(0);
 		expect(screen.getByText(/2 comparendos/)).toBeInTheDocument();
+	});
+
+	it('muestra quién tenía el vehículo el día de la multa (cruce con rentas)', async () => {
+		tauri.register('listar_comparendos', () => [
+			comparendo({
+				responsable: {
+					idRenta: 7,
+					nombreCliente: 'Ana Martínez',
+					noContrato: 42,
+					anioContrato: 2026,
+					fechaRecogida: '2026-07-01',
+					fechaRetorno: '2026-07-10',
+					estadoRenta: 'Cerrada'
+				}
+			}),
+			comparendo({ id: 2, placa: 'XYZ987', responsable: null })
+		]);
+
+		render(ComparendosPage);
+
+		expect(await screen.findByText('Ana Martínez')).toBeInTheDocument();
+		expect(screen.getByText(/2026-042 ·/)).toBeInTheDocument();
+		expect(screen.getByText('Quién lo tenía')).toBeInTheDocument();
 	});
 
 	it('muestra el estado vacío cuando no hay comparendos', async () => {

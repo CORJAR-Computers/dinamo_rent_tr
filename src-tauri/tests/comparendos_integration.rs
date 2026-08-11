@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use chrono::Local;
+use chrono::{Duration, Local};
 use serial_test::serial;
 
 use dinamo_rent_lib::core::config::AppConfig;
@@ -15,7 +15,9 @@ use dinamo_rent_lib::core::rbac::SessionStore;
 use dinamo_rent_lib::core::security::LoginAttemptTracker;
 use dinamo_rent_lib::repositories::auto::AutoRepository;
 use dinamo_rent_lib::repositories::comparendo::ComparendoDatos;
+use dinamo_rent_lib::repositories::renta::RentaDatos;
 use dinamo_rent_lib::services::comparendo::ComparendoService;
+use dinamo_rent_lib::services::renta::RentaService;
 use dinamo_rent_lib::services::AppState;
 
 fn dev_state() -> AppState {
@@ -279,4 +281,119 @@ fn comparendo_numero_oficial_y_dedup() {
             .expect("num after delete"),
         "soft-delete excluye el número (dedup solo sobre activos)"
     );
+}
+
+/// Renta temporal con rango de fechas dado (para el cruce con comparendos)
+fn datos_renta_cruce(placa: &str, recogida: &str, retorno: &str) -> RentaDatos {
+    RentaDatos {
+        placa: Some(placa.into()),
+        id_cliente: None,
+        nombre_cliente: "CLIENTE CRUCE TEST".into(),
+        no_licencia: None,
+        nacionalidad: None,
+        fecha_recogida: recogida.into(),
+        hora_recogida: Some("09:00".into()),
+        ubicacion_recogida: None,
+        fecha_retorno: retorno.into(),
+        hora_retorno: Some("18:00".into()),
+        ubicacion_retorno: None,
+        dias_calculados: 5,
+        horas_extras: 0,
+        valor_dia: "150000".into(),
+        valor_hora_extra: "10000".into(),
+        valor_dia_extra: "0".into(),
+        costo_lavado: "0".into(),
+        costo_silla: "0".into(),
+        costo_retorno: "0".into(),
+        costo_domicilio: "0".into(),
+        costo_cables: "0".into(),
+        costo_inversor: "0".into(),
+        descuento: "0".into(),
+        subtotal: String::new(),
+        impuestos: String::new(),
+        total: String::new(),
+        abono: "0".into(),
+        saldo_pendiente: String::new(),
+        observaciones: None,
+        km_salida: "42000".into(),
+        tanque_salida: Some("Lleno".into()),
+        id_reserva: None,
+    }
+}
+
+/// El cruce con rentas responde QUIÉN tenía el vehículo el día de la multa:
+/// la renta del mismo vehículo cuyo rango [recogida, retorno] contiene la
+/// fecha de la infracción (None si el vehículo no estaba rentado ese día).
+#[test]
+#[serial]
+fn comparendo_cruce_responsable_renta() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        eprintln!("Sin autos en la BD de dev — test omitido");
+        return;
+    };
+
+    let hoy = Local::now().date_naive();
+    // Renta temporal en el pasado (60-55 días atrás): no pisa rentas reales de
+    // la BD dev (recientes) ni las de otros tests.
+    let recogida = hoy - Duration::days(60);
+    let retorno = hoy - Duration::days(55);
+    let renta = RentaService::crear(
+        &mut conn,
+        cfg,
+        datos_renta_cruce(
+            &placa,
+            &recogida.format("%Y-%m-%d").to_string(),
+            &retorno.format("%Y-%m-%d").to_string(),
+        ),
+    )
+    .expect("crear renta");
+    assert_eq!(renta.nombre_cliente, "CLIENTE CRUCE TEST");
+
+    // Comparendo DENTRO del rango → el responsable es la renta del test
+    let mut c1 = datos_comparendo(&placa, "450000");
+    c1.fecha_infraccion = (hoy - Duration::days(58)).format("%Y-%m-%d").to_string();
+    let c1 = ComparendoService::crear(&mut conn, cfg, c1).expect("crear comparendo dentro");
+
+    // Comparendo FUERA del rango (30 días después del retorno) → sin responsable
+    let mut c2 = datos_comparendo(&placa, "450001");
+    c2.fecha_infraccion = (hoy + Duration::days(30)).format("%Y-%m-%d").to_string();
+    let c2 = ComparendoService::crear(&mut conn, cfg, c2).expect("crear comparendo fuera");
+
+    let lista = ComparendoService::listar(&mut conn, None, Some(&placa), None).expect("listar");
+
+    let dentro = lista
+        .iter()
+        .find(|c| c.id == c1.id)
+        .expect("comparendo dentro en la lista");
+    let resp = dentro
+        .responsable
+        .as_ref()
+        .expect("comparendo dentro del rango → responsable asignado");
+    assert_eq!(resp.id_renta, renta.id);
+    assert_eq!(resp.nombre_cliente, "CLIENTE CRUCE TEST");
+    assert_eq!(resp.no_contrato, renta.no_contrato);
+    assert_eq!(resp.anio_contrato, renta.anio_contrato);
+    assert_eq!(
+        resp.fecha_recogida,
+        recogida.format("%Y-%m-%d").to_string(),
+        "rango de la renta reportado"
+    );
+
+    let fuera = lista
+        .iter()
+        .find(|c| c.id == c2.id)
+        .expect("comparendo fuera en la lista");
+    assert!(
+        fuera.responsable.is_none(),
+        "comparendo fuera del rango → sin responsable (el vehículo no estaba rentado)"
+    );
+
+    // Limpieza (comparendos soft-delete; la renta cae limpia)
+    ComparendoService::eliminar(&mut conn, c1.id).expect("limpiar c1");
+    ComparendoService::eliminar(&mut conn, c2.id).expect("limpiar c2");
+    RentaService::eliminar(&mut conn, renta.id).expect("limpiar renta");
 }

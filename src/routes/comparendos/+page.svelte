@@ -19,7 +19,7 @@
 	} from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatCOP, formatDate } from '$lib/utils/format';
+	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -418,6 +418,7 @@
 		{ key: 'id', header: 'No.' },
 		{ key: 'vehiculo', header: 'Vehículo' },
 		{ key: 'fecha', header: 'Infracción' },
+		{ key: 'responsable', header: 'Quién lo tenía' },
 		{ key: 'monto', header: 'Monto' },
 		{ key: 'estado', header: 'Estado' },
 		{ key: 'observaciones', header: 'Observaciones' },
@@ -688,6 +689,18 @@
 						<p class="text-text-primary tabular-nums">{formatDate(c.fechaInfraccion)}</p>
 						<p class="text-xs text-text-secondary">{c.horaInfraccion}</p>
 					</div>
+				{:else if col.key === 'responsable'}
+					{#if c.responsable}
+						<div class="max-w-[200px]">
+							<p class="text-text-primary truncate">{c.responsable.nombreCliente || '—'}</p>
+							<p class="text-xs text-text-secondary truncate" title="{c.responsable.estadoRenta}">
+								{formatContrato(c.responsable.anioContrato, c.responsable.noContrato)} ·
+								{formatDate(c.responsable.fechaRecogida)} → {formatDate(c.responsable.fechaRetorno)}
+							</p>
+						</div>
+					{:else}
+						<p class="text-sm text-text-secondary">—</p>
+					{/if}
 				{:else if col.key === 'monto'}
 					<p class="font-bold text-text-primary tabular-nums text-right whitespace-nowrap">{formatCOP(c.monto)}</p>
 				{:else if col.key === 'estado'}

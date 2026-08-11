@@ -782,6 +782,17 @@ export const rentaApi = {
 // ─── Comandos de Comparendos ─────────────────────────────────────────────────
 
 /** Comparendo (repositories/comparendo.rs) */
+/** Responsable del vehículo el día de la infracción (cruce con rentas, backend) */
+export interface ResponsableComparendo {
+	idRenta: number;
+	nombreCliente: string;
+	noContrato: number;
+	anioContrato: number;
+	fechaRecogida: string;
+	fechaRetorno: string;
+	estadoRenta: string;
+}
+
 export interface Comparendo {
 	id: number;
 	placa: string;
@@ -796,6 +807,7 @@ export interface Comparendo {
 	observaciones: string | null;
 	createdAt: string | null;
 	updatedAt: string | null;
+	responsable: ResponsableComparendo | null;
 }
 
 /** Datos de entrada para crear/actualizar un comparendo */
