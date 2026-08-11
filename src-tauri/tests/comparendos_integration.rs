@@ -357,11 +357,22 @@ fn comparendo_cruce_responsable_renta() {
     let mut c1 = datos_comparendo(&placa, "450000");
     c1.fecha_infraccion = (hoy - Duration::days(58)).format("%Y-%m-%d").to_string();
     let c1 = ComparendoService::crear(&mut conn, cfg, c1).expect("crear comparendo dentro");
+    // La atribución se PERSISTE en el alta (id_renta/id_cliente resueltos)
+    assert_eq!(
+        c1.id_renta,
+        Some(renta.id),
+        "el alta resuelve y guarda la renta del día"
+    );
+    assert_eq!(c1.id_cliente, renta.id_cliente, "id_cliente heredado de la renta");
 
     // Comparendo FUERA del rango (30 días después del retorno) → sin responsable
     let mut c2 = datos_comparendo(&placa, "450001");
     c2.fecha_infraccion = (hoy + Duration::days(30)).format("%Y-%m-%d").to_string();
     let c2 = ComparendoService::crear(&mut conn, cfg, c2).expect("crear comparendo fuera");
+    assert!(
+        c2.id_renta.is_none() && c2.id_cliente.is_none(),
+        "fuera del rango → sin renta atribuida"
+    );
 
     let lista = ComparendoService::listar(&mut conn, None, Some(&placa), None).expect("listar");
 

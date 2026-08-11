@@ -23,8 +23,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use chrono::{Duration, Local};
 use rsfbclient::{Execute, Queryable};
 use serial_test::serial;
+
+use dinamo_rent_lib::repositories::comparendo::{ComparendoDatos, ComparendoRepository};
+use dinamo_rent_lib::repositories::renta::RentaDatos;
+use dinamo_rent_lib::services::renta::RentaService;
 
 use dinamo_rent_lib::core::config::AppConfig;
 use dinamo_rent_lib::core::db::{create_pool, Pool};
@@ -230,7 +235,7 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
     run_migrations(&pool, &migrations_dir)
         .expect("la migración debe auto-reparar la BD parcial");
 
-    // Las 15 migraciones quedan registradas.
+    // Las 16 migraciones quedan registradas.
     let aplicadas = versiones_aplicadas(&pool);
     for v in [
         "0001_initial_schema.sql",
@@ -248,6 +253,7 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
         "0013_consolidar_indices_auditoria.sql",
         "0014_limpiar_tablas_tests.sql",
         "0015_comparendo_numero_simit.sql",
+        "0016_atribucion_comparendo_renta.sql",
     ] {
         assert!(
             aplicadas.contains(&v.to_string()),
@@ -540,7 +546,7 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
     let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
 
     run_migrations(&pool, &migrations_dir)
-        .expect("las 15 migraciones deben aplicar sobre una BD vacía");
+        .expect("las 16 migraciones deben aplicar sobre una BD vacía");
 
     let aplicadas = versiones_aplicadas(&pool);
     for v in [
@@ -555,6 +561,7 @@ fn migraciones_aplican_en_bd_nueva_desde_cero() {
         "0013_consolidar_indices_auditoria.sql",
         "0014_limpiar_tablas_tests.sql",
         "0015_comparendo_numero_simit.sql",
+        "0016_atribucion_comparendo_renta.sql",
     ] {
         assert!(
             aplicadas.contains(&v.to_string()),
@@ -880,7 +887,7 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("el runner debe auto-reparar una instalación nueva a medias");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 15, "todas las versiones");
+    assert_eq!(versiones_aplicadas(&pool).len(), 16, "todas las versiones");
     // 0001 completo: la última tabla y su índice; 0002 completo.
     assert!(existe_objeto(
         &pool,
@@ -930,7 +937,7 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
         "IX_INSPECCIONES_ID_RENTA"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 15);
+    assert_eq!(versiones_aplicadas(&pool).len(), 16);
 }
 
 /// Simula una instalación nueva con 0001+0002 completos y un crash a mitad de
@@ -976,7 +983,7 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("auto-reparar instalación a medias en 0003/0004");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 15);
+    assert_eq!(versiones_aplicadas(&pool).len(), 16);
     assert!(existe_objeto(
         &pool,
         "SELECT COUNT(*) FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = ?",
@@ -994,5 +1001,136 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
         "IX_RENTAS_NO_CONTRATO"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 15);
+    assert_eq!(versiones_aplicadas(&pool).len(), 16);
+}
+
+/// Renta temporal con rango de fechas dado (para el backfill de 0016)
+fn datos_renta_backfill(placa: &str, recogida: &str, retorno: &str) -> RentaDatos {
+    RentaDatos {
+        placa: Some(placa.into()),
+        id_cliente: None,
+        nombre_cliente: "CLIENTE BACKFILL TEST".into(),
+        no_licencia: None,
+        nacionalidad: None,
+        fecha_recogida: recogida.into(),
+        hora_recogida: Some("09:00".into()),
+        ubicacion_recogida: None,
+        fecha_retorno: retorno.into(),
+        hora_retorno: Some("18:00".into()),
+        ubicacion_retorno: None,
+        dias_calculados: 5,
+        horas_extras: 0,
+        valor_dia: "150000".into(),
+        valor_hora_extra: "10000".into(),
+        valor_dia_extra: "0".into(),
+        costo_lavado: "0".into(),
+        costo_silla: "0".into(),
+        costo_retorno: "0".into(),
+        costo_domicilio: "0".into(),
+        costo_cables: "0".into(),
+        costo_inversor: "0".into(),
+        descuento: "0".into(),
+        subtotal: String::new(),
+        impuestos: String::new(),
+        total: String::new(),
+        abono: "0".into(),
+        saldo_pendiente: String::new(),
+        observaciones: None,
+        km_salida: "42000".into(),
+        tanque_salida: Some("Lleno".into()),
+        id_reserva: None,
+    }
+}
+
+/// 0016: backfill que atribuye los comparendos existentes sin renta/cliente
+/// con la renta que cubría el vehículo el día de la infracción. Se insertan
+/// renta + comparendo SIN atribución en una copia de la BD dev (el repositorio
+/// no resuelve; solo el servicio) y se verifica que la migración los vincula.
+#[test]
+#[serial]
+fn migracion_0016_backfill_atribuye_comparendos() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let migrations_dir = manifest.join("migrations");
+    let (path, _limpieza) = copia_bd_dev();
+    let cfg = config_con_db(&path);
+    let pool = create_pool(&cfg).expect("pool copia dev");
+    let mut conn = pool.get().expect("conn");
+
+    // La copia de dev PUEDE traer 0016 ya registrada (si se aplicó antes a la
+    // BD real): se borra el registro para que la migración quede pendiente y
+    // el test la ejecute de verdad (simula una instalación que aún no la tenía).
+    conn.execute(
+        "DELETE FROM schema_migrations WHERE version = '0016_atribucion_comparendo_renta.sql'",
+        (),
+    )
+    .expect("dejar 0016 pendiente en la copia");
+
+    let placa: String = conn
+        .query_first("SELECT FIRST 1 placa FROM autos", ())
+        .expect("auto real de la copia")
+        .map(|(p,): (String,)| p)
+        .expect("hay autos en la BD dev");
+
+    let hoy = Local::now().date_naive();
+    let recogida = hoy - Duration::days(60);
+    let retorno = hoy - Duration::days(55);
+    let renta = RentaService::crear(
+        &mut conn,
+        &cfg,
+        datos_renta_backfill(
+            &placa,
+            &recogida.format("%Y-%m-%d").to_string(),
+            &retorno.format("%Y-%m-%d").to_string(),
+        ),
+    )
+    .expect("crear renta temporal");
+
+    let id_comparendo = ComparendoRepository::insertar(
+        &mut conn,
+        &ComparendoDatos {
+            placa: placa.clone(),
+            fecha_infraccion: (hoy - Duration::days(58)).format("%Y-%m-%d").to_string(),
+            hora_infraccion: "14:30".into(),
+            monto: "470000".into(),
+            numero_comparendo: Some("BACKFILL-0016-TEST".into()),
+            id_renta: None,
+            id_cliente: None,
+            estado: "Pendiente".into(),
+            observaciones: None,
+        },
+    )
+    .expect("insertar comparendo sin atribución");
+
+    let antes: Option<(Option<i64>,)> = conn
+        .query_first(
+            "SELECT id_renta FROM comparendos WHERE id = ?",
+            (id_comparendo,),
+        )
+        .expect("leer id_renta antes");
+    assert!(
+        antes.is_some_and(|(r,)| r.is_none()),
+        "el comparendo se insertó sin atribución"
+    );
+
+    // La copia ya tiene 0001-0015 → aplica solo 0016 (el backfill UPDATE)
+    run_migrations(&pool, &migrations_dir).expect("aplicar 0016");
+
+    let despues: Option<(Option<i64>,)> = conn
+        .query_first(
+            "SELECT id_renta FROM comparendos WHERE id = ?",
+            (id_comparendo,),
+        )
+        .expect("leer id_renta después");
+    assert_eq!(
+        despues.map(|(r,)| r),
+        Some(Some(renta.id)),
+        "0016 vincula el comparendo con la renta del día"
+    );
+    assert!(versiones_aplicadas(&pool).contains(&"0016_atribucion_comparendo_renta.sql".to_string()));
+
+    // Limpieza directa sobre la copia (comparendo primero por la FK)
+    conn.execute("DELETE FROM comparendos WHERE id = ?", (id_comparendo,))
+        .expect("limpiar comparendo");
+    conn.execute("DELETE FROM rentas WHERE id = ?", (renta.id,))
+        .expect("limpiar renta");
 }

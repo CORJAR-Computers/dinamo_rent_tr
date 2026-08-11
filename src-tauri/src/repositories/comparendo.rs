@@ -312,6 +312,28 @@ impl ComparendoRepository {
         Ok(())
     }
 
+    /// Renta del vehículo que cubría el día dado (para atribuir un comparendo):
+    /// misma placa con `fecha_recogida <= día <= devolución real (o retorno)`,
+    /// excluyendo rentas Canceladas. Si hubiera solapamiento se devuelve la de
+    /// recogida más reciente. Devuelve (id_renta, id_cliente de la renta).
+    pub fn renta_del_dia(
+        conn: &mut PooledConnection,
+        placa: &str,
+        fecha: &str,
+    ) -> Result<Option<(i64, Option<i64>)>, AppError> {
+        let dia = parse_fecha(fecha)?;
+        let row: Option<(i64, Option<i64>)> = conn.query_first(
+            "SELECT FIRST 1 r.id, r.id_cliente FROM rentas r \
+             WHERE r.placa = ? \
+               AND r.fecha_recogida <= ? \
+               AND COALESCE(r.fecha_devolucion_real, r.fecha_retorno) >= ? \
+               AND r.deleted_at IS NULL AND r.estado <> 'Cancelada' \
+             ORDER BY r.fecha_recogida DESC, r.id DESC",
+            (placa.trim().to_string(), dia, dia),
+        )?;
+        Ok(row)
+    }
+
     /// ¿Existe un comparendo activo con ese número oficial? (deduplicación SIMIT)
     pub fn existe_por_numero(conn: &mut PooledConnection, numero: &str) -> Result<bool, AppError> {
         let count: Option<(i64,)> = conn.query_first(

@@ -427,7 +427,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que
 aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
-`schema_migrations`. Serie actual: **0001-0015** (propósito de cada una y esquema canónico de
+`schema_migrations`. Serie actual: **0001-0016** (propósito de cada una y esquema canónico de
 índices en el README §Migraciones). La **0015** (columna `comparendos.numero_comparendo` +
 índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev.
 

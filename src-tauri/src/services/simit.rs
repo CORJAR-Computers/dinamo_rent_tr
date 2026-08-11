@@ -815,7 +815,7 @@ pub fn sincronizar(
                         resultado.registros.push(reg);
                         continue;
                     }
-                    let datos = ComparendoDatos {
+                    let mut datos = ComparendoDatos {
                         placa: reg.placa.clone(),
                         fecha_infraccion: reg.fecha_infraccion.clone(),
                         hora_infraccion: reg.hora_infraccion.clone(),
@@ -826,6 +826,16 @@ pub fn sincronizar(
                         estado: reg.estado.clone(),
                         observaciones: Some(observaciones_para(&reg)),
                     };
+                    // Atribución persistente: se resuelve qué renta cubría el
+                    // vehículo el día de la infracción y se guarda el vínculo
+                    // (id_renta/id_cliente) — el comparendo queda asociado al
+                    // cliente que tenía el vehículo (cruce comparendos↔rentas).
+                    if let Some((id_renta, id_cliente)) =
+                        ComparendoRepository::renta_del_dia(conn, &reg.placa, &reg.fecha_infraccion)?
+                    {
+                        datos.id_renta = Some(id_renta);
+                        datos.id_cliente = id_cliente;
+                    }
                     ComparendoRepository::insertar(conn, &datos)?;
                     resultado.insertados += 1;
                     reg.nuevo = true;

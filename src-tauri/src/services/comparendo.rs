@@ -78,6 +78,17 @@ impl ComparendoService {
     ) -> Result<Comparendo, AppError> {
         normalizar(&mut datos);
         validar(conn, &datos, cfg)?;
+        // Atribución automática: si no se indicó renta/cliente, se resuelve qué
+        // renta cubría el vehículo el día de la infracción y se persiste el
+        // vínculo (misma lógica que el Agente SIMIT al importar).
+        if datos.id_renta.is_none() && datos.id_cliente.is_none() {
+            if let Some((id_renta, id_cliente)) =
+                ComparendoRepository::renta_del_dia(conn, &datos.placa, &datos.fecha_infraccion)?
+            {
+                datos.id_renta = Some(id_renta);
+                datos.id_cliente = id_cliente;
+            }
+        }
         let id = ComparendoRepository::insertar(conn, &datos)?;
         Self::obtener(conn, id)
     }

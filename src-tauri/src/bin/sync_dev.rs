@@ -47,26 +47,30 @@ struct Snapshot {
     pagados: i64,
     /// Suma de los montos pendientes (deuda real de la flota en la BD)
     suma_pendiente: f64,
+    /// Comparendos con renta atribuida (id_renta no nulo)
+    atribuidos: i64,
 }
 
 fn snapshot(conn: &mut PooledConnection) -> Result<Snapshot, Box<dyn std::error::Error>> {
     // El monto se devuelve CAST a VARCHAR (rsfbclient no soporta DECIMAL directo,
     // convención del repo) y se parsea a f64 en Rust.
-    let row: Option<(i64, i64, i64, String)> = conn.query_first(
+    let row: Option<(i64, i64, i64, String, i64)> = conn.query_first(
         "SELECT COUNT(*), \
          COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END), 0), \
          COALESCE(SUM(CASE WHEN estado = 'Pagado' THEN 1 ELSE 0 END), 0), \
-         CAST(COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN monto ELSE 0 END), 0) AS VARCHAR(20)) \
+         CAST(COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN monto ELSE 0 END), 0) AS VARCHAR(20)), \
+         COALESCE(SUM(CASE WHEN id_renta IS NOT NULL THEN 1 ELSE 0 END), 0) \
          FROM comparendos WHERE deleted_at IS NULL",
         (),
     )?;
-    let (total, pendientes, pagados, suma_raw) = row.unwrap_or((0, 0, 0, "0".into()));
+    let (total, pendientes, pagados, suma_raw, atribuidos) = row.unwrap_or((0, 0, 0, "0".into(), 0));
     let suma_pendiente = suma_raw.trim().parse::<f64>().unwrap_or(0.0);
     Ok(Snapshot {
         total,
         pendientes,
         pagados,
         suma_pendiente,
+        atribuidos,
     })
 }
 
@@ -93,8 +97,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let snap = snapshot(&mut conn)?;
     println!("== Placas activas ({}): {}", placas.len(), placas.join(", "));
     println!(
-        "== Comparendos: total={} pendientes={} pagados={} suma_pendiente=${:.2}",
-        snap.total, snap.pendientes, snap.pagados, snap.suma_pendiente
+        "== Comparendos: total={} pendientes={} pagados={} atribuidos={} suma_pendiente=${:.2}",
+        snap.total, snap.pendientes, snap.pagados, snap.atribuidos, snap.suma_pendiente
     );
 
     if solo_total {
@@ -103,6 +107,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .query_first("SELECT COUNT(*) FROM autos WHERE placa = ?", ("AAA000",))?
             .unwrap_or((0,));
         println!("== AAA000 en autos: {}", if cnt > 0 { "SÍ" } else { "NO" });
+        // Diagnóstico de la atribución (cruce comparendos↔rentas)
+        let (m16,): (i64,) = conn
+            .query_first(
+                "SELECT COUNT(*) FROM schema_migrations \
+                 WHERE version = '0016_atribucion_comparendo_renta.sql'",
+                (),
+            )?
+            .unwrap_or((0,));
+        let (rentas,): (i64,) = conn
+            .query_first("SELECT COUNT(*) FROM rentas WHERE deleted_at IS NULL", ())?
+            .unwrap_or((0,));
+        println!("== Migración 0016 (backfill atribución): {}", if m16 > 0 { "APLICADA" } else { "pendiente" });
+        println!("== Rentas activas (deleted_at nulo): {}", rentas);
         println!("(modo --solo-total: no se tocó el portal ni la BD)");
         return Ok(());
     }
@@ -145,10 +162,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             println!(
-                "\n== Comparendos DESPUÉS: total={} pendientes={} pagados={} suma_pendiente=${:.2} (delta total {:+})",
+                "\n== Comparendos DESPUÉS: total={} pendientes={} pagados={} atribuidos={} suma_pendiente=${:.2} (delta total {:+})",
                 despues.total,
                 despues.pendientes,
                 despues.pagados,
+                despues.atribuidos,
                 despues.suma_pendiente,
                 despues.total - antes.total
             );
