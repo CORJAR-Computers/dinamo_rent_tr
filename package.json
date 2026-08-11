@@ -20,6 +20,7 @@
 	"smoke:app": "node scripts/smoke-test-app.mjs",
 	"watch:simit": "node scripts/watch-simit.mjs",
 	"check:simit": "node scripts/check-simit.mjs",
+	"test:check-simit": "node scripts/test-check-simit.mjs",
 		"lint": "eslint src --ext .ts,.svelte",
 		"lint:fix": "eslint src --ext .ts,.svelte --fix",
 		"format": "prettier --write src",

@@ -8,8 +8,10 @@
 //   1. Captcha Proof-of-Work   → POST qxcaptcha.fcm.org.co/api.php y resuelve
 //                                el PoW (mismo algoritmo que el backend).
 //   2. Microservicio de consulta → página principal + POST del endpoint de
-//                                consulta; si no está claramente caído, hace
-//                                una SONDA E2E completa (token real + placa).
+//                                consulta; ante 401 SIN token (el gateway ya
+//                                valida captchas: token vacío/inválido → 401,
+//                                verificado el 11-08) confirma con una SONDA
+//                                E2E completa (token real + placa).
 //
 // Uso:
 //   node scripts/check-simit.mjs [--placa AAA000] [--timeout 15000]
@@ -23,10 +25,15 @@ import { promises as dns } from 'node:dns';
 
 // ─── Contrato del SIMIT (espejo de services/simit.rs) ────────────────────────
 
-const CAPTCHA_URL = 'https://qxcaptcha.fcm.org.co/api.php';
+// Overrides por env (misma convención que SIMIT_PLACA/SIMIT_TIMEOUT_MS):
+// permiten apuntar el diagnóstico a un servidor local en los tests
+// (scripts/test-check-simit.mjs).
+const CAPTCHA_URL =
+	process.env.SIMIT_CAPTCHA_URL || 'https://qxcaptcha.fcm.org.co/api.php';
 const CONSULTA_URL =
+	process.env.SIMIT_CONSULTA_URL ||
 	'https://consultasimit.fcm.org.co/simit/microservices/estado-cuenta-simit/estadocuenta/consulta';
-const PAGINA_URL = 'https://consultasimit.fcm.org.co/';
+const PAGINA_URL = process.env.SIMIT_PAGINA_URL || 'https://consultasimit.fcm.org.co/';
 const USER_AGENT =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 // Sin Origin/Referer el servidor rechaza la petición con 401 (verificado 10-08
@@ -50,6 +57,9 @@ const MAX_ITERACIONES = 10_000_000;
 
 const HOSTS_SIMIT = ['qxcaptcha.fcm.org.co', 'consultasimit.fcm.org.co'];
 const DNS_TIMEOUT_MS = 3000;
+// En tests (SIMIT_DNS_SKIP=1) se omite el chequeo DNS: apuntar las URLs a un
+// servidor local hace irrelevante la resolución de los subdominios reales.
+const DNS_SKIP = process.env.SIMIT_DNS_SKIP === '1';
 
 function lookupConTimeout(host) {
 	return new Promise((resolve) => {
@@ -138,7 +148,10 @@ function resolverPow(question, time, difficulty) {
 		nonce = resolverIteracion(question, time, nonce);
 		partes.push(jsonVerificacion(question, time, nonce));
 	}
-	return `[${partes.join(',')}]`;
+	// Fase 1: el microservicio acepta solo la PRIMERA solución (como el
+	// Python [:1] y el agente Rust con solo_primera_solucion). Mandar el
+	// array completo hace que el gateway rechace el token con 401.
+	return `[${partes[0]}]`;
 }
 
 // Pide la pregunta del captcha y resuelve el PoW. Devuelve
@@ -196,15 +209,15 @@ async function comprobarCaptcha(timeoutMs) {
 // ─── Microservicio de consulta ────────────────────────────────────────────────
 
 // Clasifica una respuesta del endpoint de consulta.
-// Firma conocida de gateway caído: 401 {"codigo":5,"descripcion":"Autenticación
-// fallida: Acceso denegado..."} — el mismo para cualquier petición (con o sin
-// token), verificado el 09-08 y 10-08 contra el portal real.
+// El 401 SIN token ya no indica portal caído: desde el 11-08 el gateway
+// rechaza cualquier token vacío/inválido (comportamiento normal) y solo un
+// 401 CON token real válido confirma bloqueo/caída.
 function clasificarConsulta(res) {
 	if (res.status === 503 || /server-unavailable/i.test(res.text)) {
 		return { up: false, firma: 'down', texto: `HTTP 503 — Server-unavailable!` };
 	}
 	if (res.status === 401 || /autenticación fallida|acceso denegado|politica de seguridad/i.test(res.text)) {
-		return { up: false, firma: 'gateway', texto: 'HTTP 401 — gateway de seguridad bloquea (portal caído)' };
+		return { up: null, firma: 'gateway', texto: 'HTTP 401 — el gateway exige un captcha PoW válido (esperado sin token)' };
 	}
 	if (res.status === 200) {
 		return { up: true, firma: 'up', texto: 'HTTP 200 — endpoint responde' };
@@ -240,11 +253,14 @@ async function comprobarMicroservicio(timeoutMs, placa, conCaptcha) {
 	} catch (e) {
 		probe = { up: null, firma: 'red', texto: `error de red: ${e.cause?.code ?? e.message}` };
 	}
-	statusLine(`POST consulta (sin token) — ${probe.texto}`, probe.up === true);
+	// 401 sin token = esperado (el gateway valida captchas): marca ⚠; el
+	// veredicto real lo da la sonda E2E con token (abajo).
+	const marcaProbe = probe.firma === 'gateway' ? null : probe.up === true ? true : false;
+	statusLine('POST consulta (sin token)', marcaProbe, probe.texto);
 
-	// 3) Sonda E2E con token real solo si el servicio parece vivo (ni caído ni
-	//    con error de red previo: tras un fallo de red no tiene sentido resolver)
-	if ((probe.up === true || probe.firma === 'indefinido') && conCaptcha) {
+	// 3) Sonda E2E con token real. Corre salvo caída definitiva (503) o error
+	//    de red: el 401 SIN token se confirma con token, no se da por caído.
+	if (probe.firma !== 'down' && probe.firma !== 'red' && conCaptcha) {
 		const captcha = await obtenerTokenCaptcha(timeoutMs);
 		if (!captcha.ok) {
 			statusLine('Sonda E2E', false, captcha.motivo);
@@ -262,18 +278,40 @@ async function comprobarMicroservicio(timeoutMs, placa, conCaptcha) {
 			if (cls.up === true) {
 				let multas = 0;
 				let total = 0;
+				let e2e = null;
 				try {
 					const dto = JSON.parse(res.text);
-					multas = Array.isArray(dto.multas) ? dto.multas.length : 0;
-					total = dto.multas?.reduce((s, m) => s + (Number(m.valorPagar) || 0), 0) || 0;
+					const lista = Array.isArray(dto.multas) ? dto.multas : [];
+					multas = lista.length;
+					total = lista.reduce((s, m) => s + (Number(m.valorPagar) || 0), 0) || 0;
+					// --multas: resumen compacto por multa en el JSON para que
+					// watch-simit detecte cambios del total pendiente entre
+					// corridas (persiste el último en data/simit_watch/).
+					if (opciones.multas) {
+						e2e = {
+							placa,
+							multas,
+							totalPendiente: total,
+							detalles: lista.map((m) => ({
+								numero: m.numeroComparendo ?? null,
+								placa: m.placa ?? placa,
+								fecha: m.fechaComparendo ?? null,
+								valor: Number(m.valorPagar) || 0,
+								estado: m.estadoComparendo ?? null
+							}))
+						};
+					}
 				} catch { /* sin JSON: se reporta el código */ }
 				const detalle = multas > 0
 					? `HTTP 200 · ${multas} multa(s) · $${total.toLocaleString('es-CO')}`
 					: 'HTTP 200 · sin multas';
 				statusLine(`Sonda E2E (placa ${placa})`, true, detalle);
-				return { ok: true, up: true, firma: 'up' };
+				return { ok: true, up: true, firma: 'up', ...(e2e ? { e2e } : {}) };
 			}
-			statusLine(`Sonda E2E (placa ${placa})`, false, cls.texto);
+			const textoE2E = cls.firma === 'gateway'
+				? 'HTTP 401 — el gateway rechazó el token REAL (portal bloqueado/caído)'
+				: cls.texto;
+			statusLine(`Sonda E2E (placa ${placa})`, false, textoE2E);
 			return { ok: false, up: false, firma: cls.firma };
 		} catch (e) {
 			statusLine('Sonda E2E', false, `error de red: ${e.cause?.code ?? e.message}`);
@@ -297,6 +335,8 @@ Opciones:
   --timeout <ms>      Timeout por petición (default: 15000, env SIMIT_TIMEOUT_MS)
   --solo-captcha      Solo comprueba el captcha (sin chequeo DNS ni microservicio)
   --solo-micro        Solo comprueba el microservicio (sin chequeo DNS ni sonda E2E)
+  --multas            Incluye el resumen de multas de la sonda E2E en el JSON
+                      (microservicio.e2e: totalPendiente + detalle por multa)
   --json              Salida JSON (para scripts/CI)
   --ayuda, -h         Muestra esta ayuda
 
@@ -305,13 +345,14 @@ Códigos de salida: 0 = operativo · 1 = error técnico/DNS caído · 2 = SIMIT 
 
 const args = process.argv.slice(2);
 const valorTimeout = (v) => (Number.isFinite(v) && v > 0 ? v : 15000);
-const opciones = { placa: process.env.SIMIT_PLACA || 'AAA000', timeoutMs: valorTimeout(Number(process.env.SIMIT_TIMEOUT_MS)), json: false, soloCaptcha: false, soloMicro: false };
+const opciones = { placa: process.env.SIMIT_PLACA || 'AAA000', timeoutMs: valorTimeout(Number(process.env.SIMIT_TIMEOUT_MS)), json: false, soloCaptcha: false, soloMicro: false, multas: false };
 for (let i = 0; i < args.length; i++) {
 	const a = args[i];
 	if (a === '--placa') opciones.placa = args[++i];
 	else if (a === '--timeout') opciones.timeoutMs = valorTimeout(Number(args[++i]));
 	else if (a === '--solo-captcha') opciones.soloCaptcha = true;
 	else if (a === '--solo-micro') opciones.soloMicro = true;
+	else if (a === '--multas') opciones.multas = true;
 	else if (a === '--json') opciones.json = true;
 	else if (a === '--ayuda' || a === '-h') { ayuda(); process.exit(0); } // seguro: aún no hay sockets pendientes
 }
@@ -325,9 +366,10 @@ try {
 		console.log(`⏱  ${new Date().toLocaleString('es-CO')}`);
 	}
 
-	// 0) DNS previo (se omite con --solo-*): si los subdominios no resuelven,
-	//    la E2E es imposible y el diagnóstico lo dice claro.
-	const conDns = !opciones.soloCaptcha && !opciones.soloMicro;
+	// 0) DNS previo (se omite con --solo-* o SIMIT_DNS_SKIP=1): si los
+	//    subdominios no resuelven, la E2E es imposible y el diagnóstico lo dice
+	//    claro.
+	const conDns = !opciones.soloCaptcha && !opciones.soloMicro && !DNS_SKIP;
 	reporte.dns = conDns ? await comprobarDns() : { ok: true, hosts: [] };
 	const hayDnsFallido = conDns && !reporte.dns.ok;
 
@@ -383,7 +425,7 @@ try {
 			micro_caido: '✗ Microservicio NO operativo (portal caído)',
 			dns_caido: '✗ Subdominios SIMIT sin resolución DNS — el portal no es alcanzable (no es un fallo de la app)',
 			error_tecnico: '? Error técnico de red — reintentar más tarde',
-			indefinido: '? Estado indefinido — revisar salida'
+			indefinido: '? Estado indefinido — un 401 sin token exige sonda con token (no usar --solo-micro para confirmar)'
 		}[reporte.resultado];
 		console.log(`\nRESULTADO: ${mensaje}`);
 	} else {
