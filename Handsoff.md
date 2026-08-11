@@ -1,6 +1,65 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-10** · Estado: **todos los módulos operativos, validación verde**
+> Última actualización: **2026-08-11** · Estado: **todos los módulos operativos, validación verde**
+
+> **Herramientas de monitoreo y test del Agente SIMIT (11-08):** tras la validación E2E, el
+> monitoreo del portal quedó consolidado en `scripts/`:
+> - **`check-simit.mjs`** (`npm run check:simit`) — ante un **401 sin token** ya no declara el
+>   portal caído: corre una **sonda E2E con token real** (PoW de UNA solución, Fase 1) y solo
+>   reporta operativo si la consulta responde 200. El flujo quedó cubierto por el test
+>   **`scripts/test-check-simit.mjs`** (`npm run test:check-simit`): servidor local que simula el
+>   gateway selectivo, verifica 401→sonda E2E→operativo y el token `[a]`, y también el caso
+>   negativo (401 con token real → `micro_caido`). Opción nueva **`--multas`**: incluye
+>   `microservicio.e2e` (totalPendiente + detalle por multa) en el JSON.
+> - **`watch-simit.mjs`** (`npm run watch:simit`) — vigilante periódico que pasa `--multas`,
+>   persiste el último total pendiente en `data/simit_watch/ultimo_total.json` y **alerta cuando
+>   el total pendiente de la flota cambia** entre corridas (consola + log + `cambioTotal` en el
+>   JSON final).
+> - **Verificación del jar en el agente real** — convertida en test de integración `#[ignore]`
+>   `jar_portal_real_captura_cookies_adc` (`services/simit.rs`): corre siembra + captcha contra el
+>   portal real y falla si el jar no captura `aiovg_rand_seed` + `ADC_CONN_*` + `ADC_REQ_*`
+>   (en verde: mismas cookies que la sonda Node).
+> Suite al cierre: `cargo test --lib` **37 passed + 1 ignored** · `test-check-simit` ✅ ambos
+> escenarios. Detalle y referencias en `SIMIT_MIGRACION_PYTHON_RUST.md` §4 y §6.
+
+> **E2E del Agente SIMIT validada contra el portal real (11-08):** el microservicio de consulta
+> volvió a estar operativo y se validó el flujo completo sobre la BD dev con un binario de
+> desarrollo nuevo (`src-tauri/src/bin/sync_dev.rs`, `cargo run --features dev --bin sync_dev` —
+> mismo camino que «Sincronizar ahora», sin Tauri). Resultado: **21/21 placas consultadas, 30
+> registros encontrados, 27 comparendos reales insertados** (reporte totalPendiente $21.225.939
+> sobre los 30 encontrados; **deuda real en BD tras dedup: $19.212.789** — ver
+> `SIMIT_MIGRACION_PYTHON_RUST.md` §4 «Sonda vs BD dev»), 0 errores; **2ª corrida: 0 insertados /
+> 30 duplicados** (dedup confirmado); **reporte HTML** en
+> `data/informes_simit/simit_*.html` y **export Excel** verificado con
+> `scripts/verificar-excel-simit.mjs` (mismo mapeo que el botón de `/comparendos`: 30 filas 1:1,
+> total pendiente correcto). 🐛 **2 bugs reales encontrados y corregidos en `simit.rs`**: (1) el
+> SIMIT envía `fechaComparendo` en **DD/MM/YYYY** y el mapeo solo aceptaba ISO → **las 30 multas
+> reales se descartaban** (primera corrida con el código viejo: 0 insertados); `parsear_fecha_hora`
+> ahora normaliza a ISO (tests nuevos). (2) una fecha malformada **abortaba toda la
+> sincronización** porque `ya_existe` → `existe_duplicado` llama `parse_fecha` antes del
+> pre-check; el pre-check se movió ANTES (intención original: omitir el registro, no abortar).
+> 🗑️ **Sonda temporal eliminada** (`scripts/simit-sonda-fase1.mjs`): cumplió su ciclo y quedó
+> reemplazada por el propio `scripts/check-simit.mjs`, actualizado el 11-08 — ante un 401 sin
+> token corre la sonda E2E con token real y usa el **token de una sola solución** (el gateway
+> rechaza el array completo con 401 y acepta `[:1]` con 200; las cookies ADC ya no son el gate de
+> hoy — el jar queda como hardening). Verificado en vivo: `check-simit` → **SIMIT operativo**
+> (exit 0). Tests: simit 14/14 · `comparendos_integration` 4/4 · `informeExcel` 6/6. Detalle en
+> `SIMIT_MIGRACION_PYTHON_RUST.md` §4.
+
+> **Fase 1 del Agente SIMIT (10-08, noche):** se comparó el contrato HTTP del agente Rust contra el
+> servicio Python de referencia (**API-Runt-simit**, `D:\Proyectos\API-Runt-simit-main`, con
+> `debug_response.json` exitoso) — documento completo: **`SIMIT_MIGRACION_PYTHON_RUST.md`**.
+> Hallazgo principal: el agente ureq **no tenía jar de cookies** (feature `cookies` de ureq 2.12.1
+> NO está en los defaults; el proyecto usaba solo `json`) y el gateway ADC exige la cookie de
+> sesión → el 401 «No se puede definir la política de seguridad». Implementado en `simit.rs`: jar
+> persistente (`cookie_store`), **siembra de sesión** con `GET https://www.fcm.org.co/` (una vez
+> por proceso + re-siembra ante 401), **token PoW de una sola solución** (como el Python `[:1]`) y
+> **reintento con token fresco tras 401** (el token parece de un solo uso). Validación: `cargo
+> check --lib` 0/0 · `cargo test --lib` **37/37** (5 tests nuevos: jar compartido entre peticiones,
+> siembra deja la cookie en el jar, 401 clasificado como `Unauthorized` con body, recorte del
+> token) · clippy sin warnings nuevos. E2E sigue pendiente solo por disponibilidad del micro.
+> ⚠️ racha larga del `os error 32` de Defender durante el build (8+ fallos seguidos, incluso con
+> target fresco — inusual; ver README §4).
 
 > **Revisión visual en la app real (10-08, noche):** se lanzó el binario Tauri (debug) con
 > WebView2 remote-debugging y se revisaron los pendientes vía CDP (script
@@ -198,12 +257,13 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   (round-trip de `numero_comparendo`, dedup por número y placa+fecha+monto, sync de estado,
   soft-delete excluye del dedup) · frontend: factories de `comparendos.test.ts` y
   `alertas.test.ts` actualizados con `numeroComparendo`.
-- **Validación real del 10-08 (ver nota al inicio):** probado el flujo HTTP por primera vez.
-  ✅ Captcha PoW aceptado (sin TLS fingerprinting — ureq/rustls basta; verificado también con
-  Node/undici y curl). ✅ Token 1:1 con la referencia. 🐛 **Bug corregido:** faltaban los headers
-  `Origin`/`Referer` (+`Accept`/`Accept-Language`) — ahora `con_headers_browser()` en
-  `services/simit.rs`. ❌ El **microservicio de consulta sigue caído** (401 de gateway a toda
-  petición + 503 en la página principal) → la sincronización end-to-end sigue pendiente. Ver §3.
+- **Validación real (10-08 al 11-08, ver notas al inicio):** el 10-08 se probó el flujo HTTP por
+  primera vez — ✅ captcha PoW aceptado (sin TLS fingerprinting), ✅ token 1:1 con la referencia,
+  🐛 headers `Origin`/`Referer` añadidos (`con_headers_browser()`), ❌ micro caído ese día (401 a
+  toda petición + 503). El **11-08 el micro volvió** y la E2E quedó **validada**: 21/21 placas,
+  27 comparendos reales insertados (dedup en 2ª corrida: 0 nuevos / 30 duplicados), reporte HTML
+  + Excel verificados; 🐛 **2 bugs corregidos** (fechas `fechaComparendo` en **DD/MM/YYYY** — las
+  multas se descartaban — y orden del pre-check de fecha que abortaba la sincronización). Ver §3.
 
 ### ✅ Alertas (`/alertas`)
 - **Sin backend nuevo:** consolida `autoApi.alertas` (vencimientos SOAT/tecno-mecánica/extintor/
@@ -274,23 +334,26 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 ## 3. Pendiente / mejoras sugeridas
 
-- [ ] **PRIMERO — Probar el Agente SIMIT contra el portal real (en curso).** El 10-08 se probó el
-      flujo HTTP real por primera vez (el captcha qxcaptcha volvió a estar arriba):
+- [x] **PRIMERO — Probar el Agente SIMIT contra el portal real.** *HECHO el 11-08 — E2E validada
+      contra el portal real: 27 comparendos insertados (BD dev), dedup en 2ª corrida, reporte HTML +
+      Excel verificados, 2 bugs corregidos (fechas DD/MM/YYYY y orden del pre-check) — resumen en la
+      nota de portada y detalle en `SIMIT_MIGRACION_PYTHON_RUST.md` §4.      Herramientas:
+      `cargo run --features dev --bin sync_dev` (sincronización E2E sin Tauri, dump JSON en
+      `data/simit_watch/sync_result.json`), `node scripts/verificar-excel-simit.mjs` (valida el
+      export Excel contra el resultado) y el monitoreo/test de hoy (`check-simit` con sonda E2E y
+      `--multas`, `watch-simit` con alerta de total, `test-check-simit`, test `#[ignore]` del jar) —
+      resumen en la nota de portada.* Historial: el 10-08 se probó el flujo HTTP real por
+      primera vez (el captcha qxcaptcha volvió a estar arriba):
       (1) ✅ **captcha PoW aceptado** — el riesgo de TLS fingerprinting NO se materializó (probado
       con ureq/rustls, Node/undici y curl); (2) ✅ **token 1:1 con la referencia** (HashHelper.cs /
       captcha.ts de manavarrp/SimitConsulta) y **bug de contrato corregido** (faltaban
       `Origin`/`Referer`/`Accept`/`Accept-Language` → `con_headers_browser()` en services/simit.rs);
-      (3) ❌ **el microservicio de consulta sigue caído** (re-verificado 10-08 tarde con el código
-      corregido): responde 401 «Autenticación fallida...» (código 5) de gateway a CUALQUIER petición
-      (con token válido de Rust/Node o sin token) y la página principal da 503 «Server-unavailable!»;
-      el WADL del endpoint (Jersey 2.32) confirma el contrato POST JSON sin auth en la API — el 401
-      es del gateway externo. Cuando el microservicio vuelva: ejecutar
-      `npm run tauri dev` → «Sincronizar ahora» en `/comparendos` y verificar insertar/dedup, sync
-      de estado a Pagado, reporte HTML en `data/informes_simit/` y descarga del Excel; revisar el
-      panel en **Tauri** (aún no revisado visualmente en la app real). Reintento rápido: recrear el
-      test temporal (patrón `simit_portal_real_temporal.rs`, eliminado tras la validación) o el
-      script `scripts/simit-real-test.mjs` (también eliminado); el diagnóstico del 401 está
-      documentado en la nota de la portada.
+      (3) ❌ el 10-08 el microservicio seguía caído (401 de gateway a CUALQUIER petición + 503 en la
+      página principal; WADL del endpoint confirma el contrato POST JSON sin auth en la API). El
+      11-08 el micro volvió: el 401 pasó a distinguir token válido (200) de inválido/sin token
+      (401), y la sonda temporal `simit-sonda-fase1.mjs` (eliminada) + `check-simit.mjs`
+      (actualizado: 401 sin token → sonda E2E con token real de UNA solución) confirmaron el flujo.
+      Queda pendiente solo el repaso visual del panel del Agente SIMIT en la app real.
 - [x] **Arreglar `npm run lint` (hecho 10-08):** `eslint.config.js` corregido — (1) el plugin
       `@typescript-eslint` se declara en TODOS los bloques que usan sus reglas (custom y tests;
       flat config scoping — causa del «could not find plugin»); (2) globals de navegador vía el
