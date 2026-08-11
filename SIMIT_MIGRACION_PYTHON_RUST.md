@@ -220,6 +220,17 @@ comportamiento quedó cubierto por el test `scripts/test-check-simit.mjs`.
 - Lectura sin efectos: `cargo run --features dev --bin sync_dev -- --solo-total` (no toca el
   portal ni escribe en la BD).
 
+**Atribución persistente del import (11-08):** además del flujo HTTP, el agente resuelve qué
+renta cubría el vehículo el día de la infracción (`ComparendoRepository::renta_del_dia`, misma
+lógica que el cruce comparendos↔rentas: rango `[fecha_recogida, devolución real o retorno]`,
+sin Canceladas) y persiste `id_renta`/`id_cliente` en cada comparendo nuevo; la alta manual
+hace lo mismo. La migración **0016** (`atribucion_comparendo_renta.sql`, DML idempotente)
+backfillea los comparendos existentes sin vínculo (test en `migraciones_integration`: inserta
+renta + comparendo sin atribución en una copia de la BD dev y verifica que 0016 los vincula).
+Con los datos dev actuales el backfill dejó `atribuidos=0` — las 7 rentas activas no cubren
+las fechas de las 27 multas (hecho de los datos, no un fallo). Detalle y validación en
+`Handsoff.md` (nota de portada y §2).
+
 ### Fase 1.5 — Robustez de sesión (sugerida, no implementada)
 
 - Re-siembra **periódica** según el TTL de la cookie ADC (no solo ante 401) — el TTL real se

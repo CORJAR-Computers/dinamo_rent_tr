@@ -2,6 +2,19 @@
 
 > Última actualización: **2026-08-11** · Estado: **todos los módulos operativos, validación verde**
 
+> **Atribución comparendos↔rentas (11-08):** cada comparendo ahora responde **quién tenía el
+> vehículo el día de la multa** — cruce con rentas (misma placa, rango
+> `[fecha_recogida, devolución real o retorno]` que contiene la fecha de la infracción, sin
+> rentas Canceladas; `ROW_NUMBER()` deduplica si hubiera solape). Se muestra como columna
+> **«Quién lo tenía»** en `/comparendos`, en la **notificación imprimible** (`OrdenComparendo`) y
+> en la nueva **vista por vehículo** `/autos/[placa]` (línea de tiempo de rentas y multas, botón
+> «Historial» en Autos). El Agente SIMIT **persiste la atribución** al importar
+> (`renta_del_dia` → `comparendos.id_renta`/`id_cliente`; la alta manual hace lo mismo) y la
+> migración **0016** hace el backfill de los comparendos existentes (aplicada a la BD dev — con
+> los datos actuales `atribuidos=0`: las 7 rentas activas no cubren las fechas de las 27 multas,
+> hecho de los datos, no fallo). Validación: suite Rust ✅ (migraciones 9/9 con test del backfill,
+> comparendos 5/5) · vitest ✅ · `svelte-check` 0/0 · `eslint` 0.
+
 > **Publicado en origin/main (11-08):** el trabajo del Agente SIMIT de estos días quedó
 > empujado a `github.com/CORJAR-Computers/dinamo_rent_tr` (rama `main`) como **6 commits
 > temáticos**: `9561b2a` Fase 1 (jar persistente + siembra de sesión + token de una solución +
@@ -233,6 +246,10 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
     `numero_comparendo` (fallback placa+fecha+monto, solo registros activos) y **sincroniza
     estado**: si el SIMIT reporta pagado un número ya registrado → `marcar_pagado_por_numero`.
     Las observaciones llevan trazabilidad (`Importado SIMIT (Comparendo|Multa) · N° … · organismo · código · descripción`).
+    **Atribución**: al insertar un comparendo nuevo se resuelve la renta del día
+    (`ComparendoRepository::renta_del_dia`) y se persiste `id_renta`/`id_cliente` — la base del
+    cruce comparendos↔rentas (columna «Quién lo tenía», vista `/autos/[placa]` y notificación
+    imprimible; backfill de los existentes en la migración **0016**).
   - Reporte: **HTML imprimible** en `data_dir/simit_report_dir/simit_AAAAMMDD_HHMM.html` con
     tarjetas de resumen, tabla (🆕 = nuevo en la BD) y errores por placa. `total_pendiente` =
     suma de **todos** los registros pendientes encontrados (no solo los nuevos).
@@ -429,7 +446,10 @@ El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrat
 aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
 `schema_migrations`. Serie actual: **0001-0016** (propósito de cada una y esquema canónico de
 índices en el README §Migraciones). La **0015** (columna `comparendos.numero_comparendo` +
-índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev.
+índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev. La
+**0016** (`atribucion_comparendo_renta.sql`, DML idempotente) vincula los comparendos sin
+renta/cliente con la renta que cubría el vehículo el día de la infracción (misma lógica que
+`renta_del_dia`); aplicada a la BD dev (con datos actuales: 0 de 27 comparendos en rango).
 
 ### 5.1 Cómo añadir una migración nueva (000N)
 
