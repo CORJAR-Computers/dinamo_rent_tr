@@ -32,7 +32,7 @@ Guardas disponibles en `commands/mod.rs`:
 | `app_frontend_lista`, `confirmar_cierre` | app | Ciclo de vida de la ventana (flag/destroy), no tocan datos |
 | `login`, `change_password`, `get_login_status` | auth | Pre-login: credenciales propias / estado de bloqueo |
 
-## B. Solo sesión — cualquier rol (52 comandos)
+## B. Solo sesión — cualquier rol (50 comandos)
 
 Operación normal del negocio; ningún dato restringido.
 
@@ -47,11 +47,10 @@ Operación normal del negocio; ningún dato restringido.
 | mantenimiento | `listar_mantenimientos`, `mantenimientos_recientes`, `obtener_mantenimiento`, `crear_mantenimiento`, `actualizar_mantenimiento`, `totales_mantenimiento`, `alertas_km_mantenimiento` |
 | reserva | `listar_reservas`, `proximas_reservas`, `obtener_reserva`, `crear_reserva`, `actualizar_reserva`, `cancelar_reserva` |
 | renta | `listar_rentas`, `obtener_renta`, `crear_renta`, `actualizar_renta`, `cerrar_renta`, `cancelar_renta`, `registrar_pago_renta`, `registrar_inspeccion_renta`, `rentas_activas` |
-| simit | `simit_sync_status`, `simit_sync_now` |
+| simit | `simit_sync_status` |
 | business | `get_business_lists` |
-| pii | `get_pii_status` (solo lectura de estado) |
 
-## C. `require_eliminacion` — roles_con_eliminar (Admin + Supervisor) · 7 comandos
+## C. `require_eliminacion` — roles_con_eliminar (Admin + Supervisor) · 8 comandos
 
 | Comando | Módulo |
 |---|---|
@@ -62,6 +61,7 @@ Operación normal del negocio; ningún dato restringido.
 | `eliminar_gasto` | gasto |
 | `eliminar_reserva` | reserva |
 | `eliminar_mantenimiento` | mantenimiento |
+| `simit_sync_now` | simit |
 
 ## D. `require_informes` — roles_con_informes (Admin + Supervisor) · 1 comando
 
@@ -69,13 +69,13 @@ Operación normal del negocio; ningún dato restringido.
 |---|---|
 | `informe_mensual` | informe |
 
-## E. `require_usuario_admin` — roles_con_usuarios (Administrador) · 12 comandos
+## E. `require_usuario_admin` — roles_con_usuarios (Administrador) · 13 comandos
 
 | Módulo | Comandos |
 |---|---|
 | usuario | `listar_usuarios`, `crear_usuario`, `actualizar_usuario`, `eliminar_usuario`, `forzar_cambio_password_usuario`, `desbloquear_usuario` |
 | auditoria | `listar_auditoria`, `acciones_auditoria`, `usuarios_auditoria` |
-| pii | `probar_clave_pii`, `guardar_clave_pii`, `eliminar_clave_pii` |
+| pii | `get_pii_status`, `probar_clave_pii`, `guardar_clave_pii`, `eliminar_clave_pii` |
 
 ## Frontend (guards de página)
 
@@ -86,18 +86,11 @@ Operación normal del negocio; ningún dato restringido.
 | Botones «Eliminar» en `/rentas`, `/autos`, `/clientes`, `/comparendos`, `/gastos`, `/reservas`, `/mantenimiento` | `roles_con_eliminar` (config-driven) | `puedeEliminar` derived + `{#if}` |
 | Resto de páginas | Solo sesión | `guardSesion` |
 
-## Gaps detectados
+## Gaps pendientes
 
-### 1. `get_pii_status` de solo lectura sin rol — INFORMATIVO
-Cualquier rol ve si hay clave PII configurada y cuántos clientes legacy quedan por
-descifrar. La mutación (probar/guardar/eliminar clave) es solo admin. Si el estado
-de cifrado se considera sensible, restringir a `roles_con_usuarios`.
-
-### 2. `simit_sync_now` operacional sin rol — INFORMATIVO
-Cualquier rol con sesión puede disparar desde `/comparendos` una sincronización
-real contra el portal SIMIT (PoW + red). No es destructiva (inserta con dedup y
-atribución), pero consume recursos de red. Considerar restringir a
-Admin/Supervisor si el negocio lo pide.
+Ninguno detectado. Todas las claves de config (`roles_con_usuarios`,
+`roles_con_informes`, `roles_con_eliminar`) están aplicadas en los comandos y
+la UI.
 
 ## Cerrado / verificado
 
@@ -112,5 +105,13 @@ Admin/Supervisor si el negocio lo pide.
   del frontend: era duplicado de `desbloquear_usuario` (que sí lee
   `roles_con_usuarios`) y no lo llamaba ninguna página. El servicio
   `AuthService::unlock_account` se conserva (es la lógica real, con test).
+- `simit_sync_now` ✅ restringido a `roles_con_eliminar` (Admin/Supervisor): la
+  sincronización manual contra el portal SIMIT ya no la puede disparar un
+  Operador; el botón «Sincronizar ahora» se oculta en `/comparendos` para
+  roles sin permiso.
+- `get_pii_status` ✅ restringido a `roles_con_usuarios` (Administrador): el
+  estado del cifrado PII (clave configurada, clientes legacy) ya no lo ven
+  Supervisor ni Operador; el botón «Configurar clave» se oculta en
+  `/clientes` para roles sin permiso.
 - Sin sesión → `session_expired`; rol no autorizado → `permission`
   (verificado por tests en `informes_integration.rs` y `borrado_rbac_integration.rs`).

@@ -101,6 +101,32 @@ describe('página de Clientes', () => {
 		expect(screen.getByText(/datos de contacto cifrados \(Fernet legacy\)/i)).toBeInTheDocument();
 	});
 
+	it('oculta el botón «Configurar clave» (PII) para el rol Operador', async () => {
+		setSesion('Operador');
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }), true)
+		]);
+
+		render(ClientesPage);
+		await screen.findByText('Ana Pérez');
+
+		// El aviso de legacy es informativo (lo ve cualquiera); el botón de
+		// configuración de la clave es solo de Administrador
+		expect(screen.getByText(/datos de contacto cifrados/i)).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /Configurar clave/ })).not.toBeInTheDocument();
+	});
+
+	it('muestra el botón «Configurar clave» (PII) para el rol Administrador', async () => {
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }), true)
+		]);
+
+		render(ClientesPage);
+		await screen.findByText('Ana Pérez');
+
+		expect(screen.getByRole('button', { name: /Configurar clave/ })).toBeInTheDocument();
+	});
+
 	it('crea un cliente desde el modal', async () => {
 		tauri.register('listar_clientes', () => []);
 		const crear = vi.fn((_args: { sessionId: string; datos: ClienteDatos }) =>

@@ -13,7 +13,7 @@ use crate::services::AppState;
 use tauri::Manager;
 use tauri::State;
 
-use super::require_session;
+use super::{require_eliminacion, require_session};
 
 type Cmd<T> = Result<T, ErrorPayload>;
 
@@ -40,13 +40,16 @@ pub fn simit_sync_status(
 
 /// Dispara una sincronización manual contra el SIMIT (asíncrono: corre en
 /// `spawn_blocking` porque las operaciones de BD son síncronas).
+///
+/// Restringido a `roles_con_eliminar` (por defecto Administrador y Supervisor):
+/// la corrida consume recursos de red contra el portal y modifica la BD.
 #[tauri::command]
 pub async fn simit_sync_now(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     session_id: String,
 ) -> Cmd<ResultadoSincronizacion> {
-    require_session(&state, &session_id)?;
+    require_eliminacion(&state, &session_id)?;
     let pool = state.pool.clone();
     let cfg = state.config.clone();
     let estado = estado_agente(&app)?;

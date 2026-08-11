@@ -413,4 +413,26 @@ describe('panel del Agente SIMIT', () => {
 		expect(screen.getByRole('button', { name: 'Sincronizar ahora' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Descargar Excel' })).toBeInTheDocument();
 	});
+
+	it('oculta el botón «Sincronizar ahora» para el rol Operador', async () => {
+		setSesion('Operador');
+		tauri.register('listar_comparendos', () => [comparendo()]);
+		tauri.register('simit_sync_status', () => infoAgente());
+
+		render(ComparendosPage);
+		await screen.findByText('Exceso de velocidad');
+
+		expect(screen.queryByRole('button', { name: 'Sincronizar ahora' })).not.toBeInTheDocument();
+	});
+
+	it('muestra el botón «Sincronizar ahora» para el rol Supervisor', async () => {
+		setSesion('Supervisor');
+		tauri.register('listar_comparendos', () => [comparendo()]);
+		tauri.register('simit_sync_status', () => infoAgente());
+
+		render(ComparendosPage);
+
+		// findByRole espera a que el panel del Agente SIMIT termine de cargar
+		expect(await screen.findByRole('button', { name: 'Sincronizar ahora' })).toBeInTheDocument();
+	});
 });

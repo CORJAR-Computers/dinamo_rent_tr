@@ -4,7 +4,7 @@
 	import { sid, session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
-	import { guardSesion, haySesion } from '$lib/utils/guards';
+	import { guardSesion, haySesion, tieneRol } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
@@ -179,9 +179,11 @@
 				Algunos clientes antiguos tienen datos de contacto cifrados (Fernet legacy) que requieren la clave original
 				<code class="font-mono text-xs bg-surface px-1 py-0.5 rounded">db_encryption_key</code> para mostrarse.
 			</span>
-			<button class="btn-outline !px-2.5 !py-1 text-[11px] shrink-0" onclick={() => (piiDialogOpen = true)}>
-				<span class="inline-flex items-center gap-1.5"><Icon name="lock" class="w-3.5 h-3.5" />Configurar clave</span>
-			</button>
+			{#if tieneRol(['Administrador'])}
+				<button class="btn-outline !px-2.5 !py-1 text-[11px] shrink-0" onclick={() => (piiDialogOpen = true)}>
+					<span class="inline-flex items-center gap-1.5"><Icon name="lock" class="w-3.5 h-3.5" />Configurar clave</span>
+				</button>
+			{/if}
 		</div>
 	{/if}
 
