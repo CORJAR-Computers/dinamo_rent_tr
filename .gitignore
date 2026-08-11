@@ -59,6 +59,18 @@ scripts/.tmp-*
 # Copia anidada del repo (artefacto accidental; ver git log -- Dinamo_Rent_tr)
 /dinamo_rent_tr/
 
+# Artefactos de análisis del portal SIMIT (capturas y bundles minificados descargados
+# durante la ingeniería inversa; conservar en disco, fuera de git)
+/app.min.js
+/capture_simit.js
+/core.min.js
+/format_js.py
+/importsbasecore.min.js
+/plugins.min.js
+/simit_config.js
+/simit_index.html
+/vendors.js
+
 # Vite timestamps
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
