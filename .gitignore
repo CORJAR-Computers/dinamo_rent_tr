@@ -52,6 +52,9 @@ static/preview-shots/*.pdf
 .vscode/
 .idea/
 
+# Runtime local de la herramienta Freebuff (BD SQLite + settings de la sesión local)
+.freebuff/
+
 # Temporales de impresión
 .tmp-print/
 scripts/.tmp-*
