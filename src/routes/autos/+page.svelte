@@ -356,6 +356,14 @@
 					</div>
 				{:else if col.key === 'acciones'}
 					<div class="flex items-center justify-end gap-1">
+						<a
+							href={`/autos/${a.placa}`}
+							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors inline-flex"
+							title="Historial: rentas y multas del vehículo"
+							aria-label={`Historial de ${a.placa}`}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+						</a>
 						<button
 							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 							title="Editar"
