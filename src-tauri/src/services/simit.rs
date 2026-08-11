@@ -24,6 +24,19 @@
 //!    infracciones: [{codigoInfraccion, descripcionInfraccion}] }],
 //!    pazSalvo, cancelada, suspendida }`
 //!
+//! # Fase 1 — sesión HTTP como navegador (cookie jar compartido)
+//! El gateway de seguridad externo (ADC) exige cookies de sesión
+//! (`ADC_CONN_*`/`ADC_REQ_*`): sin ellas responde 401 "Autenticación fallida:
+//! Acceso denegado. No se puede definir la política de seguridad." Para
+//! replicar la sesión de un navegador: (1) el agente ureq mantiene un **jar de
+//! cookies persistente** compartido entre siembra, captcha y consulta
+//! (feature `cookies`); (2) se hace un `GET https://www.fcm.org.co/` previo
+//! (como navegar a la SPA) para que el gateway emita sus cookies; (3) el token
+//! PoW se envía con **una sola solución** (`solo_primera_solucion`), igual que
+//! el servicio Python de referencia (API-Runt-simit/app/procesos/simit/service.py)
+//! que se verificó exitoso (`debug_response.json`); (4) ante un 401 se re-siembra
+//! la sesión y se reintenta una vez con token fresco.
+//!
 //! Nota: los servidores de SIMIT son intermitentes ("Server-unavailable") y
 //! pueden cambiar el contrato; el agente reintenta en cada ciclo y registra
 //! los errores por placa sin abortar el resto de la sincronización.
@@ -35,6 +48,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chrono::{Local, NaiveDate};
+use cookie_store::CookieStore;
 use serde::Serialize;
 use serde::Deserialize;
 use sha2::Digest;
@@ -294,14 +308,103 @@ pub struct EventoLogSimit {
 // ─── Cliente SIMIT (captcha PoW + consulta) ───────────────────────────────────
 
 /// Cliente HTTP compartido con timeouts configurables (se reutiliza entre placas)
+///
+/// Fase 1: el jar de cookies (`cookie_store`) es persistente y se comparte
+/// entre la siembra del sitio, el captcha y la consulta — como el `httpx`
+/// con cookie jar del servicio Python de referencia. Sin él, el gateway ADC
+/// del SIMIT rechaza la consulta con 401.
 static AGENTE: once_cell::sync::Lazy<ureq::Agent> = once_cell::sync::Lazy::new(|| {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECONDS))
+        .cookie_store(CookieStore::default())
         .build()
 });
 
 fn agente() -> &'static ureq::Agent {
     &AGENTE
+}
+
+// ─── Sesión del sitio (siembra de cookies del gateway ADC) ───────────────────
+
+/// Página principal del portal (SPA del SIMIT). Visitarla una vez, como un
+/// navegador, hace que el gateway ADC emita sus cookies de sesión
+/// (`ADC_CONN_*`/`ADC_REQ_*`) en el jar compartido.
+const SITIO_URL: &str = "https://www.fcm.org.co/";
+
+/// true si ya se sembró la sesión del sitio al menos una vez en este proceso
+static SESION_SITIO_LISTA: AtomicBool = AtomicBool::new(false);
+
+/// `GET` al sitio (con headers de navegador; sin `Origin`/`Referer`, que una
+/// navegación de nivel superior no lleva) reutilizando el agente con jar.
+/// Sigue hasta 2 redirecciones y captura las cookies de cada respuesta.
+/// Best-effort: un 4xx/5xx o un fallo de red no aborta la sincronización
+/// (el captcha/consulta pueden funcionar igual según el estado del gateway).
+fn sembrar_cookies_sitio_con(agente: &ureq::Agent, url_inicial: &str) -> Result<(), AppError> {
+    let mut url = url_inicial.to_string();
+    for _ in 0..3 {
+        let mut req = agente.get(&url);
+        req = req
+            .set("User-Agent", USER_AGENT)
+            .set(
+                "Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
+            .set("Accept-Language", "es-ES,es;q=0.9");
+        match req.call() {
+            Ok(resp) => {
+                if let Some(loc) = resp.header("location").map(str::to_string) {
+                    url = loc;
+                    continue;
+                }
+                log::debug!(
+                    "Sesión SIMIT sembrada: GET {url_inicial} → HTTP {}",
+                    resp.status()
+                );
+                return Ok(());
+            }
+            // El WAF puede responder 4xx con Set-Cookie; la cookie ya quedó en
+            // el jar aunque el status no sea 2xx (ureq la almacena al crear la
+            // respuesta). Se trata como "siembra hecha".
+            Err(ureq::Error::Status(code, resp)) => {
+                if let Some(loc) = resp.header("location").map(str::to_string) {
+                    url = loc;
+                    continue;
+                }
+                log::warn!(
+                    "Sesión SIMIT: GET {url_inicial} → HTTP {code} (cookies del jar conservadas)"
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                return Err(AppError::Generic(format!(
+                    "No se pudo sembrar la sesión SIMIT ({url_inicial}): {e}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn sembrar_cookies_sitio() -> Result<(), AppError> {
+    sembrar_cookies_sitio_con(agente(), SITIO_URL)
+}
+
+/// Asegura la siembra una sola vez por proceso (best-effort; no aborta si falla).
+fn asegurar_sesion_sitio() {
+    if SESION_SITIO_LISTA.load(Ordering::SeqCst) {
+        return;
+    }
+    match sembrar_cookies_sitio() {
+        Ok(()) => SESION_SITIO_LISTA.store(true, Ordering::SeqCst),
+        Err(e) => log::warn!("Agente SIMIT: {e}"),
+    }
+}
+
+/// Re-siembra forzada tras un 401 del gateway: la cookie ADC puede haber
+/// expirado; una navegación nueva la renueva en el jar compartido.
+fn resembrar_cookies_sitio() {
+    let _ = sembrar_cookies_sitio();
+    SESION_SITIO_LISTA.store(true, Ordering::SeqCst);
 }
 
 /// Inicializa el agente HTTP con timeout configurado
@@ -379,10 +482,14 @@ pub fn resolver_captcha_con_reintentos(
     )))
 }
 
-/// Resuelve el captcha Proof-of-Work y devuelve el token (array JSON de
-/// objetos de verificación) listo para enviar al microservicio de consulta.
+/// Resuelve el captcha Proof-of-Work y devuelve el token (array JSON con la
+/// PRIMERA solución de verificación) listo para enviar al microservicio.
+///
+/// Fase 1: antes de resolver, se asegura la sesión del sitio (GET a la SPA)
+/// para que el gateway ADC emita sus cookies en el jar compartido.
 pub fn resolver_captcha() -> Result<(String, u64), AppError> {
     let inicio = Instant::now();
+    asegurar_sesion_sitio();
     let respuesta = con_headers_browser(agente().post(CAPTCHA_URL))
         .send_form(&[("endpoint", "question")])
         .map_err(|e| {
@@ -404,8 +511,23 @@ pub fn resolver_captcha() -> Result<(String, u64), AppError> {
     };
     let tiempo = Local::now().timestamp();
     let token = resolver_pow(&data.question, tiempo, dificultad)?;
+    // Fase 1: el microservicio acepta (y el servicio Python de referencia, que
+    // se verificó exitoso, envía) solo la PRIMERA solución; el resto se descarta.
+    let token = solo_primera_solucion(&token)?;
     let duracion = inicio.elapsed().as_millis() as u64;
     Ok((token, duracion))
+}
+
+/// Recorta el token PoW `[a,b,c,…]` a `[a]` (una sola solución de verificación).
+/// El servicio Python de referencia envía `pow_solutions[:1]` — ver
+/// app/procesos/simit/service.py de API-Runt-simit (verificado exitoso).
+fn solo_primera_solucion(token: &str) -> Result<String, AppError> {
+    let soluciones: Vec<serde_json::Value> = serde_json::from_str(token)
+        .map_err(|e| AppError::Generic(format!("Token PoW inválido: {e}")))?;
+    let primera = soluciones.first().ok_or_else(|| {
+        AppError::Generic("Token PoW vacío: el captcha no produjo soluciones".into())
+    })?;
+    Ok(format!("[{primera}]"))
 }
 
 /// Consulta los comparendos/multas de una placa en el SIMIT con reintentos.
@@ -475,34 +597,107 @@ pub struct MetricasPlaca {
     pub reintentos: u32,
 }
 
-/// Consulta los comparendos/multas de una placa en el SIMIT.
-pub fn consultar_placa(placa: &str) -> Result<(Vec<RegistroSimit>, u64, u64), AppError> {
-    let (token, duracion_captcha) = resolver_captcha()?;
-    let tiempo_captcha = duracion_captcha;
-    
-    let inicio_consulta = Instant::now();
+/// Fallo de la consulta al microservicio, con el 401 del gateway distinguido
+/// (permite la re-siembra + reintento con token fresco en `consultar_placa`).
+enum ErrorConsulta {
+    /// 401 del gateway ("Autenticación fallida…") — lleva el body del SIMIT
+    Unauthorized(String),
+    /// Cualquier otro fallo (red, 5xx, parseo)
+    Otro(AppError),
+}
+
+/// Envía el POST de consulta al microservicio. `url` es parametrizable para
+/// poder testear el 401 y el manejo de cookies contra un servidor local.
+fn enviar_consulta(
+    placa: &str,
+    token: &str,
+    url: &str,
+) -> Result<RespuestaConsulta, ErrorConsulta> {
     let body = serde_json::json!({
         "filtro": placa.trim(),
         "reCaptchaDTO": { "response": token, "consumidor": "1" }
     });
-    let respuesta = con_headers_browser(agente().post(CONSULTA_URL))
+    let respuesta = match con_headers_browser(agente().post(url))
         .set("Content-Type", "application/json")
         .send_json(body)
-        .map_err(|e| {
-            AppError::Generic(format!("SIMIT no respondió para la placa {placa}: {e}"))
-        })?;
-    let dto: RespuestaConsulta = respuesta.into_json().map_err(|e| {
-        AppError::Generic(format!("Respuesta SIMIT inválida para la placa {placa}: {e}"))
-    })?;
-    let tiempo_consulta = inicio_consulta.elapsed().as_millis() as u64;
-    
-    log::debug!(
-        "Placa {placa}: captcha={}ms, consulta={}ms",
-        tiempo_captcha,
-        tiempo_consulta
-    );
-    
-    Ok((mapear_registros(&dto, placa.trim()), tiempo_captcha, tiempo_consulta))
+    {
+        Ok(r) => r,
+        // 401 del gateway: se conserva el detalle del body para el mensaje y
+        // para decidir la re-siembra. Las Set-Cookie de esta respuesta ya
+        // quedaron en el jar del agente.
+        Err(ureq::Error::Status(401, resp)) => {
+            let detalle = resp.into_string().unwrap_or_default();
+            return Err(ErrorConsulta::Unauthorized(detalle));
+        }
+        Err(ureq::Error::Status(code, resp)) => {
+            let detalle = resp.into_string().unwrap_or_default();
+            return Err(ErrorConsulta::Otro(AppError::Generic(format!(
+                "SIMIT respondió HTTP {code} para la placa {placa}: {detalle}"
+            ))));
+        }
+        Err(e) => {
+            return Err(ErrorConsulta::Otro(AppError::Generic(format!(
+                "SIMIT no respondió para la placa {placa}: {e}"
+            ))));
+        }
+    };
+    respuesta.into_json().map_err(|e| {
+        ErrorConsulta::Otro(AppError::Generic(format!(
+            "Respuesta SIMIT inválida para la placa {placa}: {e}"
+        )))
+    })
+}
+
+/// Consulta los comparendos/multas de una placa en el SIMIT.
+///
+/// Fase 1: si el gateway rechaza con 401 (cookie ADC expirada o handshake
+/// incompleto), se re-siembra la sesión del sitio y se reintenta UNA vez con
+/// token fresco — el token PoW parece ser de un solo uso.
+pub fn consultar_placa(placa: &str) -> Result<(Vec<RegistroSimit>, u64, u64), AppError> {
+    // 1er intento: captcha + consulta
+    let (token, duracion_captcha) = resolver_captcha()?;
+    let inicio_consulta = Instant::now();
+    match enviar_consulta(placa, &token, CONSULTA_URL) {
+        Ok(dto) => {
+            let tiempo_consulta = inicio_consulta.elapsed().as_millis() as u64;
+            let registros = mapear_registros(&dto, placa.trim());
+            log::debug!(
+                "Placa {placa}: captcha={}ms, consulta={}ms",
+                duracion_captcha,
+                tiempo_consulta
+            );
+            return Ok((registros, duracion_captcha, tiempo_consulta));
+        }
+        Err(ErrorConsulta::Unauthorized(detalle)) => {
+            log::warn!(
+                "Placa {placa}: 401 del gateway ({detalle}); re-sembrando sesión y reintentando"
+            );
+            resembrar_cookies_sitio();
+        }
+        Err(ErrorConsulta::Otro(e)) => return Err(e),
+    }
+
+    // 2do intento (solo tras un 401): token fresco + sesión re-sembrada
+    let (token2, duracion_captcha2) = resolver_captcha()?;
+    let inicio_consulta2 = Instant::now();
+    match enviar_consulta(placa, &token2, CONSULTA_URL) {
+        Ok(dto) => {
+            let tiempo_consulta = inicio_consulta2.elapsed().as_millis() as u64;
+            let registros = mapear_registros(&dto, placa.trim());
+            log::debug!(
+                "Placa {placa}: captcha={}ms, consulta={}ms (reintento tras 401)",
+                duracion_captcha + duracion_captcha2,
+                tiempo_consulta
+            );
+            Ok((registros, duracion_captcha + duracion_captcha2, tiempo_consulta))
+        }
+        Err(ErrorConsulta::Unauthorized(detalle)) => {
+            Err(AppError::Generic(format!(
+                "SIMIT rechazó el token de seguridad para la placa {placa}: {detalle}"
+            )))
+        }
+        Err(ErrorConsulta::Otro(e)) => Err(e),
+    }
 }
 
 // ─── Sincronización con la base de datos ──────────────────────────────────────
@@ -1342,6 +1537,8 @@ fn resolver_iteracion(question: &str, time: i64, inicio: i64) -> Result<i64, App
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
 
     #[test]
     fn sha256_abc_conocido() {
@@ -1487,5 +1684,173 @@ mod tests {
     #[test]
     fn escapa_html() {
         assert_eq!(esc_html("<script>&\"x\"</script>"), "&lt;script&gt;&amp;&quot;x&quot;&lt;/script&gt;");
+    }
+
+    // ─── Fase 1: token de una sola solución ─────────────────────────────────
+
+    #[test]
+    fn solo_primera_solucion_recorta_a_la_primera() {
+        let token = resolver_pow("question-test", 1700000000, 2).expect("pow resoluble");
+        let recortado = solo_primera_solucion(&token).expect("token válido");
+        let parseado: Vec<serde_json::Value> =
+            serde_json::from_str(&recortado).expect("array JSON");
+        assert_eq!(parseado.len(), 1, "solo la primera solución");
+        assert_eq!(parseado[0]["question"], "question-test");
+    }
+
+    #[test]
+    fn solo_primera_solucion_token_vacio_error() {
+        assert!(solo_primera_solucion("[]").is_err());
+        assert!(solo_primera_solucion("no-json").is_err());
+    }
+
+    // ─── Fase 1: jar de cookies compartido entre peticiones ────────────────
+
+    /// Mini servidor HTTP de test: responde la secuencia dada y devuelve el
+    /// header `Cookie` de cada request recibido (para verificar el jar).
+    fn servidor_http(
+        respuestas: Vec<(u16, Vec<(&'static str, &'static str)>, String)>,
+    ) -> (String, std::thread::JoinHandle<Vec<Option<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("puerto de test libre");
+        let addr = listener.local_addr().expect("dirección del listener");
+        let handle = std::thread::spawn(move || {
+            let mut cookies_recibidas = Vec::new();
+            for (status, headers, body) in respuestas {
+                let (mut stream, _) = listener.accept().expect("aceptar conexión");
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 2048];
+                loop {
+                    let n = stream.read(&mut tmp).expect("leer request");
+                    if n == 0 {
+                        break;
+                    }
+                    buf.extend_from_slice(&tmp[..n]);
+                    if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                let req = String::from_utf8_lossy(&buf);
+                let cookie = req
+                    .lines()
+                    .find(|l| l.to_ascii_lowercase().starts_with("cookie:"))
+                    .map(|l| l.trim().to_string());
+                cookies_recibidas.push(cookie);
+                let mut resp = format!("HTTP/1.1 {status} OK\r\nConnection: close\r\n");
+                for (k, v) in &headers {
+                    resp.push_str(&format!("{k}: {v}\r\n"));
+                }
+                resp.push_str(&format!("Content-Length: {}\r\n\r\n{}", body.len(), body));
+                stream.write_all(resp.as_bytes()).expect("escribir respuesta");
+            }
+            cookies_recibidas
+        });
+        (format!("http://{addr}"), handle)
+    }
+
+    #[test]
+    fn cookie_jar_compartido_entre_peticiones() {
+        let (base, server) = servidor_http(vec![
+            (200, vec![("Set-Cookie", "adc_test=xyz123; Path=/")], String::new()),
+            (200, vec![], "ok".into()),
+        ]);
+        let agente = ureq::AgentBuilder::new()
+            .cookie_store(CookieStore::default())
+            .build();
+        agente
+            .get(&format!("{base}/captcha"))
+            .call()
+            .expect("primera petición");
+        agente
+            .get(&format!("{base}/consulta"))
+            .call()
+            .expect("segunda petición");
+        let cookies = server.join().expect("servidor de test");
+        assert_eq!(cookies[0], None, "la primera petición no lleva cookie");
+        let cookie2 = cookies[1]
+            .as_deref()
+            .expect("la segunda petición lleva la cookie");
+        assert!(
+            cookie2.contains("adc_test=xyz123"),
+            "jar compartido: la cookie de la 1ª petición viaja en la 2ª"
+        );
+    }
+
+    #[test]
+    fn sembrar_cookies_sitio_siembra_el_jar() {
+        let (base, server) = servidor_http(vec![
+            (200, vec![("Set-Cookie", "ADC_CONN=abc; Path=/")], "<html>".into()),
+            (200, vec![], "ok".into()),
+        ]);
+        let agente = ureq::AgentBuilder::new()
+            .cookie_store(CookieStore::default())
+            .build();
+        sembrar_cookies_sitio_con(&agente, &base).expect("siembra ok");
+        agente
+            .get(&format!("{base}/x"))
+            .call()
+            .expect("petición de verificación");
+        let cookies = server.join().expect("servidor de test");
+        assert!(cookies[0].is_none());
+        let cookie2 = cookies[1]
+            .as_deref()
+            .expect("la cookie del sitio viaja después");
+        assert!(cookie2.contains("ADC_CONN=abc"));
+    }
+
+    #[test]
+    fn consulta_401_clasifica_como_unauthorized() {
+        let (base, server) = servidor_http(vec![(
+            401,
+            vec![("Content-Type", "application/json")],
+            r#"{"codigo":5,"descripcion":"Autenticación fallida: Acceso denegado"}"#.into(),
+        )]);
+        let err = enviar_consulta("ABC123", "TOKEN", &base).expect_err("401 → Unauthorized");
+        match err {
+            ErrorConsulta::Unauthorized(detalle) => {
+                assert!(
+                    detalle.contains("Autenticación fallida"),
+                    "el body del SIMIT se conserva para el mensaje"
+                );
+            }
+            ErrorConsulta::Otro(e) => panic!("se esperaba Unauthorized, no {e}"),
+        }
+        server.join().expect("servidor de test");
+    }
+
+    /// Integración contra el portal REAL (no corre en la suite normal):
+    /// ejecuta la siembra del sitio + captcha con el agente global y falla si
+    /// el jar no captura las cookies del gateway ADC (`aiovg_rand_seed` del
+    /// GET del sitio y `ADC_CONN_*`/`ADC_REQ_*` de la respuesta del captcha),
+    /// replicando la verificación manual del 11-08.
+    ///
+    /// Ejecutar con:
+    ///   cargo test --lib jar_portal_real_captura_cookies_adc -- --ignored --nocapture
+    #[test]
+    #[ignore = "requiere el portal SIMIT real (internet); correr con -- --ignored"]
+    fn jar_portal_real_captura_cookies_adc() {
+        // Siembra explícita (GET www.fcm.org.co → aiovg_rand_seed) + captcha
+        // PoW (POST qxcaptcha → ADC_CONN_*/ADC_REQ_*), ambos con el agente
+        // global real de la sincronización.
+        sembrar_cookies_sitio_con(agente(), SITIO_URL).expect("siembra del sitio real");
+        let (token, _duracion) = resolver_captcha().expect("captcha contra el portal real");
+        assert!(!token.is_empty(), "token PoW generado");
+
+        let guard = AGENTE.cookie_store();
+        let nombres: Vec<String> = guard.iter_any().map(|c| c.name().to_string()).collect();
+        let resumen = nombres.join(", ");
+        println!("[jar:portal-real] cookies capturadas → {resumen}");
+
+        assert!(
+            nombres.iter().any(|n| n == "aiovg_rand_seed"),
+            "falta aiovg_rand_seed (GET del sitio) en el jar — cookies: {resumen}"
+        );
+        assert!(
+            nombres.iter().any(|n| n.starts_with("ADC_CONN_")),
+            "falta ADC_CONN_* (respuesta del captcha) en el jar — cookies: {resumen}"
+        );
+        assert!(
+            nombres.iter().any(|n| n.starts_with("ADC_REQ_")),
+            "falta ADC_REQ_* (respuesta del captcha) en el jar — cookies: {resumen}"
+        );
     }
 }

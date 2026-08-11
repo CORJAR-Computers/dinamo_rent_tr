@@ -20,6 +20,14 @@ path = "src/bin/dev_reset_admin.rs"
 required-features = ["dev"]
 
 [[bin]]
+name = "sync_dev"
+path = "src/bin/sync_dev.rs"
+# Sincronización SIMIT de punta a punta sobre la BD de desarrollo (sin Tauri,
+# mismo camino que «Sincronizar ahora»). Solo se construye con `--features dev`
+# para no llegar al bundle de release.
+required-features = ["dev"]
+
+[[bin]]
 name = "rotate_pii_key"
 path = "src/bin/rotate_pii_key.rs"
 # Herramienta de mantenimiento (SECURITY.md §2.1): rota la clave PII
@@ -51,7 +59,14 @@ rust_decimal = { version = "1", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # Cliente HTTP del Agente SIMIT (captcha PoW + consulta de comparendos por placa)
-ureq = { version = "2.12", features = ["json"] }
+# - `cookies`: habilita el jar de cookies persistente del agente. El gateway ADC
+#   del SIMIT emite cookies de sesión (ADC_CONN_*/ADC_REQ_*) y rechaza con 401
+#   "No se puede definir la política de seguridad" las peticiones sin ellas —
+#   Fase 1 (ver Handsoff §3 y API-Runt-simit/service.py).
+ureq = { version = "2.12", features = ["json", "cookies"] }
+# Store de cookies de ureq (mismo crate que ureq usa internamente); lo
+# declaramos directo para construir el jar explícitamente en services/simit.rs.
+cookie_store = "0.21"
 
 # Criptografía y seguridad
 # - aes-gcm: cifrado PII nuevo formato `v1:` (AES-256-GCM) — ver core/crypto.rs
