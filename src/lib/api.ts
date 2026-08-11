@@ -92,8 +92,6 @@ export const authApi = {
 	getLoginStatus: (username: string) =>
 		invokeCmd<LoginStatus>('get_login_status', { username }),
 	getSession: (sessionId: string) => invokeCmd<SessionData>('get_session', { sessionId }),
-	unlockAccount: (sessionId: string, username: string) =>
-		invokeCmd<boolean>('unlock_account', { sessionId, username }),
 	/** Preferencia de tema del usuario ('light' | 'dark' | 'auto' | null) */
 	obtenerTema: (sessionId: string) => invokeCmd<string | null>('obtener_tema', { sessionId }),
 	guardarTema: (sessionId: string, tema: string) =>

@@ -38,23 +38,6 @@ pub fn get_login_status(state: State<'_, AppState>, username: String) -> LoginSt
     AuthService::get_login_status(&state, &username)
 }
 
-/// Desbloquea una cuenta (requiere rol Administrador)
-#[tauri::command]
-pub fn unlock_account(
-    state: State<'_, AppState>,
-    session_id: String,
-    username: String,
-) -> Cmd<bool> {
-    // RBAC: solo Administrador
-    let _session = {
-        let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        crate::core::rbac::require_role(&mut sessions, &session_id, &["Administrador"])
-    }
-    .map_err(|e| e.to_payload())?;
-
-    AuthService::unlock_account(&state, &username).map_err(|e| e.to_payload())
-}
-
 /// Estado de la sesión actual (para guard de rutas / refresh de UI)
 #[tauri::command]
 pub fn get_session(state: State<'_, AppState>, session_id: String) -> Cmd<crate::core::rbac::SessionData> {

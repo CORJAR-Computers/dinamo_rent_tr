@@ -132,7 +132,6 @@ pub fn run() {
             commands::auth::logout,
             commands::auth::change_password,
             commands::auth::get_login_status,
-            commands::auth::unlock_account,
             commands::auth::get_session,
             commands::auth::obtener_tema,
             commands::auth::guardar_tema,
