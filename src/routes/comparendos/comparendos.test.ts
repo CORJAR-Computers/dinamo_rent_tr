@@ -147,6 +147,32 @@ describe('página de Comparendos', () => {
 		expect(screen.getByText('Quién lo tenía')).toBeInTheDocument();
 	});
 
+	it('muestra en la notificación imprimible quién tenía el vehículo el día de la multa', async () => {
+		tauri.register('listar_comparendos', () => [
+			comparendo({
+				id: 5,
+				responsable: {
+					idRenta: 7,
+					nombreCliente: 'Ana Martínez',
+					noContrato: 42,
+					anioContrato: 2026,
+					fechaRecogida: '2026-07-01',
+					fechaRetorno: '2026-07-10',
+					estadoRenta: 'Cerrada'
+				}
+			})
+		]);
+
+		render(ComparendosPage);
+		await screen.findByText('Exceso de velocidad');
+
+		await fireEvent.click(screen.getByTitle('Imprimir notificación'));
+		const dialogo = await screen.findByRole('dialog');
+		expect(within(dialogo).getByText('Ana Martínez')).toBeInTheDocument();
+		expect(within(dialogo).getByText(/2026-042/)).toBeInTheDocument();
+		expect(within(dialogo).getByText(/Tenía el vehículo el día de la infracción/)).toBeInTheDocument();
+	});
+
 	it('muestra el estado vacío cuando no hay comparendos', async () => {
 		tauri.register('listar_comparendos', () => []);
 

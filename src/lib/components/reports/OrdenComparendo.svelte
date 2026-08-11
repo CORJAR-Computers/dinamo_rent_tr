@@ -1,7 +1,7 @@
 <script lang="ts">
 	// OrdenComparendo.svelte — Documento imprimible A4 para Comparendos
 	import type { Comparendo } from '$lib/api';
-	import { formatCOP, formatDate } from '$lib/utils/format';
+	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
 
 	let { comparendo }: { comparendo: Comparendo } = $props();
 
@@ -60,13 +60,22 @@
 		</div>
 		<div class="rounded-lg border border-slate-300 p-3">
 			<p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Responsable (Cliente / Renta)</p>
-			{#if comparendo.idRenta}
+			{#if comparendo.responsable}
+				<p class="font-bold">{comparendo.responsable.nombreCliente || 'Cliente sin nombre'}</p>
+				<p class="text-xs text-slate-600">
+					Renta {formatContrato(comparendo.responsable.anioContrato, comparendo.responsable.noContrato)}
+					<span class="text-slate-400">· {formatDate(comparendo.responsable.fechaRecogida)} → {formatDate(comparendo.responsable.fechaRetorno)}</span>
+				</p>
+				<p class="text-[10px] text-slate-500 mt-0.5">Tenía el vehículo el día de la infracción</p>
+			{:else if comparendo.idRenta}
 				<p class="font-bold">Renta #{comparendo.idRenta}</p>
+				{#if comparendo.idCliente}
+					<p class="text-xs text-slate-600">Cliente ID: {comparendo.idCliente}</p>
+				{/if}
+				<p class="text-[10px] text-slate-500 mt-0.5">Vínculo registrado al importar</p>
 			{:else}
 				<p class="font-bold text-slate-500 italic">No asociado a renta</p>
-			{/if}
-			{#if comparendo.idCliente}
-				<p class="text-xs text-slate-600">Cliente ID: {comparendo.idCliente}</p>
+				<p class="text-[10px] text-slate-500 mt-0.5">El vehículo no estaba rentado el día de la infracción.</p>
 			{/if}
 		</div>
 	</div>
