@@ -78,16 +78,17 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: ['Cambio Aceite', 'Frenos', 'Llantas', 'Batería', 'Tecno-Mecánica', 'Lavado General', 'Reparación Mecánica', 'Otro'],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
+	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
 };
 
-function setSesion() {
+function setSesion(rol = 'Administrador') {
 	session.setSession({
 		success: true,
 		sessionId: 'tok-test',
 		username: 'admin',
 		nombre: 'Administrador',
-		rol: 'Administrador',
+		rol,
 		debeCambiarPassword: false
 	});
 }
@@ -253,6 +254,26 @@ describe('página de Mantenimiento', () => {
 		await waitFor(() => expect(eliminar).toHaveBeenCalledTimes(1));
 		const args = eliminar.mock.calls[0][0] as { sessionId: string; id: number };
 		expect(args.id).toBe(3);
+	});
+
+	it('oculta el botón Eliminar para el rol Operador', async () => {
+		setSesion('Operador');
+		tauri.register('listar_mantenimientos', () => [mantenimiento()]);
+
+		render(MantenimientoPage);
+		await screen.findByText('Cambio de aceite 15W-40');
+
+		expect(screen.queryByTitle('Eliminar')).not.toBeInTheDocument();
+	});
+
+	it('muestra el botón Eliminar para el rol Supervisor', async () => {
+		setSesion('Supervisor');
+		tauri.register('listar_mantenimientos', () => [mantenimiento()]);
+
+		render(MantenimientoPage);
+		await screen.findByText('Cambio de aceite 15W-40');
+
+		expect(screen.getByTitle('Eliminar')).toBeInTheDocument();
 	});
 
 	it('filtra por placa con el selector', async () => {

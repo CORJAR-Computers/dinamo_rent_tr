@@ -37,6 +37,7 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: [],
 	rolesConInformes: [],
 	rolesConUsuarios: ['Administrador'],
+	rolesConEliminar: [],
 	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador']
 };	beforeEach(() => {
 		session.clear();

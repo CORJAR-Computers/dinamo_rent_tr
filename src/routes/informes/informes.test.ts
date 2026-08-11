@@ -21,6 +21,7 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: [],
 	rolesConInformes: ['Administrador', 'Supervisor'],
 	rolesConUsuarios: ['Administrador'],
+	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador']
 };
 

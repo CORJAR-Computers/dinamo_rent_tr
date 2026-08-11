@@ -7,7 +7,7 @@ use crate::services::cliente::{ClienteConPii, ClienteService};
 use crate::services::AppState;
 use tauri::State;
 
-use super::{conn, require_session};
+use super::{conn, require_eliminacion, require_session};
 
 type Cmd<T> = Result<T, ErrorPayload>;
 
@@ -70,7 +70,7 @@ pub fn actualizar_cliente(
 /// Elimina un cliente por id
 #[tauri::command]
 pub fn eliminar_cliente(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<()> {
-    require_session(&state, &session_id)?;
+    require_eliminacion(&state, &session_id)?;
     let mut c = conn(&state)?;
     ClienteService::eliminar(&mut c, id).map_err(|e| e.to_payload())
 }

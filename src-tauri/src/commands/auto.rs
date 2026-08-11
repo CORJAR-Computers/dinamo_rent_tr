@@ -6,7 +6,7 @@ use crate::services::auto::{AlertaVencimiento, AutoService};
 use crate::services::AppState;
 use tauri::State;
 
-use super::{conn, require_session};
+use super::{conn, require_eliminacion, require_session};
 
 type Cmd<T> = Result<T, ErrorPayload>;
 
@@ -59,7 +59,7 @@ pub fn actualizar_auto(
 /// Elimina un vehículo por placa
 #[tauri::command]
 pub fn eliminar_auto(state: State<'_, AppState>, session_id: String, placa: String) -> Cmd<()> {
-    require_session(&state, &session_id)?;
+    require_eliminacion(&state, &session_id)?;
     let mut c = conn(&state)?;
     AutoService::eliminar(&mut c, &placa).map_err(|e| e.to_payload())
 }

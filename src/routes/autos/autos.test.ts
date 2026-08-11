@@ -52,16 +52,17 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: [],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
+	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
 };
 
-function setSesion() {
+function setSesion(rol = 'Administrador') {
 	session.setSession({
 		success: true,
 		sessionId: 'tok-test',
 		username: 'admin',
 		nombre: 'Administrador',
-		rol: 'Administrador',
+		rol,
 		debeCambiarPassword: false
 	});
 }
@@ -192,6 +193,26 @@ describe('página de Autos', () => {
 		await waitFor(() => expect(eliminar).toHaveBeenCalledTimes(1));
 		const args = eliminar.mock.calls[0][0] as { sessionId: string; placa: string };
 		expect(args.placa).toBe('ABC123');
+	});
+
+	it('oculta el botón Eliminar para el rol Operador', async () => {
+		setSesion('Operador');
+		tauri.register('listar_autos', () => [auto({ placa: 'ABC123' })]);
+
+		render(AutosPage);
+		await screen.findByText('ABC123');
+
+		expect(screen.queryByTitle('Eliminar')).not.toBeInTheDocument();
+	});
+
+	it('muestra el botón Eliminar para el rol Supervisor', async () => {
+		setSesion('Supervisor');
+		tauri.register('listar_autos', () => [auto({ placa: 'ABC123' })]);
+
+		render(AutosPage);
+		await screen.findByText('ABC123');
+
+		expect(screen.getByTitle('Eliminar')).toBeInTheDocument();
 	});
 
 	it('filtra por búsqueda con debounce', async () => {

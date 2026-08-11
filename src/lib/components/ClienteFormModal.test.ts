@@ -53,6 +53,7 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: [],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
+	rolesConEliminar: [],
 	rolesDisponibles: []
 };
 

@@ -57,6 +57,20 @@ pub fn require_informes(state: &AppState, session_id: &str) -> Result<SessionDat
         .map_err(|e| e.to_payload())
 }
 
+/// Requiere sesión activa con rol habilitado para eliminar registros
+/// (roles_con_eliminar en config.ini — por defecto Administrador y Supervisor).
+pub fn require_eliminacion(state: &AppState, session_id: &str) -> Result<SessionData, ErrorPayload> {
+    let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
+    // Fallback: si config.ini no define roles_con_eliminar, Admin + Supervisor
+    let roles: Vec<&str> = if state.config.roles_con_eliminar.is_empty() {
+        vec!["Administrador", "Supervisor"]
+    } else {
+        state.config.roles_con_eliminar.iter().map(|s| s.as_str()).collect()
+    };
+    crate::core::rbac::require_role(&mut sessions, session_id, &roles)
+        .map_err(|e| e.to_payload())
+}
+
 /// Obtiene una conexión del pool
 pub fn conn(state: &AppState) -> Result<PooledConnection, ErrorPayload> {
     state.pool.get().map_err(|e| AppError::from(e).to_payload())

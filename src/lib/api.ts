@@ -272,6 +272,7 @@ export interface BusinessLists {
 	tiposMantenimiento: string[];
 	rolesConInformes: string[];
 	rolesConUsuarios: string[];
+	rolesConEliminar: string[];
 	rolesDisponibles: string[];
 }
 

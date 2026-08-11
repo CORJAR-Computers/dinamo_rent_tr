@@ -85,16 +85,17 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: [],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
+	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
 };
 
-function setSesion() {
+function setSesion(rol = 'Administrador') {
 	session.setSession({
 		success: true,
 		sessionId: 'tok-test',
 		username: 'admin',
 		nombre: 'Administrador',
-		rol: 'Administrador',
+		rol,
 		debeCambiarPassword: false
 	});
 }
@@ -297,6 +298,26 @@ describe('página de Comparendos', () => {
 		await waitFor(() => expect(eliminar).toHaveBeenCalledTimes(1));
 		const args = eliminar.mock.calls[0][0] as { sessionId: string; id: number };
 		expect(args.id).toBe(3);
+	});
+
+	it('oculta el botón Eliminar para el rol Operador', async () => {
+		setSesion('Operador');
+		tauri.register('listar_comparendos', () => [comparendo({ id: 3 })]);
+
+		render(ComparendosPage);
+		await screen.findByText('Exceso de velocidad');
+
+		expect(screen.queryByTitle('Eliminar')).not.toBeInTheDocument();
+	});
+
+	it('muestra el botón Eliminar para el rol Supervisor', async () => {
+		setSesion('Supervisor');
+		tauri.register('listar_comparendos', () => [comparendo({ id: 3 })]);
+
+		render(ComparendosPage);
+		await screen.findByText('Exceso de velocidad');
+
+		expect(screen.getByTitle('Eliminar')).toBeInTheDocument();
 	});
 
 	it('filtra por estado con el selector', async () => {

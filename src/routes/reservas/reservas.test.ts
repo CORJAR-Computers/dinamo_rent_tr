@@ -48,16 +48,17 @@ const LISTS: BusinessLists = {
 	tiposMantenimiento: [],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
+	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
 };
 
-function setSesion() {
+function setSesion(rol = 'Administrador') {
 	session.setSession({
 		success: true,
 		sessionId: 'tok-test',
 		username: 'admin',
 		nombre: 'Administrador',
-		rol: 'Administrador',
+		rol,
 		debeCambiarPassword: false
 	});
 }
@@ -92,5 +93,25 @@ describe('página de Reservas', () => {
 		render(ReservasPage);
 
 		expect(await screen.findByText(/No hay reservas/i)).toBeInTheDocument();
+	});
+
+	it('oculta el botón Eliminar para el rol Operador', async () => {
+		setSesion('Operador');
+		tauri.register('listar_reservas', () => [reserva()]);
+
+		render(ReservasPage);
+		await screen.findByText('Juan Perez');
+
+		expect(screen.queryByTitle('Eliminar')).not.toBeInTheDocument();
+	});
+
+	it('muestra el botón Eliminar para el rol Supervisor', async () => {
+		setSesion('Supervisor');
+		tauri.register('listar_reservas', () => [reserva()]);
+
+		render(ReservasPage);
+		await screen.findByText('Juan Perez');
+
+		expect(screen.getByTitle('Eliminar')).toBeInTheDocument();
 	});
 });

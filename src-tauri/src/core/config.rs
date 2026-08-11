@@ -78,6 +78,7 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
     ("business", "impuesto_porcentaje", "19"),
     ("business", "roles_con_informes", "Administrador, Supervisor"),
     ("business", "roles_con_usuarios", "Administrador"),
+    ("business", "roles_con_eliminar", "Administrador, Supervisor"),
     ("business", "roles_usuarios", "Administrador, Supervisor, Operador"),
     ("business", "tipos_auto", "Automóvil, Camioneta, Van, Lujo, Moto"),
     ("business", "tipos_transmision", "Automática, Mecánica"),
@@ -170,6 +171,7 @@ pub struct AppConfig {
     // ── Business ──
     pub roles_con_informes: HashSet<String>,
     pub roles_con_usuarios: HashSet<String>,
+    pub roles_con_eliminar: HashSet<String>,
     pub roles_usuarios: Vec<String>,
     pub tipos_auto: Vec<String>,
     pub tipos_transmision: Vec<String>,
@@ -273,6 +275,7 @@ impl AppConfig {
             simit_start_delay_minutes: get_u64(&map, "simit", "start_delay_minutes", 10),
             roles_con_informes: get_set(&map, "business", "roles_con_informes"),
             roles_con_usuarios: get_set(&map, "business", "roles_con_usuarios"),
+            roles_con_eliminar: get_set(&map, "business", "roles_con_eliminar"),
             roles_usuarios: get_list(&map, "business", "roles_usuarios"),
             tipos_auto: get_list(&map, "business", "tipos_auto"),
             tipos_transmision: get_list(&map, "business", "tipos_transmision"),
@@ -438,6 +441,7 @@ pub struct BusinessLists {
     pub tipos_mantenimiento: Vec<String>,
     pub roles_con_informes: Vec<String>,
     pub roles_con_usuarios: Vec<String>,
+    pub roles_con_eliminar: Vec<String>,
     pub roles_usuarios: Vec<String>,
 }
 
@@ -458,6 +462,7 @@ impl AppConfig {
             tipos_mantenimiento: self.tipos_mantenimiento.clone(),
             roles_con_informes: self.roles_con_informes.iter().cloned().collect(),
             roles_con_usuarios: self.roles_con_usuarios.iter().cloned().collect(),
+            roles_con_eliminar: self.roles_con_eliminar.iter().cloned().collect(),
             roles_usuarios: self.roles_usuarios.clone(),
         }
     }
@@ -512,6 +517,7 @@ mod tests {
         let text = build_default_ini_text();
         let ini = parse_ini(&text);
         assert_eq!(get_str(&ini, "business", "roles_con_informes", ""), "Administrador, Supervisor");
+        assert_eq!(get_str(&ini, "business", "roles_con_eliminar", ""), "Administrador, Supervisor");
         assert_eq!(get_u64(&ini, "security", "session_timeout", 0), 3600);
         // Retraso inicial del Agente SIMIT (10 min): no debe competir con el arranque
         assert_eq!(get_u64(&ini, "simit", "start_delay_minutes", 0), 10);
