@@ -32,7 +32,12 @@ const menu: SeccionMenu[] = [
 	{
 		section: 'FINANZAS',
 		items: [
-			{ label: 'Informes', href: '/informes', icon: 'informes' },
+			{
+				label: 'Informes',
+				href: '/informes',
+				icon: 'informes',
+				roles: ['Administrador', 'Supervisor']
+			},
 			{ label: 'Gastos', href: '/gastos', icon: 'gastos' }
 		]
 	}
@@ -82,7 +87,7 @@ describe('PaletaComandos', () => {
 	});
 
 	it('filtra también por nombre de sección', () => {
-		renderPaleta({ open: true });
+		renderPaleta({ open: true, rol: 'Administrador' });
 
 		escribir('finanzas');
 
@@ -101,6 +106,16 @@ describe('PaletaComandos', () => {
 		renderPaleta({ open: true, rol: 'Administrador' });
 		expect(screen.getByRole('option', { name: /Usuarios/ })).toBeInTheDocument();
 		expect(screen.getByRole('option', { name: /Auditoría/ })).toBeInTheDocument();
+	});
+
+	it('oculta Informes para roles sin acceso y lo muestra para los de informes', () => {
+		renderPaleta({ open: true, rol: 'Operador' });
+
+		expect(screen.queryByRole('option', { name: /Informes/ })).not.toBeInTheDocument();
+		expect(screen.getByRole('option', { name: /Gastos/ })).toBeInTheDocument();
+
+		renderPaleta({ open: true, rol: 'Supervisor' });
+		expect(screen.getByRole('option', { name: /Informes/ })).toBeInTheDocument();
 	});
 
 	it('navega con ↑↓ y Enter', () => {

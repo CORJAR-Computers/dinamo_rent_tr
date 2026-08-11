@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { informeApi, type InformeMensual, type UtilidadVehiculo } from '$lib/api';
+	import { informeApi, businessApi, type InformeMensual, type UtilidadVehiculo, type BusinessLists } from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatDate } from '$lib/utils/format';
-	import { guardSesion } from '$lib/utils/guards';
+	import { guardRole, guardSesion, haySesion, tieneRol } from '$lib/utils/guards';
 	import { construirLibroInforme } from '$lib/utils/informeExcel';
 	import { imprimirDocumento } from '$lib/utils/imprimir';
 
@@ -14,6 +14,12 @@
 	let loading = $state(true);
 	let error = $state('');
 
+	// Listas de negocio: `rolesConInformes` viene de config.ini
+	// (business.roles_con_informes). Si la carga falla, se usa el fallback
+	// del default de config: Administrador y Supervisor.
+	let lists = $state<BusinessLists | null>(null);
+	const rolesInformes = $derived(lists?.rolesConInformes ?? ['Administrador', 'Supervisor']);
+
 	// Selector de rango de fechas
 	const ahora = new Date();
 	const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
@@ -22,7 +28,11 @@
 	let fechaFin = $state(ahora.toISOString().split('T')[0]);
 
 	async function cargar() {
-		if (!guardSesion()) return;
+		// Guard de sesión + rol: nunca consultar sin sesión ni si el usuario
+		// no tiene rol de informes (cubre también el debounce durante una
+		// redirección).
+		if (!haySesion()) return;
+		if (!tieneRol(rolesInformes)) return;
 		loading = true;
 		error = '';
 		try {
@@ -35,7 +45,20 @@
 		}
 	}
 
-	onMount(cargar);
+	onMount(async () => {
+		// Guard de sesión + rol: solo los roles de `rolesConInformes` ven el
+		// balance. El menú ya oculta la ruta, pero esto protege el acceso
+		// directo por URL. Las listas se cargan antes del guard para respetar
+		// la configuración real (y no solo el fallback).
+		if (!guardSesion()) return;
+		try {
+			lists = await businessApi.listas(sid());
+		} catch {
+			/* listas opcionales: el guard usa el fallback de config.ini */
+		}
+		if (!guardRole(rolesInformes, '/dashboard')) return;
+		await cargar();
+	});
 
 
 

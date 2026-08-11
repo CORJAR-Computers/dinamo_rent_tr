@@ -17,6 +17,8 @@
 		href: string;
 		icon: string;
 		adminOnly?: boolean;
+		/** Roles con acceso (espejo de roles_con_informes para el menú). */
+		roles?: string[];
 	}
 	export interface SeccionMenu {
 		section: string;
@@ -78,6 +80,7 @@
 		for (const grupo of menu) {
 			for (const item of grupo.items) {
 				if (item.adminOnly && rol !== 'Administrador') continue;
+				if (item.roles && !item.roles.includes(rol ?? '')) continue;
 				if (!q) {
 					out.push({
 						label: item.label,

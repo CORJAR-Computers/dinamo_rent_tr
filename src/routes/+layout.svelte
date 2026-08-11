@@ -126,7 +126,17 @@
 	);
 
 	// ── Estructura de menú (paridad con MainWindow._MENU_STRUCTURE) ──
-	const menu = [
+	// Tipado explícito: los ítems pueden restringirse por rol (adminOnly para
+	// administración, roles para informes) y el acceso por URL se valida en
+	// la página y en el comando del backend.
+	interface ItemMenu {
+		label: string;
+		href: string;
+		icon: string;
+		adminOnly?: boolean;
+		roles?: string[];
+	}
+	const menu: { section: string; items: ItemMenu[] }[] = [
 		{ section: 'PRINCIPAL', items: [{ label: 'Dashboard', href: '/dashboard', icon: 'dashboard' }] },
 		{
 			section: 'OPERACIÓN',
@@ -151,7 +161,14 @@
 		{
 			section: 'FINANZAS',
 			items: [
-				{ label: 'Informes', href: '/informes', icon: 'informes' },
+				{
+					label: 'Informes',
+					href: '/informes',
+					icon: 'informes',
+					// Espejo del default de config.ini (business.roles_con_informes).
+					// El guard real de la página y del comando lee la config.
+					roles: ['Administrador', 'Supervisor']
+				},
 				{ label: 'Gastos', href: '/gastos', icon: 'gastos' }
 			]
 		}
@@ -269,7 +286,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 					{/if}
 					<div class="space-y-1">
 						{#each group.items as item}
-							{#if !item.adminOnly || session.user?.rol === 'Administrador'}
+							{#if (!item.roles || item.roles.includes(session.user?.rol ?? '')) && (!item.adminOnly || session.user?.rol === 'Administrador')}
 								<a
 									href={item.href}
 									title={item.label}

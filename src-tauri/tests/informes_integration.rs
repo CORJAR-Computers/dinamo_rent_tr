@@ -119,3 +119,44 @@ fn informe_mensual_especifico() {
         assert!(total.parse::<rust_decimal::Decimal>().is_ok());
     }
 }
+
+/// RBAC: `informe_mensual` solo es accesible para los roles de
+/// `roles_con_informes` (config.ini — por defecto Administrador y Supervisor).
+#[test]
+#[serial]
+fn informe_requiere_roles_con_informes() {
+    let state = dev_state();
+
+    // Operador → denegado con kind "permission"
+    {
+        let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        let token = sessions.create(1, "operador", "Operador", "Op", false);
+        drop(sessions);
+        let err = dinamo_rent_lib::commands::require_informes(&state, &token)
+            .expect_err("Operador no puede consultar informes");
+        assert_eq!(err.kind, "permission");
+    }
+
+    // Supervisor y Administrador → permitidos (default de roles_con_informes)
+    {
+        let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        let token_sup = sessions.create(2, "supervisor", "Supervisor", "Sup", false);
+        let token_admin = sessions.create(3, "admin", "Administrador", "Adm", false);
+        drop(sessions);
+        assert!(
+            dinamo_rent_lib::commands::require_informes(&state, &token_sup).is_ok(),
+            "Supervisor tiene rol de informes"
+        );
+        assert!(
+            dinamo_rent_lib::commands::require_informes(&state, &token_admin).is_ok(),
+            "Administrador tiene rol de informes"
+        );
+    }
+
+    // Sin sesión → session_expired
+    {
+        let err = dinamo_rent_lib::commands::require_informes(&state, "no-existe")
+            .expect_err("sin sesión no se accede a informes");
+        assert_eq!(err.kind, "session_expired");
+    }
+}

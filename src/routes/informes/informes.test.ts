@@ -2,9 +2,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { tauri } from '../../test/tauri';
+import { goto } from '$app/navigation';
 import { session } from '$lib/stores/session.svelte';
-import type { InformeMensual } from '$lib/api';
+import type { InformeMensual, BusinessLists } from '$lib/api';
 import InformesPage from './+page.svelte';
+
+const LISTS: BusinessLists = {
+	tiposAuto: [],
+	tiposTransmision: [],
+	tiposCombustible: [],
+	estadosAuto: [],
+	tiposAdquisicion: [],
+	tiposDoc: [],
+	estadosCliente: [],
+	estadosReserva: [],
+	tiposGasto: [],
+	nivelTanque: [],
+	tiposMantenimiento: [],
+	rolesConInformes: ['Administrador', 'Supervisor'],
+	rolesConUsuarios: ['Administrador'],
+	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador']
+};
 
 function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 	return {
@@ -52,13 +70,13 @@ function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 	};
 }
 
-function setSesion() {
+function setSesion(rol = 'Administrador') {
 	session.setSession({
 		success: true,
 		sessionId: 'tok-test',
-		username: 'admin',
-		nombre: 'Administrador',
-		rol: 'Administrador',
+		username: rol === 'Administrador' ? 'admin' : 'usuario',
+		nombre: 'Usuario de prueba',
+		rol,
 		debeCambiarPassword: false
 	});
 }
@@ -66,6 +84,7 @@ function setSesion() {
 beforeEach(() => {
 	session.clear();
 	setSesion();
+	tauri.register('get_business_lists', () => LISTS);
 });
 
 describe('página de Informes', () => {
@@ -149,5 +168,42 @@ describe('página de Informes', () => {
 		render(InformesPage);
 
 		expect(await screen.findByText(/No se pudo calcular el informe/)).toBeInTheDocument();
+	});
+});
+
+describe('guard de rol de la página de Informes (roles_con_informes)', () => {
+	it('redirige a /dashboard cuando el usuario no tiene rol de informes', async () => {
+		setSesion('Operador');
+		const mensual = vi.fn(() => informe());
+		tauri.register('informe_mensual', mensual);
+
+		render(InformesPage);
+
+		await waitFor(() => expect(goto).toHaveBeenCalledWith('/dashboard', { replaceState: true }));
+		// El Operador no debe disparar NINGUNA llamada al informe
+		expect(mensual).not.toHaveBeenCalled();
+	});
+
+	it('respeta rolesConInformes personalizado de config.ini (no el fallback)', async () => {
+		// Config.ini con roles_con_informes = Supervisor: ni el Administrador entra
+		setSesion('Administrador');
+		tauri.register('get_business_lists', () => ({ ...LISTS, rolesConInformes: ['Supervisor'] }));
+		const mensual = vi.fn(() => informe());
+		tauri.register('informe_mensual', mensual);
+
+		render(InformesPage);
+
+		await waitFor(() => expect(goto).toHaveBeenCalledWith('/dashboard', { replaceState: true }));
+		expect(mensual).not.toHaveBeenCalled();
+	});
+
+	it('permite al Supervisor ver el balance con la configuración por defecto', async () => {
+		setSesion('Supervisor');
+		tauri.register('informe_mensual', () => informe());
+
+		render(InformesPage);
+
+		expect(await screen.findByText('Ingresos del mes')).toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
 	});
 });
