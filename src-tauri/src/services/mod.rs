@@ -12,6 +12,7 @@ pub mod dashboard;
 pub mod pii;
 pub mod reserva;
 pub mod renta;
+pub mod rotacion;
 pub mod simit;
 pub mod usuario;
 

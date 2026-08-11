@@ -54,6 +54,38 @@ Esto facilita despliegues en CI o servidores donde no se desea escribir `config.
 
 ---
 
+### 1.5 Ubicación de la clave PII y respaldo obligatorio (verificado 2026-08-11)
+
+La clave `db_encryption_key` **no se copia ni se pega manualmente**: la aplicación la persiste y
+la lee automáticamente desde `config.ini` (sección `[security]`) en cada arranque, y la mantiene
+en memoria (`AppState.pii_key`). Ubicaciones actuales de la clave:
+
+| Entorno | Archivo | Estado |
+|---|---|---|
+| Desarrollo | `<repo>/data/config.ini` → `[security] db_encryption_key` | Configurada (10-08-2026) |
+| Producción | `%APPDATA%\com.corjar.dinamorent\config.ini` → `[security] db_encryption_key` | Configurada (10-08-2026) |
+
+> ℹ️ La ruta de producción deriva del `identifier` de Tauri (`com.corjar.dinamorent`, ver
+> `src-tauri/tauri.conf.json`). Si se cambia el identifier, la app leería un `config.ini` nuevo
+> **sin** la clave y los datos PII quedarían ocultos — actualizar la ruta en esta tabla.
+
+**Respaldo obligatorio del operador**: guardar el valor de la clave en un **gestor de contraseñas**
+(Windows Credential Manager, Bitwarden, KeePass, etc.). Es la única copia fuera de esta máquina:
+si ambos `config.ini` se pierden o corrompen, los datos PII cifrados (AES-256-GCM, formato `v1:`)
+son **irrecuperables** — no existe mecanismo de recuperación ni puerta trasera.
+
+⚠️ **NUNCA** escribir el valor de la clave en este repositorio (este archivo está commiteado — ver
+§4, incidente de clave expuesta), ni en logs, issues, capturas ni mensajes.
+
+**Verificación (2026-08-11)**: con la clave almacenada en los `config.ini` anteriores, un
+diagnóstico de solo lectura contra ambas BD (`data/dinamo_rent_v3.fdb` y
+`%APPDATA%\com.corjar.dinamorent\dinamo_rent_v3.fdb`) confirmó que **los 42 clientes / 238 tokens
+PII descifran al 100% con esa clave** en cada BD (cero campos ocultos, cero tokens Fernet legacy
+pendientes). La clave se carga en memoria al arrancar: tras cambiar o reconfigurar la clave,
+**reiniciar la app** para que el estado en caliente se actualice.
+
+---
+
 ## 2. Rotación de clave PII (`db_encryption_key`)
 
 La rotación debe realizarse:
@@ -67,6 +99,17 @@ La rotación debe realizarse:
 La rotación es una operación **destructiva si se hace mal**. Probar en entorno staging primero y **siempre** tener un backup cifrado de la BD antes de comenzar.
 
 #### Paso 0 — Backup
+
+Con la app **detenida**, respaldar `config.ini` (contiene la clave PII) y la BD `.fdb` de los
+despliegues dev y producción con el script del repo. Copia ambos archivos en
+`data/Backups/pre-rotacion/<fecha-hora>/` con checksums sha256:
+
+```bash
+bash scripts/backup-antes-rotacion.sh
+# Opciones: --dev-only / --prod-only / --dest <carpeta> / --force (si la app está abierta)
+```
+
+Equivalente manual mínimo (solo la BD de desarrollo):
 
 ```bash
 # Asumiendo que la app está detenida
@@ -86,7 +129,7 @@ chmod 600 /tmp/new_key.txt
 
 #### Paso 2 — Script de rotación
 
-La rotación implica **descifrar cada fila PII con la clave vieja y re-cifrarla con la nueva**. El repo incluye el bin de mantenimiento `rotate_pii_key` (`src-tauri/src/bin/rotate_pii_key.rs`), que re-cifra las columnas PII de `clientes` (Fernet legacy → AES-GCM `v1:`) en una transacción y aborta si la clave vieja no descifra algún token:
+La rotación implica **descifrar cada fila PII con la clave vieja y re-cifrarla con la nueva**. El repo incluye el bin de mantenimiento `rotate_pii_key` (`src-tauri/src/bin/rotate_pii_key.rs`), que re-cifra las columnas PII de `clientes` (Fernet legacy y AES-GCM `v1:` → AES-GCM `v1:`) en una transacción y aborta si la clave vieja no descifra algún token. El bin descifra los tokens `v1:` con la clave vieja (no los trata como texto plano) — la regresión del 2026-08-11 que re-cifraba tokens ya cifrados quedó corregida en `services/rotacion.rs` (ver §5.4):
 
 ```bash
 # Detener la aplicación primero (evita escrituras concurrentes).
@@ -119,7 +162,20 @@ chmod 600 data/config.ini
 1. Arrancar la aplicación en modo `production_mode = false`.
 2. Abrir un cliente existente y verificar que la cédula, teléfono y licencia se muestran correctamente (descifrado OK).
 3. Crear un cliente nuevo y verificar que sus datos se guardan y re-leen.
-4. Revisar logs de auditoría (`logs/audit.log`) — debe registrar el evento `PII_KEY_ROTATED` sin exponer la clave.
+4. Revisar la tabla `auditoria` de la BD (vista Auditoría de la app o consulta SQL directa) — el bin
+   `rotate_pii_key` registra el evento `PII_KEY_ROTATED` (usuario `sistema`, ip `local`) en la misma
+   transacción que la re-cifra, **sin exponer la clave** en el mensaje.
+5. **Verificar que NO quedó doble cifrado** (lección del 2026-08-11, §5): después de la re-cifra,
+   ningún token `v1:` debe quedar anidado dentro de otro. Ejecutar el dry-run del script de
+   normalización — debe reportar **"0 a normalizar"**:
+
+   ```bash
+   python scripts/normalizar_doble_cifrado.py   # reporte: "campos PII con cifrado anidado a normalizar: 0"
+   ```
+
+   Si el dry-run encontrara **> 0 campos**, la rotación habría vuelto a duplicar capas (regresión del
+   binario): detener la app y recuperar con §5.3 antes de continuar. Ver §5.2 para las señales
+   adicionales de cifrado anidado.
 
 #### Paso 5 — Purgar la clave vieja del historial Git
 
@@ -227,6 +283,11 @@ Esto constituye un incidente **Critical** (CVSS ~9.1) bajo RGPD/Ley 1581 de Colo
 6. ✅ **Historial Git purgado** (2026-08-10) con `git filter-repo` (invert-paths + replace-text) y force-push.
 7. ✅ **Clave PII rotada** (2026-08-10): nueva clave generada con `openssl rand -base64 32`, los 42 clientes re-cifrados (Fernet → AES-GCM v1:) en las BDs de dev y producción con `rotate_pii_key`, y `db_encryption_key` actualizada en ambos `config.ini` (dev y `%APPDATA%`). Verificación OK: la app lista los clientes sin PII oculto y sin errores.
 
+> ⚠️ **Esta verificación resultó insuficiente** (ver §5): el binario usado re-cifraba de nuevo los
+> tokens `v1:` ya cifrados (doble capa con la misma clave). El defecto se detectó el 2026-08-11
+> porque la app mostraba los tokens en el modal de edición; la BD dev se normalizó entonces
+> (sección §5). La BD de producción no resultó afectada.
+
 ### 4.5 Pendientes del operador
 
 1. ⚠️ **Cambiar la contraseña `sysdba`** de Firebird si existe cualquier despliegue en modo server (en embedded no aplica).
@@ -240,11 +301,84 @@ Esto constituye un incidente **Critical** (CVSS ~9.1) bajo RGPD/Ley 1581 de Colo
 
 ---
 
-## 5. Referencias
+## 5. Lección aprendida — doble cifrado por rotación con binario defectuoso (2026-08-11)
+
+### 5.1 Qué pasó
+
+La rotación de clave del 2026-08-10 (§4.4) se ejecutó con una versión del binario
+`rotate_pii_key` que **solo descifraba tokens Fernet legacy** (`gAAAA...`) y trataba los tokens
+AES-GCM `v1:` como si fueran texto en claro, **re-cifrándolos de nuevo** (doble capa con la MISMA
+clave). La clave nueva quedó en `config.ini`, de modo que:
+
+- **Capa externa** (`v1:...`) → descifra con la clave actual → produce...
+- **Capa interna** (`v1:g7kgKY18aDrKGnDe:...`) → también descifra con la clave actual → produce
+  el texto real (teléfono, correo, dirección).
+
+La app descifraba una sola capa y mostraba la capa interna como si fuera el dato: el modal
+**Editar cliente** exhibía tokens `v1:...` en lugar del celular/correo/dirección. Fue un fallo de
+calidad del binario (no pérdida de clave ni compromiso): los datos **no se perdieron**.
+
+> ⚠️ Si el doble cifrado hubiera usado **dos claves distintas** (p. ej. una rotación con bug
+> ejecutada dos veces con claves diferentes), la recuperación requeriría AMBAS claves y el dato
+> sería irrecuperable si la intermedia se perdiera. Por eso la pre-validación del bin aborta
+> antes de escribir si algún token no descifra con la clave vieja (§2.1 Paso 2).
+
+> ℹ️ La normalización real de la BD dev ejecutada el **2026-08-11** se hizo **antes** de que el
+> script registrara el evento de auditoría, por lo que esa operación concreta no aparece en la
+> tabla `auditoria`. El evento `PII_NORMALIZADA` queda registrado a partir de esa mejora, en
+> futuras normalizaciones.
+
+### 5.2 Cómo detectarlo
+
+| Señal | Dónde | Qué indica |
+|---|---|---|
+| Campos PII con texto `v1:...` en la UI | Modal Editar cliente / tabla Clientes | La app descifró 1 capa y mostró la capa interna (token anidado) |
+| Descifrado que devuelve otro token `v1:` o `gAAAA` | Diagnóstico SQL / script | El valor almacenado tiene más de una capa de cifrado |
+| Dry-run del script de normalización > 0 | `scripts/normalizar_doble_cifrado.py` | Existen campos con cifrado anidado que necesitan normalización |
+
+Verificación de lectura directa (sin tocar la BD) con la clave de `config.ini`:
+
+```bash
+python scripts/normalizar_doble_cifrado.py            # dry-run: reporta "a normalizar"
+python scripts/normalizar_doble_cifrado.py --commit   # solo si el dry-run encontró > 0 campos
+```
+
+### 5.3 Cómo recuperarlo
+
+1. **Respaldo previo** con la app detenida (§2.1 Paso 0): `bash scripts/backup-antes-rotacion.sh`.
+2. **Dry-run** para confirmar el alcance: `python scripts/normalizar_doble_cifrado.py` — debe
+   reportar los campos anidados y **cero indescifrables**.
+3. **Normalizar**: `python scripts/normalizar_doble_cifrado.py --commit` — des-envuelve todas las
+   capas con la clave actual y re-cifra **una sola vez** (formato sano). Registra el evento de
+   auditoría `PII_NORMALIZADA` (usuario `sistema`, ip `local`, mensaje con conteos **sin exponer
+   la clave**) en la misma transacción.
+4. **Verificar**: re-ejecutar el dry-run (debe quedar en **0**) y comprobar que los clientes se ven
+   descifrados en la app.
+5. **Destruir** la copia de trabajo y el backup pre-normalización cuando la app lleve **≥72h**
+   estable sin incidentes (análogo a §2.1 Paso 6).
+
+### 5.4 Blindaje aplicado en el código
+
+1. ✅ `PiiCipher::decrypt` des-envuelve **todas** las capas `v1:`/Fernet de forma iterativa hasta
+   el texto en claro (límite de seguridad `MAX_CAPAS_CIFRADO = 8`). Aunque se vuelva a producir
+   un cifrado anidado accidental, la vista seguirá mostrando los datos correctos.
+2. ✅ `rotate_pii_key` / `services/rotacion.rs` descifran tokens `v1:` y Fernet con la clave vieja
+   (no los tratan como texto plano) y pre-validan toda la tabla antes de escribir.
+3. ✅ Tests de regresión en `core/crypto.rs`: doble capa, triple capa, Fernet-tras-v1 y límite de
+   capas; y `tests/rotacion_integration.rs` cubre la rotación y el evento `PII_KEY_ROTATED`.
+4. ✅ Script `scripts/normalizar_doble_cifrado.py` (reparación) con dry-run, transacción atómica
+   y auditoría `PII_NORMALIZADA`.
+
+---
+
+## 6. Referencias
 
 - `.gitignore` (raíz del repo)
 - `data/config.ini.example`
 - `.env.example`
 - `THIRD_PARTY_LICENSES.md`
 - `scripts/sanitize-repo.sh`
+- `scripts/backup-antes-rotacion.sh`
+- `scripts/normalizar_doble_cifrado.py`
+- `src-tauri/src/services/rotacion.rs`
 - `worklog.md` (bitácora de análisis — sección Grupo A)

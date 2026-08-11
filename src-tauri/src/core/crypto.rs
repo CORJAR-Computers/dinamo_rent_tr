@@ -27,6 +27,9 @@ use super::error::AppError;
 const V1_PREFIX: &str = "v1:";
 /// Prefijo de los tokens Fernet (version byte 0x80 → base64 `gAAAA`)
 const FERNET_PREFIX: &str = "gAAAA";
+/// Límite de capas de cifrado anidadas que `PiiCipher::decrypt` des-envuelve.
+/// Protege ante bucles infinitos por corrupción o tokens maliciosos.
+const MAX_CAPAS_CIFRADO: usize = 8;
 
 type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 type HmacSha256 = Hmac<Sha256>;
@@ -186,25 +189,45 @@ impl PiiCipher {
 
     /// Desencripta un valor PII en cualquiera de los formatos soportados.
     ///
+    /// Des-envuelve de forma iterativa todas las capas de cifrado (v1: y Fernet)
+    /// hasta obtener el texto en claro, con un límite de profundidad por seguridad.
+    /// Esto protege la vista ante cifrados anidados accidentales (por ejemplo, la
+    /// rotación de clave con un binario defectuoso que re-cifraba tokens ya cifrados).
+    ///
     /// Para tokens Fernet legacy sin clave configurada (o con clave inválida)
     /// devuelve `Err(AppError::Crypto)`, y el servicio decide cómo mostrarlo.
     pub fn decrypt(&self, stored: &str) -> Result<String, AppError> {
-        if stored.starts_with(V1_PREFIX) {
-            decrypt(&self.aes_key, stored)
-        } else if is_fernet_token(stored) {
-            match self.fernet_key.as_deref() {
-                Some(key) => fernet_decrypt(key, stored).ok_or_else(|| {
-                    AppError::Crypto(
-                        "Dato Fernet legacy no desencriptable (clave de config.ini inválida)".into(),
-                    )
-                }),
-                None => Err(AppError::Crypto(
-                    "Datos PII legacy cifrados (Fernet): se requiere db_encryption_key en config.ini"
-                        .into(),
-                )),
+        let mut actual = stored.to_string();
+        let mut capas = 0usize;
+        loop {
+            if actual.starts_with(V1_PREFIX) {
+                actual = decrypt(&self.aes_key, &actual)?;
+                capas += 1;
+            } else if is_fernet_token(&actual) {
+                let claro = match self.fernet_key.as_deref() {
+                    Some(key) => fernet_decrypt(key, &actual).ok_or_else(|| {
+                        AppError::Crypto(
+                            "Dato Fernet legacy no desencriptable (clave de config.ini inválida)"
+                                .into(),
+                        )
+                    })?,
+                    None => {
+                        return Err(AppError::Crypto(
+                            "Datos PII legacy cifrados (Fernet): se requiere db_encryption_key en config.ini"
+                                .into(),
+                        ))
+                    }
+                };
+                actual = claro;
+                capas += 1;
+            } else {
+                return Ok(actual); // dato en claro
             }
-        } else {
-            Ok(stored.to_string()) // dato en claro
+            if capas > MAX_CAPAS_CIFRADO {
+                return Err(AppError::Crypto(
+                    "Exceso de capas de cifrado anidadas (posible corrupción)".into(),
+                ));
+            }
         }
     }
 }
@@ -266,5 +289,62 @@ mod tests {
         let cipher = PiiCipher::new("");
         let token = "gAAAAABqdgoctcLf9K9H-r2OLdNCk65oVGpCNvwzy1OCK_CwkJfMlOs9kfKy-JWxaio5ZOzClYSwyzUeuX0S8HQl2otr-9O-og==";
         assert!(cipher.decrypt(token).is_err());
+    }
+
+    #[test]
+    fn pii_cipher_desenvuelve_doble_cifrado_v1() {
+        // Un valor cifrado dos veces con la misma clave (regresión del bin de
+        // rotación viejo) debe des-envolverse hasta el texto en claro.
+        let cipher = PiiCipher::new("clave-de-prueba-para-doble-cifrado");
+        let claro = "3101234567";
+        let una_capa = cipher.encrypt(claro).unwrap();
+        let doble = cipher.encrypt(&una_capa).unwrap();
+        assert!(doble.starts_with(V1_PREFIX));
+        assert_eq!(cipher.decrypt(&doble).unwrap(), claro);
+    }
+
+    #[test]
+    fn pii_cipher_desenvuelve_tres_capas_v1() {
+        let cipher = PiiCipher::new("otra-clave-de-prueba");
+        let claro = "hola@ejemplo.com";
+        let mut tok = cipher.encrypt(claro).unwrap();
+        for _ in 0..2 {
+            tok = cipher.encrypt(&tok).unwrap();
+        }
+        assert_eq!(cipher.decrypt(&tok).unwrap(), claro);
+    }
+
+    #[test]
+    fn pii_cipher_desenvuelve_fernet_tras_v1() {
+        // Capa externa v1: + capa interna Fernet legacy (misma clave)
+        let key = "KP6_mu0mUEsqMcNjz6Z2HaaqCTfMNE0zTZNC-9GBF9s=";
+        let token = "gAAAAABqdgoctcLf9K9H-r2OLdNCk65oVGpCNvwzy1OCK_CwkJfMlOs9kfKy-JWxaio5ZOzClYSwyzUeuX0S8HQl2otr-9O-og==";
+        let cipher = PiiCipher::new(key);
+        let envuelto = cipher.encrypt(token).unwrap();
+        assert_eq!(cipher.decrypt(&envuelto).unwrap(), "3101234567");
+    }
+
+    #[test]
+    fn pii_cipher_acepta_hasta_el_limite_de_capas() {
+        let cipher = PiiCipher::new("clave-limite-capas");
+        let claro = "12345";
+        let mut tok = cipher.encrypt(claro).unwrap();
+        // Total de capas = MAX_CAPAS_CIFRADO (8): debe des-envolverse sin error
+        for _ in 0..(MAX_CAPAS_CIFRADO - 1) {
+            tok = cipher.encrypt(&tok).unwrap();
+        }
+        assert_eq!(cipher.decrypt(&tok).unwrap(), claro);
+    }
+
+    #[test]
+    fn pii_cipher_rechaza_exceso_de_capas() {
+        let cipher = PiiCipher::new("clave-limite-capas");
+        let claro = "12345";
+        let mut tok = cipher.encrypt(claro).unwrap();
+        // Una capa más del límite (9 en total): debe devolver Err (protección anti-bucle)
+        for _ in 0..MAX_CAPAS_CIFRADO {
+            tok = cipher.encrypt(&tok).unwrap();
+        }
+        assert!(cipher.decrypt(&tok).is_err());
     }
 }
