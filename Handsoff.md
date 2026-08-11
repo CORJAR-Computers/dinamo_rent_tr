@@ -2,6 +2,20 @@
 
 > Última actualización: **2026-08-11** · Estado: **todos los módulos operativos, validación verde**
 
+> **Publicado en origin/main (11-08):** el trabajo del Agente SIMIT de estos días quedó
+> empujado a `github.com/CORJAR-Computers/dinamo_rent_tr` (rama `main`) como **6 commits
+> temáticos**: `9561b2a` Fase 1 (jar persistente + siembra de sesión + token de una solución +
+> `sync_dev`), `1e7bf80` fixes (fechas DD/MM/YYYY y pre-check de fecha antes de dedup),
+> `1e53fd6` herramientas de monitoreo/test (`check-simit`, `watch-simit`, `test-check-simit`,
+> `verificar-excel-simit`), `aa24a4c` docs (`SIMIT_MIGRACION_PYTHON_RUST.md`, Handsoff) y
+> `43c2f93`/`d82de75` chores (.gitignore de artefactos del portal y del runtime Freebuff).
+> Empuje **fast-forward limpio**: el remoto estaba en `c20875d`, sin divergencia — no hizo falta
+> `--force`, y el commit único original `5457376` quedó reescrito en los 4 temáticos (recuperable
+> en el reflog local). Verificado contra el servidor con `git ls-remote` y la API de GitHub
+> (HEAD remoto = `d82de75…`, cadena de padres intacta). La suite completa validó el árbol en
+> verde antes de publicar: `cargo test` ✅ (lib 37 passed + 1 ignored) · vitest **197/197** ·
+> `svelte-check` **0/0** · `eslint` **0**. Detalle de cada commit en `SIMIT_MIGRACION_PYTHON_RUST.md` §4/§6.
+
 > **Herramientas de monitoreo y test del Agente SIMIT (11-08):** tras la validación E2E, el
 > monitoreo del portal quedó consolidado en `scripts/`:
 > - **`check-simit.mjs`** (`npm run check:simit`) — ante un **401 sin token** ya no declara el
