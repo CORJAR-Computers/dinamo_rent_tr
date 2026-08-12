@@ -5,6 +5,46 @@
 
 ---
 
+## ⬇️ Descarga e instalación (usuarios finales)
+
+> **Última versión estable: [v1.0.1](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.1)** — corrige el bug de instalación limpia del v1.0.0 y está construida y validada por CI en Windows limpio.
+
+### 1. Descargar el instalador
+
+Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.0.1**:
+
+| Instalador | Cuándo usarlo |
+|---|---|
+| `DinamoRent_1.0.1_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio |
+| `DinamoRent_1.0.1_x64_en-US.msi` (MSI, ~31 MB) | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
+
+> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.0.1 abre tu BD actual tal cual.
+
+### 2. Instalar
+
+- Ejecuta el `.exe` (o despliega el `.msi`) en el equipo objetivo. **Windows x64**.
+- En el primer arranque la app crea automáticamente en `%APPDATA%\com.corjar.dinamorent\`:
+  - `config.ini` — configuración inicial.
+  - `dinamo_rent_v3.fdb` — la base de datos Firebird Embedded (portable, no requiere instalación de servidor).
+- **No hace falta instalar nada más**: el runtime de Firebird y el de Visual C++ viajan dentro del instalador, y WebView2 se instala automáticamente si el sistema no lo tiene.
+
+### 3. Primer ingreso
+
+En una instalación nueva el usuario por defecto es:
+
+| Campo | Valor |
+|---|---|
+| Usuario | `admin` |
+| Contraseña | `admin123` |
+
+La app pedirá **cambiar la contraseña** en el primer ingreso. En una instalación que ya tenía BD (actualización desde v1.0.0), se conservan tus usuarios y datos tal cual.
+
+### 4. Actualizar desde v1.0.0
+
+Solo instala la v1.0.1 encima (o desinstala y reinstala conservando `%APPDATA%\com.corjar.dinamorent\`): el arranque es idempotente y aplica únicamente las migraciones pendientes. **No se pierde ningún dato.**
+
+---
+
 ## 📋 Configuración Rápida
 
 ### 1. Requisitos Previos
