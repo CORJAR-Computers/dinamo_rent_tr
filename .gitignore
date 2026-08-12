@@ -33,6 +33,7 @@ data/simit_watch/
 data/informes_simit/
 
 # Config con secretos (usar config.ini.example)
+/config.ini
 data/config.ini
 
 # Backups y logs

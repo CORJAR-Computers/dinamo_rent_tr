@@ -16,7 +16,22 @@ pub type ConnBuilder = rsfbclient::NativeConnectionBuilder<rsfbclient::DynLoad, 
 pub type Pool = r2d2::Pool<FirebirdConnectionManager<ConnBuilder>>;
 pub type PooledConnection = r2d2::PooledConnection<FirebirdConnectionManager<ConnBuilder>>;
 
-/// Crea el pool de conexiones Firebird Embedded
+/// Builder embedded con carga dinámica de fbclient.dll (sin host/port/pass).
+fn builder_embedded(cfg: &AppConfig) -> ConnBuilder {
+    let mut builder = builder_native()
+        .with_dyn_load(cfg.fbclient_path.to_string_lossy().to_string())
+        .with_embedded();
+    builder.db_name(cfg.db_path.to_string_lossy().to_string());
+    builder.user(cfg.db_user.clone());
+    builder
+}
+
+/// Crea el pool de conexiones Firebird Embedded.
+///
+/// Si la BD no existe (instalación nueva / equipo limpio), la crea con
+/// `CREATE DATABASE` antes de abrir el pool: el driver embedded NO crea el
+/// archivo al conectar (comportamiento verificado en la prueba de release
+/// v1.0.0 — la app se quedaba colgada esperando una BD inexistente).
 pub fn create_pool(cfg: &Arc<AppConfig>) -> Result<Pool, AppError> {
     if !cfg.fbclient_path.exists() {
         return Err(AppError::Database(format!(
@@ -25,14 +40,30 @@ pub fn create_pool(cfg: &Arc<AppConfig>) -> Result<Pool, AppError> {
         )));
     }
 
-    // Construcción embedded (sin host/port/pass — no aplican)
-    let mut builder = builder_native()
-        .with_dyn_load(cfg.fbclient_path.to_string_lossy().to_string())
-        .with_embedded();
-    builder.db_name(cfg.db_path.to_string_lossy().to_string());
-    builder.user(cfg.db_user.clone());
+    // Instalación nueva: crear la BD vacía si el archivo no existe.
+    if !cfg.db_path.exists() {
+        log::info!(
+            "BD no encontrada en {:?} — creando una nueva (instalación limpia)",
+            cfg.db_path
+        );
+        if let Some(parent) = cfg.db_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| AppError::Database(format!(
+                        "No se pudo crear el directorio de la BD {:?}: {e}",
+                        parent
+                    )))?;
+            }
+        }
+        builder_embedded(cfg)
+            .create_database()
+            .map_err(|e| AppError::Database(format!(
+                "No se pudo crear la BD {:?}: {e}",
+                cfg.db_path
+            )))?;
+    }
 
-    let manager = FirebirdConnectionManager::new(builder);
+    let manager = FirebirdConnectionManager::new(builder_embedded(cfg));
     let pool = r2d2::Pool::builder()
         .max_size(cfg.pool_size.max(1) as u32)
         .build(manager)?;

@@ -444,6 +444,54 @@ fn migraciones_sobre_bd_ya_migrada_son_no_op() {
     assert!(existe_columna(&pool, "COMPARENDOS", "NUMERO_COMPARENDO"));
 }
 
+/// `create_pool` debe CREAR la BD cuando el archivo no existe (instalación
+/// nueva en equipo limpio — el bug del release v1.0.0 dejaba la app colgada
+/// esperando una BD que el driver embedded nunca crea al conectar).
+#[test]
+#[serial]
+fn create_pool_crea_la_bd_si_no_existe() {
+    let tmp = std::env::temp_dir().join(format!(
+        "dinamo_rent_pool_nueva_{}.fdb",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let _limpieza = LimpiarTemporal(tmp.clone());
+    assert!(!tmp.exists(), "precondición: la BD no debe existir");
+
+    let cfg = config_con_db(&tmp);
+    let pool = create_pool(&cfg).expect("create_pool debe crear la BD nueva");
+
+    assert!(tmp.exists(), "create_pool debe haber creado el archivo .fdb");
+
+    // Y la BD nueva debe poder migrarse desde cero (camino de instalación).
+    let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    run_migrations(&pool, &migrations_dir).expect("migraciones sobre BD recién creada");
+    assert!(has_initial_schema(&pool), "el esquema inicial debe existir");
+}
+
+/// `create_pool` debe funcionar también cuando el directorio padre de la BD
+/// no existe (el app_data_dir de %APPDATA% recién creado).
+#[test]
+#[serial]
+fn create_pool_crea_el_directorio_padre_de_la_bd() {
+    let dir = std::env::temp_dir().join(format!(
+        "dinamo_rent_dir_nuevo_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let tmp = dir.join("sub").join("dinamo_rent_v3.fdb");
+    let _limpieza_dir = LimpiarDir(dir.clone());
+
+    let cfg = config_con_db(&tmp);
+    let pool = create_pool(&cfg).expect("create_pool debe crear dir padre + BD");
+    assert!(tmp.exists(), "la BD debe existir con su directorio padre creado");
+    drop(pool);
+}
+
 /// Borra el directorio temporal al salir (panic-safe).
 struct LimpiarDir(PathBuf);
 impl Drop for LimpiarDir {
