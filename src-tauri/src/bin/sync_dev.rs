@@ -23,6 +23,7 @@ use dinamo_rent_lib::core::db::{create_pool, PooledConnection};
 use dinamo_rent_lib::repositories::auto::AutoRepository;
 use dinamo_rent_lib::services::simit::{run_sync, EstadoAgenteSimit};
 use rsfbclient::Queryable;
+use tauri::AppHandle;
 
 /// Logger mínimo a stderr (el bin no arranca Tauri, así que `log::` no
 /// tiene receptor por defecto). Muestra el progreso por placa y los avisos.
@@ -130,7 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::set_max_level(log::LevelFilter::Info);
 
     let estado = EstadoAgenteSimit::default();
-    match run_sync(&pool, &cfg, &estado, None) {
+    match run_sync(&pool, &cfg, &estado, None::<&AppHandle>) {
         Ok(resultado) => {
             let despues = snapshot(&mut conn)?;
             println!("\n== RESULTADO SINCRONIZACIÓN ==");

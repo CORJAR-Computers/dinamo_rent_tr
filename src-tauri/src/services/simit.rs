@@ -703,7 +703,7 @@ pub fn consultar_placa(placa: &str) -> Result<(Vec<RegistroSimit>, u64, u64), Ap
 // ─── Sincronización con la base de datos ──────────────────────────────────────
 
 /// Helper para emitir eventos de progreso al frontend
-fn emitir_progreso(app: &tauri::AppHandle, tipo: &str, placa: &str, idx: usize, total: usize, mensaje: &str) {
+fn emitir_progreso<R: tauri::Runtime>(app: &tauri::AppHandle<R>, tipo: &str, placa: &str, idx: usize, total: usize, mensaje: &str) {
     let progreso = if total > 0 { idx as f64 / total as f64 } else { 1.0 };
     let evento = EventoProgreso {
         tipo: tipo.to_string(),
@@ -718,7 +718,7 @@ fn emitir_progreso(app: &tauri::AppHandle, tipo: &str, placa: &str, idx: usize, 
 }
 
 /// Helper para emitir eventos de log al frontend
-fn emitir_log(app: &tauri::AppHandle, level: LogLevel, message: &str, placa: Option<&str>, detail: Option<&str>) {
+fn emitir_log<R: tauri::Runtime>(app: &tauri::AppHandle<R>, level: LogLevel, message: &str, placa: Option<&str>, detail: Option<&str>) {
     let evento = EventoLogSimit {
         timestamp: Local::now().format("%H:%M:%S").to_string(),
         level,
@@ -732,10 +732,10 @@ fn emitir_log(app: &tauri::AppHandle, level: LogLevel, message: &str, placa: Opt
 /// Ejecuta una sincronización completa: consulta todas las placas de la flota,
 /// inserta los comparendos nuevos y genera el reporte HTML.
 /// Si se proporciona `app`, emite eventos de progreso al frontend.
-pub fn sincronizar(
+pub fn sincronizar<R: tauri::Runtime>(
     conn: &mut PooledConnection,
     cfg: &Arc<AppConfig>,
-    app: Option<&tauri::AppHandle>,
+    app: Option<&tauri::AppHandle<R>>,
 ) -> Result<ResultadoSincronizacion, AppError> {
     let inicio_total = Instant::now();
     let placas = AutoRepository::placas_activas(conn)?;
@@ -1222,11 +1222,11 @@ impl EstadoAgenteSimit {
 /// de esperar el timeout HTTP (30 s) por placa. Cubre la sincronización manual
 /// («Sincronizar ahora»); el scheduler hace además su propio pre-check para no
 /// reintentar cada 60 s cuando el portal está caído.
-pub fn run_sync(
+pub fn run_sync<R: tauri::Runtime>(
     pool: &Pool,
     cfg: &Arc<AppConfig>,
     estado: &EstadoAgenteSimit,
-    app: Option<&tauri::AppHandle>,
+    app: Option<&tauri::AppHandle<R>>,
 ) -> Result<ResultadoSincronizacion, AppError> {
     // Inicializar circuit breaker con configuración
     init_circuit_breaker(cfg.simit_circuit_breaker_threshold, cfg.simit_circuit_breaker_timeout_seconds);

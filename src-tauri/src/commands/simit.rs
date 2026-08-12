@@ -18,7 +18,7 @@ use super::{require_eliminacion, require_session};
 type Cmd<T> = Result<T, ErrorPayload>;
 
 /// Estado del agente gestionado por Tauri (inicializado en setup de lib.rs)
-fn estado_agente(app: &tauri::AppHandle) -> Result<std::sync::Arc<EstadoAgenteSimit>, ErrorPayload> {
+fn estado_agente<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<std::sync::Arc<EstadoAgenteSimit>, ErrorPayload> {
     app.try_state::<EstadoAgenteSimitManaged>()
         .map(|s| s.0.clone())
         .ok_or_else(|| {
@@ -44,8 +44,8 @@ pub fn simit_sync_status(
 /// Restringido a `roles_con_eliminar` (por defecto Administrador y Supervisor):
 /// la corrida consume recursos de red contra el portal y modifica la BD.
 #[tauri::command]
-pub async fn simit_sync_now(
-    app: tauri::AppHandle,
+pub async fn simit_sync_now<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     session_id: String,
 ) -> Cmd<ResultadoSincronizacion> {
