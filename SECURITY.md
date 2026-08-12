@@ -309,6 +309,21 @@ Esto constituye un incidente **Critical** (CVSS ~9.1) bajo RGPD/Ley 1581 de Colo
 2. ⚠️ **Revisar logs de auditoría** en busca de accesos sospechosos posteriores a la fecha de exposición (2026-08-09).
 3. ⚠️ Si la BD contiene datos reales de clientes y hubo acceso no autorizado al repo, considerar **notificación a la SIC** (Superintendencia de Industria y Comercio de Colombia) bajo la Ley 1581.
 
+**Verificación de auditoría (completada 2026-08-11)**: la rotación del 10-08 se ejecutó con un binario
+que no registraba auditoría, por lo que el evento `PII_KEY_ROTATED` se insertó **retroactivamente** en
+ambas BD (usuario `sistema`, ip `local`, fecha 2026-08-10 09:00, mensaje con conteos **sin exponer la
+clave**):
+
+| BD | `PII_KEY_ROTATED` (10-08) | `PII_NORMALIZADA` (11-08) |
+|---|---|---|
+| Desarrollo (`data/`) | #2085 | #2042 |
+| Producción (`%APPDATA%`) | #681 | — (no aplica) |
+
+> Los `#` son los `id` de la tabla `auditoria` en cada BD (valores por instancia, informativos).
+
+La política `bash scripts/verificar-rotacion.sh --exige-evento-rotacion` pasa en ambos entornos (exit 0).
+Los eventos futuros los registrará automáticamente el bin corregido.
+
 ### 4.6 Fecha del hallazgo
 
 - Detectado: 2026-08-09 (Grupo A — Saneamiento del repo).
@@ -339,9 +354,9 @@ calidad del binario (no pérdida de clave ni compromiso): los datos **no se perd
 > antes de escribir si algún token no descifra con la clave vieja (§2.1 Paso 2).
 
 > ℹ️ La normalización real de la BD dev ejecutada el **2026-08-11** se hizo **antes** de que el
-> script registrara el evento de auditoría, por lo que esa operación concreta no aparece en la
-> tabla `auditoria`. El evento `PII_NORMALIZADA` queda registrado a partir de esa mejora, en
-> futuras normalizaciones.
+> script registrara el evento de auditoría; esa operación concreta se registró **retroactivamente**
+> después (evento `PII_NORMALIZADA` #2042, ver §4.5). A partir de esa mejora, el script
+> `normalizar_doble_cifrado.py` registra el evento automáticamente en cada normalización.
 
 ### 5.2 Cómo detectarlo
 
