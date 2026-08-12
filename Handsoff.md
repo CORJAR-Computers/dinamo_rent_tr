@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-11** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E**
+> Última actualización: **2026-08-12** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.1 publicada**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -49,6 +49,21 @@
 > test **OPERATIVO** — BD creada (2.9 MB), proceso vivo a los 12 s, Login OK con admin sembrado.
 > Reproducible con `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-sandbox.ps1`
 > (resultado en `scripts/smoke-result.txt`).
+> 🚀 **Release v1.0.1 publicada (12-08):** [github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.1]
+> — instaladores `DinamoRent_1.0.1_x64-setup.exe` (NSIS, 20 MB) y `.msi` (31 MB) construidos
+> **por CI** (workflow `release.yml`, disparado por el tag `v1.0.1`) con los fixes de
+> instalación limpia ya fusionados en main. Notas de la release documentan el bug.
+> 🐛 **Hallazgo del CI (12-08) — el feature `linking` de rsfbclient rompía el build de
+> release**: el release v1.0.0 **nunca había pasado por CI** (se publicó con artefactos
+> locales) y el primer build en GitHub Actions fallaba en el linkeo de `dinamo_rent_lib.dll`
+> con LNK2019/LNK1120 (símbolos `isc_*`/`fb_interpret` sin resolver). Causa: el feature por
+> defecto `linking` de `rsfbclient` exige `fbclient.lib` en build time; localmente compilaba
+> porque la máquina de desarrollo tiene el SDK de Firebird, el runner limpio de GitHub no.
+> Fix (**commit `4a0721b`**): `rsfbclient = { default-features = false, features =
+> ["dynamic_loading"] }` — el proyecto solo usa carga dinámica (`.with_dyn_load`),
+> `linking` sobraba. Verificado localmente (`cargo build --release --lib` linkea sin él) y
+> CI verde en el segundo intento → **v1.0.1 es el primer instalador verificado íntegramente
+> por CI**, reproducible en cualquier runner sin SDK de Firebird.
 
 > **Atribución comparendos↔rentas (11-08):** cada comparendo ahora responde **quién tenía el
 > vehículo el día de la multa** — cruce con rentas (misma placa, rango
