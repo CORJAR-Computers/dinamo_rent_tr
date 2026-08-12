@@ -126,7 +126,7 @@ Dinamo_Rent_tr/
 
 ---
 
-**Versión**: 4.0.0-beta (Migración Tauri V2)
+**Versión estable**: 1.0.1 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.0.x).
 
 
 ---
