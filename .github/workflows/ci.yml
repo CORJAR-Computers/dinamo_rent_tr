@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validación (lint + check + tests)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies (bun)
+        run: bun install --frozen-lockfile
+
+      - name: Lint (eslint)
+        run: bun run lint
+
+      - name: Svelte check
+        run: bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json
+
+      - name: Frontend tests (vitest)
+        run: bunx vitest run
+
+      - name: Build producción del frontend (vite build)
+        run: bun run build
+
+      # Unit tests de la lib Rust (no requieren BD). Los tests de integración
+      # (src-tauri/tests/*.rs) dependen de la BD dev local (gitignored) y se
+      # ejecutan solo en desarrollo — ver SECURITY.md y rotacion_integration.rs.
+      - name: Rust unit tests + check
+        working-directory: src-tauri
+        run: |
+          cargo test --lib
+          cargo check --all-targets
+
+      # Los bins de mantenimiento (rotate_pii_key, sync_dev, dev_reset_admin)
+      # usan required-features=["dev"] y quedan omitidos sin la feature:
+      # comprobarlos aquí garantiza que el binario de rotación PII se chequea.
+      - name: Rust check bins de mantenimiento (--features dev)
+        working-directory: src-tauri
+        run: cargo check --bins --features dev
