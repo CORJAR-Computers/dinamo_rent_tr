@@ -206,7 +206,7 @@ pub fn run() {
 }
 
 /// Crea el usuario admin por defecto si no hay usuarios (puerto de database_sa.init_db)
-fn seed_admin(pool: &crate::core::db::Pool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn seed_admin(pool: &crate::core::db::Pool) -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = pool.get()?;
     if crate::repositories::usuario::UsuarioRepository::contar(&mut conn)? == 0 {
         let hash = crate::core::security::hash_password("admin123")?;

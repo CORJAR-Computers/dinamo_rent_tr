@@ -40,6 +40,16 @@ pub fn create_pool(cfg: &Arc<AppConfig>) -> Result<Pool, AppError> {
         )));
     }
 
+    // Firebird embedded carga fbclient.dll por ruta completa, pero el loader de
+    // Windows NO busca las dependencias de ese DLL (msvcp140.dll, vcruntime140*.dll,
+    // icu*.dll) en la carpeta del propio fbclient.dll: solo busca en el dir de la
+    // app, System32, Windows, cwd y PATH. En un equipo limpio sin el runtime VC++
+    // instalado en System32, la carga falla con "LoadLibraryExW failed"
+    // (ERROR_MOD_NOT_FOUND 126) y la app paniquea al arrancar. Solución: añadir
+    // la carpeta que contiene a fbclient.dll al orden de búsqueda del proceso.
+    #[cfg(windows)]
+    add_firebird_dir_to_dll_search(&cfg.fbclient_path);
+
     // Instalación nueva: crear la BD vacía si el archivo no existe.
     if !cfg.db_path.exists() {
         log::info!(
@@ -73,6 +83,33 @@ pub fn create_pool(cfg: &Arc<AppConfig>) -> Result<Pool, AppError> {
     conn.execute("SELECT 1 FROM RDB$DATABASE", ())?;
     log::info!("Firebird Embedded conectado en {:?}", cfg.db_path);
     Ok(pool)
+}
+
+/// Añade el directorio de fbclient.dll al orden de búsqueda de DLLs del proceso
+/// (SetDllDirectoryW), una sola vez por proceso.
+///
+/// Sin esto, en equipos limpios sin el runtime VC++ en System32 el loader no
+/// encuentra las DLLs que fbclient.dll necesita (msvcp140.dll, vcruntime140*.dll)
+/// aunque estén en la misma carpeta, y `LoadLibraryExW` falla (error 126).
+/// Verificado en Windows Sandbox (Windows limpio) con el instalador NSIS.
+#[cfg(windows)]
+fn add_firebird_dir_to_dll_search(fbclient_path: &std::path::Path) {
+    use std::os::windows::ffi::OsStrExt;
+    use std::sync::Once;
+
+    static ONCE: Once = Once::new();
+    let Some(dir) = fbclient_path.parent() else { return };
+    ONCE.call_once(|| {
+        extern "system" {
+            fn SetDllDirectoryW(lpPathName: *const u16) -> i32;
+        }
+        let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(Some(0)).collect();
+        // SAFETY: `wide` es una cadena UTF-16 válida terminada en NUL y sigue viva
+        // durante toda la llamada. SetDllDirectoryW es segura de invocar en
+        // cualquier momento del ciclo de vida del proceso (kernel32).
+        unsafe { SetDllDirectoryW(wide.as_ptr()) };
+        log::info!("SetDllDirectoryW -> {:?}", dir);
+    });
 }
 
 /// Verifica la conexión y devuelve (ok, mensaje) — para diálogo de config BD

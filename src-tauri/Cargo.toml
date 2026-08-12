@@ -35,6 +35,14 @@ path = "src/bin/rotate_pii_key.rs"
 # para no llegar al bundle de release.
 required-features = ["dev"]
 
+[[bin]]
+name = "verificar_instalacion_limpia"
+path = "src/bin/verificar_instalacion_limpia.rs"
+# Validación E2E de instalación limpia (sin BD y sin el directorio de
+# migraciones en disco): replica el arranque de producción sin Tauri. Sólo se
+# construye con `--features dev` para no llegar al bundle de release.
+required-features = ["dev"]
+
 [features]
 default = []
 # Feature de desarrollo: habilita el binario `dev_reset_admin`.

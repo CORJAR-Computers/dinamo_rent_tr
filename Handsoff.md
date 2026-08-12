@@ -1,6 +1,54 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-11** · Estado: **todos los módulos operativos, validación verde**
+> Última actualización: **2026-08-11** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E**
+
+> **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
+> release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
+> 🐛 **Bug 1 — la BD no se creaba**: el driver Firebird embedded NO crea el `.fdb` al
+> conectar, así que en un equipo limpio `create_pool` quedaba esperando para siempre. Fix
+> (**commit `418575b`**): `create_pool` ahora crea la BD (y su directorio padre, p. ej.
+> `%APPDATA%` recién creado) con `CREATE DATABASE` antes de abrir el pool. Tests:
+> `create_pool_crea_la_bd_si_no_existe` y `create_pool_crea_el_directorio_padre_de_la_bd`
+> (migraciones 11/11 · `cargo test` 54/54).
+> 🐛 **Bug 2 (descubierto en la validación E2E) — las migraciones no viajaban en el
+> instalador**: `run_migrations` lee los `.sql` de `CARGO_MANIFEST_DIR/migrations` (ruta de la
+> máquina de build) y el bundle solo empaqueta `resources/firebird` → aunque la BD se creara,
+> el arranque fallaría en un PC sin el repo. Fix: las 16 migraciones ahora van **embebidas en
+> el binario** (`MIGRACIONES_EMBEDIDAS`, `include_str!` en `core/migrations.rs`); el runner usa
+> el directorio si existe (dev: editar sin recompilar) y, si no, el fallback embebido. El test
+> `embebidas_cubren_todos_los_sql_del_directorio` impide que la lista se desincronice.
+> 🔬 **Validación E2E (equipo limpio simulado):** binario de desarrollo nuevo
+> `verificar_instalacion_limpia` (`cargo run --features dev --bin verificar_instalacion_limpia`),
+> mismo patrón que `sync_dev` — replica el arranque de producción sin Tauri: `AppConfig::load`
+> (genera `config.ini`) → `create_pool` (crea la BD) → `run_migrations` con un **directorio de
+> migraciones inexistente** (fuerza el fallback embebido) → `seed_admin` (ahora `pub`) →
+> **login real** `admin`/`admin123` (Argon2 + sesión) → **2º arranque idempotente** (mismas
+> versiones). Resultado: ✅ `INSTALACIÓN LIMPIA VALIDADA DE PUNTA A PUNTA` — BD desde cero, 16
+> versiones registradas, admin sembrado, login OK. `seed_admin` se expuso como `pub` solo para
+> poder llamarla desde el binario (misma función del arranque real).
+> ✅ **Release build COMPLETADO (11-08, 22:25):** tras el corte de luz que mató el primer
+> intento (el exe quedó en 19:50, anterior a los fixes de las 20:56), se relanzó
+> `npm run tauri build` completo desacoplado (`Start-Process`) y terminó sin el `os error 32`.
+> Artefactos en `src-tauri/target/release/bundle/`:
+> **`nsis/DinamoRent_1.0.0_x64-setup.exe`** (23,8 MB) y **`msi/DinamoRent_1.0.0_x64_en-US.msi`**
+> (35,4 MB) · `dinamo-rent.exe` relinkeado a las 22:25 (v1.0.0, 12,2 MB) con las **16
+> migraciones embebidas verificadas** (grep de 0001/0005/0010/0016 en el binario). Suites
+> validadas antes del build: `cargo test --lib` **43/43** · `migraciones_integration` **11/11**.
+> 🐛 **Bug 3 (descubierto con Windows Sandbox, 12-08) — la app moría en equipos limpios sin
+> el runtime VC++**: `create_pool` carga `fbclient.dll` por ruta, pero el loader de Windows NO
+> busca las dependencias de ese DLL (msvcp140/vcruntime140, icu*) en la carpeta del propio
+> fbclient.dll — solo en el dir de la app, System32, Windows, cwd y PATH. En un Windows limpio
+> sin el runtime VC++ en System32, la carga falla con `LoadLibraryExW failed` (error 126) →
+> panic → abort `0xc0000409`. En la máquina de desarrollo funciona porque el runtime está en
+> System32; el Sandbox (y cualquier cliente con instalación limpia) no lo tiene. Fix:
+> `SetDllDirectoryW(firebird/)` una vez por proceso en `create_pool` (`core/db.rs`) — añade la
+> carpeta al orden de búsqueda y el loader encuentra msvcp140/vcruntime140 que **ya viajan en
+> `firebird/` del instalador**, sin depender de instalar el redistribuible. No hace falta
+> descargar el VC++ redist en las máquinas de los clientes. Validado en **Windows Sandbox**
+> (Windows limpio, sin runtime en System32): instalador reconstruido (12-08 00:48) → smoke
+> test **OPERATIVO** — BD creada (2.9 MB), proceso vivo a los 12 s, Login OK con admin sembrado.
+> Reproducible con `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-sandbox.ps1`
+> (resultado en `scripts/smoke-result.txt`).
 
 > **Atribución comparendos↔rentas (11-08):** cada comparendo ahora responde **quién tenía el
 > vehículo el día de la multa** — cruce con rentas (misma placa, rango
@@ -455,16 +503,21 @@ renta/cliente con la renta que cubría el vehículo el día de la infracción (m
 
 1. Crear `src-tauri/migrations/000N_descripcion.sql` — número siguiente con padding a 4 dígitos
    y sufijo descriptivo (`0004_no_contrato_anual.sql`, `0013_consolidar_indices_auditoria.sql`).
-2. **Nunca DDL "pelado"**: cada objeto va dentro de un `EXECUTE BLOCK` con guard contra el
+2. **Registrar la migración en `MIGRACIONES_EMBEDIDAS`** (`core/migrations.rs`): la entrada
+   `(nombre, include_str!("..."))` es la que llega al binario de release (el bundle no
+   empaqueta `migrations/`, ver nota de portada 11-08). El test unitario
+   `embebidas_cubren_todos_los_sql_del_directorio` FALLA si falta o sobra una — es la red de
+   seguridad del fallback.
+3. **Nunca DDL "pelado"**: cada objeto va dentro de un `EXECUTE BLOCK` con guard contra el
    catálogo (patrón en 5.2). Es obligatorio por el diseño del runner: cada sentencia se ejecuta
    en **autocommit** y, si una migración falla a mitad, su versión **NO se registra** y el
    siguiente arranque la reintenta — los guards omiten lo ya creado y crean lo que falta, así que
    las instalaciones a medias se auto-reparan solas.
-3. Si la migración **deja de crear** un objeto que otra creaba (p. ej. 0012 quitó de 0001 los
+4. Si la migración **deja de crear** un objeto que otra creaba (p. ej. 0012 quitó de 0001 los
    índices que después dropea), edita también la migración creadora para que las instalaciones
    nuevas nunca lo creen — y actualiza los tests (5.3).
-4. Encabezado de comentario: propósito, tablas/columnas afectadas y por qué es idempotente.
-5. Validar con `cargo test --test migraciones_integration` (5.3) y, al final, arranque real
+5. Encabezado de comentario: propósito, tablas/columnas afectadas y por qué es idempotente.
+6. Validar con `cargo test --test migraciones_integration` (5.3) y, al final, arranque real
    (`npm run tauri dev`) para que se aplique a la BD dev.
 
 ### 5.2 Patrón EXECUTE BLOCK + guard
@@ -521,12 +574,14 @@ Reglas de oro:
 cd src-tauri && cargo test --test migraciones_integration
 ```
 
-Los **8 tests** corren contra una **copia temporal** de la BD dev (la real nunca se toca) y contra
+Los **11 tests** corren contra una **copia temporal** de la BD dev (la real nunca se toca) y contra
 una BD nueva vacía: versiones registradas (incluida la nueva) + 2ª ejecución no-op (idempotencia),
 instalación fresca desde cero, auto-reparación de instalaciones a medias (crash en 0001/0003-0004),
-`has_initial_schema` (exige las 4 tablas núcleo + `pagos`) y la **seguridad ante colisión de
+`has_initial_schema` (exige las 4 tablas núcleo + `pagos`), la **seguridad ante colisión de
 0014** (tablas creadas antes de migrar: el esquema residual exacto se dropea, una tabla con el
-mismo nombre pero esquema distinto sobrevive).
+mismo nombre pero esquema distinto sobrevive) y la **creación de la BD por `create_pool`** en
+instalación limpia (archivo inexistente y directorio padre inexistente — el fix del release
+v1.0.0, ver nota de portada).
 
 Al añadir una migración hay que actualizar en `migraciones_integration.rs`: el conteo
 `versiones_aplicadas(&pool).len()` (actual: **15**), las listas de versiones de los tests de

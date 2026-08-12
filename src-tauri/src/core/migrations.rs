@@ -47,11 +47,20 @@
 //! `DEFAULT 'x--y'`) truncaría la línea y rompería la migración silenciosamente.
 //! Evitar `--` dentro de los literales y validar con los tests de migraciones.
 //!
-//! # Serie actual: 0001-0015
+//! # Serie actual: 0001-0016
 //!
 //! 0001-0009 esquema + funciones (0001-0004 idempotentes, 0005-0009 auto-reparables),
 //! 0010-0013 consolidación de índices, 0014 limpieza de tablas residuales de test,
-//! 0015 columna numero_comparendo (deduplicación del Agente SIMIT).
+//! 0015 columna numero_comparendo (deduplicación del Agente SIMIT), 0016 atribución
+//! de comparendos a la renta del día (backfill).
+//!
+//! # Instalación en equipo limpio (sin el repo)
+//!
+//! El bundle de la app solo empaqueta `resources/firebird`; el directorio
+//! `migrations/` NO se incluye y `CARGO_MANIFEST_DIR` queda compilado con la
+//! ruta de la máquina de build. En un equipo limpio ese directorio no existe,
+//! así que `run_migrations` usa `MIGRACIONES_EMBEDIDAS` (el mismo contenido,
+//! incluido en el binario) cuando no puede leer el directorio.
 
 use std::path::Path;
 
@@ -60,6 +69,33 @@ use rsfbclient::{Execute, Queryable};
 use crate::core::error::AppError;
 
 use super::db::Pool;
+
+/// Migraciones embebidas en el binario (fallback de instalación limpia).
+///
+/// El bundle de la app solo incluye `resources/firebird`; el directorio
+/// `migrations/` NO se empaqueta y `CARGO_MANIFEST_DIR` apunta a la máquina
+/// de build. En un equipo limpio ese directorio no existe y el arranque
+/// fallaría — por eso `run_migrations` usa estas versiones embebidas cuando
+/// no puede leer el directorio. El test `embebidas_cubren_todos_los_sql`
+/// evita que la lista se desincronice al añadir una migración.
+pub const MIGRACIONES_EMBEDIDAS: &[(&str, &str)] = &[
+    ("0001_initial_schema.sql", include_str!("../../migrations/0001_initial_schema.sql")),
+    ("0002_indices_optimizacion.sql", include_str!("../../migrations/0002_indices_optimizacion.sql")),
+    ("0003_no_contrato.sql", include_str!("../../migrations/0003_no_contrato.sql")),
+    ("0004_no_contrato_anual.sql", include_str!("../../migrations/0004_no_contrato_anual.sql")),
+    ("0005_tema_usuario.sql", include_str!("../../migrations/0005_tema_usuario.sql")),
+    ("0006_soft_deletes.sql", include_str!("../../migrations/0006_soft_deletes.sql")),
+    ("0007_triggers_updated_at.sql", include_str!("../../migrations/0007_triggers_updated_at.sql")),
+    ("0008_check_constraints.sql", include_str!("../../migrations/0008_check_constraints.sql")),
+    ("0009_indices.sql", include_str!("../../migrations/0009_indices.sql")),
+    ("0010_dedup_indices.sql", include_str!("../../migrations/0010_dedup_indices.sql")),
+    ("0011_consolidar_indices.sql", include_str!("../../migrations/0011_consolidar_indices.sql")),
+    ("0012_consolidar_indices_simples.sql", include_str!("../../migrations/0012_consolidar_indices_simples.sql")),
+    ("0013_consolidar_indices_auditoria.sql", include_str!("../../migrations/0013_consolidar_indices_auditoria.sql")),
+    ("0014_limpiar_tablas_tests.sql", include_str!("../../migrations/0014_limpiar_tablas_tests.sql")),
+    ("0015_comparendo_numero_simit.sql", include_str!("../../migrations/0015_comparendo_numero_simit.sql")),
+    ("0016_atribucion_comparendo_renta.sql", include_str!("../../migrations/0016_atribucion_comparendo_renta.sql")),
+];
 
 /// Aplica las migraciones pendientes. `migrations_dir` = src-tauri/migrations
 pub fn run_migrations(pool: &Pool, migrations_dir: &Path) -> Result<(), AppError> {
@@ -86,21 +122,44 @@ pub fn run_migrations(pool: &Pool, migrations_dir: &Path) -> Result<(), AppError
         .map(|rows: Vec<(String,)>| rows.into_iter().map(|r| r.0).collect())
         .unwrap_or_default();
 
-    // 3) Listar archivos .sql en orden
-    let mut files: Vec<_> = std::fs::read_dir(migrations_dir)
-        .map_err(|e| AppError::Generic(format!("No se pudo leer migrations dir: {e}")))?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|x| x == "sql").unwrap_or(false))
-        .collect();
-    files.sort_by_key(|e| e.file_name());
+    // 3) Migraciones a aplicar (nombre, sql). Preferimos el directorio en
+    //    disco (dev: permite editar los .sql sin recompilar); si no existe
+    //    (equipo limpio: el bundle NO incluye migrations/ y CARGO_MANIFEST_DIR
+    //    apunta a la máquina de build), usamos las embebidas en el binario.
+    let migraciones: Vec<(String, String)> = match std::fs::read_dir(migrations_dir) {
+        Ok(dir) => {
+            let mut v: Vec<(String, String)> = dir
+                .filter_map(Result::ok)
+                .filter(|e| e.path().extension().map(|x| x == "sql").unwrap_or(false))
+                .map(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let sql = std::fs::read_to_string(e.path())
+                        .map_err(|err| AppError::Generic(format!("Error leyendo {name}: {err}")))?;
+                    Ok((name, sql))
+                })
+                .collect::<Result<_, AppError>>()?;
+            v.sort_by(|a, b| a.0.cmp(&b.0));
+            v
+        }
+        Err(_) => {
+            log::info!(
+                "Directorio de migraciones no disponible ({:?}) — usando las {} embebidas en el binario",
+                migrations_dir,
+                MIGRACIONES_EMBEDIDAS.len()
+            );
+            MIGRACIONES_EMBEDIDAS
+                .iter()
+                .map(|(n, s)| (n.to_string(), s.to_string()))
+                .collect()
+        }
+    };
 
     // Si la BD ya tiene el esquema inicial (ej: .fdb de producción reutilizado),
     // registrar 0001 como aplicada sin ejecutarla.
     let schema_exists = has_initial_schema(pool);
 
     let mut applied_count = 0;
-    for entry in files {
-        let name = entry.file_name().to_string_lossy().to_string();
+    for (name, sql) in migraciones {
         if applied.contains(&name) {
             continue;
         }
@@ -115,9 +174,6 @@ pub fn run_migrations(pool: &Pool, migrations_dir: &Path) -> Result<(), AppError
             applied_count += 1;
             continue;
         }
-
-        let sql = std::fs::read_to_string(entry.path())
-            .map_err(|e| AppError::Generic(format!("Error leyendo {name}: {e}")))?;
 
         log::info!("Aplicando migración: {name}");
         let statements = split_sql_statements(&sql);
@@ -233,4 +289,42 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
     }
 
     statements
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Las migraciones embebidas deben cubrir EXACTAMENTE los .sql del
+    /// directorio (ni faltantes ni extraños) y estar en orden: un fallback
+    /// desincronizado rompería la instalación limpia en equipos sin el repo.
+    #[test]
+    fn embebidas_cubren_todos_los_sql_del_directorio() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+        let mut en_disco: Vec<String> = std::fs::read_dir(&dir)
+            .expect("leer migrations dir")
+            .filter_map(Result::ok)
+            .filter(|e| e.path().extension().map(|x| x == "sql").unwrap_or(false))
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        en_disco.sort();
+
+        let mut embebidas: Vec<String> =
+            MIGRACIONES_EMBEDIDAS.iter().map(|(n, _)| n.to_string()).collect();
+        embebidas.sort();
+
+        assert_eq!(
+            embebidas, en_disco,
+            "las embebidas deben coincidir 1:1 con el directorio"
+        );
+        assert!(
+            MIGRACIONES_EMBEDIDAS.windows(2).all(|w| w[0].0 < w[1].0),
+            "las embebidas deben estar en orden lexicográfico"
+        );
+        assert!(
+            MIGRACIONES_EMBEDIDAS.iter().all(|(_, s)| !s.trim().is_empty()),
+            "ninguna migración embebida debe estar vacía"
+        );
+    }
 }

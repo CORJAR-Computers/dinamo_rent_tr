@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+dinamorent-sandbox.wsb — Windows Sandbox para probar el instalador de
+DinamoRent en un entorno aislado (Windows limpio por sesión).
+
+Uso:
+  1. Requiere Windows Sandbox habilitado (Containers-DisposableClientVM) y
+     reinicio. Habilitar (como admin):
+       Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All
+  2. Ajusta el Source del instalador a tu bundle (ver abajo).
+  3. Ejecuta:  WindowsSandbox.exe  .\scripts\dinamorent-sandbox.wsb
+  4. El resultado queda en C:\shared\smoke-result.txt (carpeta compartida con
+     el host, montada abajo como <host-bundle>).
+
+El instalador se monta como unidad C:\shared\bundle (solo lectura) y el
+resultado se escribe en <host-bundle>\smoke-result.txt, que puedes abrir tras
+cerrar el Sandbox.
+-->
+<Configuration>
+  <VGpu>Disable</VGpu>
+  <MemoryInMB>4096</MemoryInMB>
+  <MappedFolders>
+    <!-- Carpeta del host con el instalador (solo lectura dentro del Sandbox) -->
+    <MappedFolder>
+      <HostFolder>D:\dinamo_rent_tr\src-tauri\target\release\bundle</HostFolder>
+      <SandboxFolder>C:\shared\bundle</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <!-- Carpeta compartida para escribir el resultado del smoke test -->
+    <MappedFolder>
+      <HostFolder>D:\dinamo_rent_tr\scripts</HostFolder>
+      <SandboxFolder>C:\shared\out</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell -ExecutionPolicy Bypass -File C:\shared\out\smoke-test-sandbox.ps1</Command>
+  </LogonCommand>
+</Configuration>
