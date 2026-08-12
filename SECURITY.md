@@ -166,16 +166,31 @@ chmod 600 data/config.ini
    `rotate_pii_key` registra el evento `PII_KEY_ROTATED` (usuario `sistema`, ip `local`) en la misma
    transacción que la re-cifra, **sin exponer la clave** en el mensaje.
 5. **Verificar que NO quedó doble cifrado** (lección del 2026-08-11, §5): después de la re-cifra,
-   ningún token `v1:` debe quedar anidado dentro de otro. Ejecutar el dry-run del script de
-   normalización — debe reportar **"0 a normalizar"**:
+   ningún token `v1:` debe quedar anidado dentro de otro. **Política automatizada** — ejecutar el
+   script de verificación, que corre el dry-run de normalización y valida la auditoría:
+
+   ```bash
+   bash scripts/verificar-rotacion.sh                      # dev + producción
+   bash scripts/verificar-rotacion.sh --dev-only           # solo desarrollo
+   bash scripts/verificar-rotacion.sh --exige-evento-rotacion   # además exige PII_KEY_ROTATED en auditoria
+   ```
+
+   El script devuelve **exit 0 solo si** el dry-run reporta **"0 a normalizar"** y **0 indescifrables**
+   (y, con `--exige-evento-rotacion`, existe al menos un evento `PII_KEY_ROTATED` en la BD — incluye
+   los registrados retroactivamente). Si falla (**exit ≠ 0**), la rotación habría vuelto a duplicar
+   capas (regresión del binario): detener la app y recuperar con §5.3 antes de continuar. Ver §5.2
+   para las señales adicionales de cifrado anidado.
+
+   > ⚠️ Nota: el evento `PII_KEY_ROTATED` se registra en cada BD **a partir de la rotación ejecutada
+   > con el binario corregido** (2026-08-11+). En la BD dev existe también el retroactivo del 10-08;
+   > en **producción aún no hay ninguno**, por lo que `--exige-evento-rotacion` sin `--dev-only`
+   > fallará en prod hasta que esa BD tenga su evento (o se inserte uno retroactivo).
+
+   Alternativa manual equivalente:
 
    ```bash
    python scripts/normalizar_doble_cifrado.py   # reporte: "campos PII con cifrado anidado a normalizar: 0"
    ```
-
-   Si el dry-run encontrara **> 0 campos**, la rotación habría vuelto a duplicar capas (regresión del
-   binario): detener la app y recuperar con §5.3 antes de continuar. Ver §5.2 para las señales
-   adicionales de cifrado anidado.
 
 #### Paso 5 — Purgar la clave vieja del historial Git
 
@@ -379,6 +394,7 @@ python scripts/normalizar_doble_cifrado.py --commit   # solo si el dry-run encon
 - `THIRD_PARTY_LICENSES.md`
 - `scripts/sanitize-repo.sh`
 - `scripts/backup-antes-rotacion.sh`
+- `scripts/verificar-rotacion.sh`
 - `scripts/normalizar_doble_cifrado.py`
 - `src-tauri/src/services/rotacion.rs`
 - `worklog.md` (bitácora de análisis — sección Grupo A)
