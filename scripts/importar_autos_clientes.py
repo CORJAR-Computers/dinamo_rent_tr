@@ -286,17 +286,24 @@ def parse_sql_value(v):
     if v.startswith("'"):
         # string SQL: '' -> '
         s = v[1:-1].replace("''", "'")
-        # Fechas/timestamps textuales de Firebird
+        # Fechas/timestamps textuales de Firebird. SOLO con formato ISO estricto
+        # (YYYY-MM-DD): desde Python 3.11+ fromisoformat acepta formatos compactos
+        # (YYYYMMDD) y en 3.14 convierte '1052070892' -> date(1052,7,8), corrompiendo
+        # columnas string numéricas como no_doc. Sin guiones -> nunca fecha.
         s2 = s.strip()
-        try:
-            if len(s2) == 10:
+        if len(s2) == 10 and s2[4] == "-" and s2[7] == "-":
+            try:
                 return datetime.date.fromisoformat(s2)
-        except ValueError:
-            pass
-        try:
-            return datetime.datetime.fromisoformat(s2.replace(" ", "T"))
-        except ValueError:
-            return s
+            except ValueError:
+                pass
+        # Datetime solo si trae componente de hora (T o espacio + hora:min).
+        s3 = s2.replace(" ", "T")
+        if "T" in s3 and ":" in s3:
+            try:
+                return datetime.datetime.fromisoformat(s3)
+            except ValueError:
+                pass
+        return s
     # Números
     try:
         if "." in v or "," in v.replace(",", "."):
