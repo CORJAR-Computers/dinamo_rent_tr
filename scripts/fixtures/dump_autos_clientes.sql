@@ -1,0 +1,18 @@
+-- Dump de ejemplo: exportación de AUTOS y CLIENTES de una instalación DinamoRent.
+-- El importador (scripts/importar_autos_clientes.py) solo usa las sentencias
+-- INSERT INTO autos/clientes; el resto se ignora.
+
+-- AUTOS
+INSERT INTO autos (PLACA, MARCA, MODELO, VERSION, COLOR, TIPO, CILINDRAJE, TRANSMISION, COMBUSTIBLE, NO_MOTOR, NO_CHASIS, PROPIETARIO, ESTADO, COSTO_FIJO_MENSUAL, KILOMETRAJE, UBICACION, TIPO_ADQUISICION, PROXIMO_ACEITE, PROXIMO_FRENOS, VENCIMIENTO_SOAT, VENCIMIENTO_TECNICO, VENCIMIENTO_EXTINTOR, VENCIMIENTO_BATERIA, OBSERVACIONES, FECHA_INGRESO)
+VALUES ('ABC123', 'Toyota', 'Corolla', 'SE 2021', 'Blanco', 'Sedán', '1800', 'Automática', 'Gasolina', 'M1A2B3C4', 'C9Z8Y7X6', 'Dinamo Rent SAS', 'Disponible', 2500000.00, 45000, 'Bodega Central', 'Compra', 5000, 30000, '2026-06-01', '2026-03-15', '2026-12-20', '2026-09-01', 'Vehículo recién detallado', '2024-01-15');
+
+INSERT INTO autos (PLACA, MARCA, MODELO, VERSION, COLOR, TIPO, CILINDRAJE, TRANSMISION, COMBUSTIBLE, NO_MOTOR, NO_CHASIS, PROPIETARIO, ESTADO, COSTO_FIJO_MENSUAL, KILOMETRAJE, UBICACION, TIPO_ADQUISICION, PROXIMO_ACEITE, PROXIMO_FRENOS, VENCIMIENTO_SOAT, VENCIMIENTO_TECNICO, VENCIMIENTO_EXTINTOR, VENCIMIENTO_BATERIA, OBSERVACIONES, FECHA_INGRESO)
+VALUES ('XYZ789', 'Chevrolet', 'Spark', 'GT 2020', 'Rojo', 'Hatchback', '1000', 'Manual', 'Gasolina', 'X7Y8Z9A', 'B1C2D3E4', 'Dinamo Rent SAS', 'Disponible', 1800000.00, 78000, 'Bodega Central', 'Leasing', 4500, 25000, '2025-12-01', '2026-08-30', '2026-06-15', '2026-04-20', NULL, '2024-03-01');
+
+-- CLIENTES (PII en claro: el importador los cifra con la clave del destino;
+-- si vinieran con prefijo v1: se intenta roundtrip y se conservan)
+INSERT INTO clientes (TIPO_DOC, NO_DOC, NOMBRES, APELLIDOS, NOMBRE_COMPLETO, CELULAR, CELULAR2, EMAIL, CIUDAD, ESTADO_REGION, PAIS, NACIONALIDAD, DIR_RESIDENCIA, DIR_TEMPORAL, HOTEL, HABITACION, NO_LICENCIA, TIPO_LICENCIA, VENCIMIENTO_LICENCIA, ESTADO)
+VALUES ('CC', '1001234567', 'Juan', 'Pérez Rodríguez', 'Juan Pérez Rodríguez', '3001112233', '3014445566', 'juan.perez@example.com', 'Bogotá', 'Cundinamarca', 'Colombia', 'Colombiana', 'Calle 10 # 5-20', 'Carrera 7 # 72-41', 'Hotel Inter', '302', 'LC1234567890', 'B1', '2027-05-10', 'Activo');
+
+INSERT INTO clientes (TIPO_DOC, NO_DOC, NOMBRES, APELLIDOS, NOMBRE_COMPLETO, CELULAR, EMAIL, CIUDAD, PAIS, NACIONALIDAD, DIR_RESIDENCIA, NO_LICENCIA, TIPO_LICENCIA, VENCIMIENTO_LICENCIA, ESTADO)
+VALUES ('CE', 'E987654321', 'María', 'Gómez Torres', 'María Gómez Torres', '3107778899', 'maria.gomez@example.com', 'Medellín', 'Colombia', 'Colombiana', 'Calle 45 # 12-30', 'LC9876543210', 'B2', '2026-11-22', 'Activo');
