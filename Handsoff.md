@@ -657,6 +657,18 @@ clientes) → PII verificados cifrados (`v1:`) → re-ejecución idempotente (0 
 actualizados) → auditoría registrada. Fixtures de ejemplo en `scripts/fixtures/`
 (`dump_autos_clientes.sql`, `generar_excel_ejemplo.py` → `datos_autos_clientes.xlsx`).
 
+> 🐛 **Bug del no_doc numérico (corregido 13-08, commit `3f8a38b`):** el parser de SQL
+> convertía un NO_DOC numérico de 10 dígitos (p. ej. `'1052070892'`) en `date(1052,7,8)` —
+> desde Python 3.11+ `date.fromisoformat` acepta formatos compactos (`YYYYMMDD`) y en 3.14
+> toma los primeros 8 dígitos e ignora el resto, corrompiendo la clave de upsert de
+> clientes. El guard `len(s2)==10` era insuficiente. Fix: `parse_sql_value` solo convierte
+> fechas con ISO estricto `YYYY-MM-DD` (guiones en las posiciones 4 y 7) y datetimes solo
+> con componente de hora. Descubierto al correr el **dry-run con los datos reales de la
+> flota** (22 autos + 42 clientes): resultado 0 nuevos / 64 existentes — sin cambios
+> pendientes de aplicar. **Test de regresión:** `scripts/test_importar_autos_clientes.py`
+> (16 casos unittest, sin BD, `python scripts/test_importar_autos_clientes.py`): el no_doc
+> de 10 dígitos debe seguir siendo string end-to-end por `parse_sql_inserts`.
+
 ### 6.2 Verificación de despliegue — `scripts/verificar-despliegue.ps1`
 
 Post-instalación en el equipo del cliente: comprueba exe **v1.0.1** instalado, **arranca la
