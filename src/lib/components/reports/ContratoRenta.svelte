@@ -15,6 +15,9 @@
 
 	// ── Encabezado de la empresa con renderizado limpio si faltan datos ──
 	const razonSocial = $derived(empresa.nombreMostrar.toUpperCase());
+	// Ciudad para la cláusula compromisoria (la configurada por la empresa; si no
+	// hay ninguna, se conserva la del contrato original: Cartagena).
+	const ciudadClausula = $derived(empresa.ciudadMostrar || 'Cartagena');
 	// "DYNARENT, RUT 900694866-3, www.dynarent.com, domiciliado en ..." (omite vacíos)
 	const datosArrendador = $derived(
 		[
@@ -464,14 +467,14 @@
 	<div class="clausula-contenido">
 		Toda controversia o diferencia relativa a este contrato, su ejecución y liquidación se resolverá
 		por un tribunal de arbitramiento designado por la junta directiva de la cámara de comercio de
-		Cartagena, mediante un sorteo efectuado entre los árbitros inscritos en las listas que lleva el
+		{ciudadClausula}, mediante un sorteo efectuado entre los árbitros inscritos en las listas que lleva el
 		centro de arbitraje y conciliación mercantiles de dicha cámara. EL tribunal se sujetará a lo
 		dispuesto en el decreto 1818 de 1998 o estatuto orgánico de los sistemas alternos de solución de
 		conflictos y demás normas concordantes de acuerdo con las siguientes reglas: a) el tribunal estará
 		integrado por 5 árbitros; b) la organización interna del tribunal se sujetará a las reglas previas
 		en el centro de arbitraje y conciliación mercantiles; c) el tribunal decidirá en derecho, en
 		conciencia o en principios técnicos; d) el tribunal funcionará en el centro de arbitraje y
-		conciliación mercantiles. A tal efecto constituye domicilio en Cartagena.
+		conciliación mercantiles. A tal efecto constituye domicilio en {ciudadClausula}.
 	</div>
 	<div class="clausula-contenido">
 		Debido a lo anterior se deja especial constancia que la anterior declaración es determinante para

@@ -31,6 +31,7 @@ class EmpresaStore {
 	telefono = $state<string | null>(null);
 	email = $state<string | null>(null);
 	web = $state<string | null>(null);
+	ciudad = $state<string | null>(null);
 	completaCargada = $state(false);
 
 	// ── Getters con fallback estático ──
@@ -62,9 +63,13 @@ class EmpresaStore {
 		return this.direccion?.trim() || FALLBACK_DIRECCION;
 	}
 
-	/** Ciudad derivada de la dirección (p. ej. la antepenúltima parte de
-	 *  "Carrera 2 #70-53, Barrio Crespo, Cartagena, Colombia" → CARTAGENA). */
+	/** Ciudad de la empresa: primero la configurada en el setup (/empresa);
+	 *  si no, se deriva de la dirección (p. ej. la penúltima parte de
+	 *  "Carrera 2 #70-53, Barrio Crespo, Cartagena, Colombia" → CARTAGENA);
+	 *  y como último recurso el fallback de la marca. */
 	get ciudadMostrar(): string {
+		const propia = this.ciudad?.trim();
+		if (propia) return propia.toUpperCase();
 		const d = this.direccion?.trim();
 		if (d) {
 			const partes = d.split(',').map((s) => s.trim()).filter(Boolean);
@@ -114,6 +119,7 @@ class EmpresaStore {
 		this.telefono = cfg.telefono;
 		this.email = cfg.email;
 		this.web = cfg.web;
+		this.ciudad = cfg.ciudad;
 		this.cargado = true;
 		this.completaCargada = true;
 	}

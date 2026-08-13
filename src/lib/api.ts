@@ -1030,6 +1030,7 @@ export interface EmpresaConfig {
 	telefono: string | null;
 	email: string | null;
 	web: string | null;
+	ciudad: string | null;
 	/** Data URL del logo (data:image/...;base64,...) o null */
 	logo: string | null;
 }
@@ -1042,6 +1043,7 @@ export interface EmpresaConfigDatos {
 	telefono?: string | null;
 	email?: string | null;
 	web?: string | null;
+	ciudad?: string | null;
 	logo?: string | null;
 }
 

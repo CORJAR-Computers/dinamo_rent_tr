@@ -47,12 +47,13 @@
 //! `DEFAULT 'x--y'`) truncaría la línea y rompería la migración silenciosamente.
 //! Evitar `--` dentro de los literales y validar con los tests de migraciones.
 //!
-//! # Serie actual: 0001-0017
+//! # Serie actual: 0001-0018
 //!
 //! 0001-0009 esquema + funciones (0001-0004 idempotentes, 0005-0009 auto-reparables),
 //! 0010-0013 consolidación de índices, 0014 limpieza de tablas residuales de test,
 //! 0015 columna numero_comparendo (deduplicación del Agente SIMIT), 0016 atribución
-//! de comparendos a la renta del día (backfill), 0017 configuración de la empresa
+//! de comparendos a la renta del día (backfill), 0017 configuración de la empresa,
+//! 0018 columna CIUDAD de la empresa (setup inicial)
 //! (setup inicial: datos + logo).
 //!
 //! # Instalación en equipo limpio (sin el repo)
@@ -97,6 +98,7 @@ pub const MIGRACIONES_EMBEDIDAS: &[(&str, &str)] = &[
     ("0015_comparendo_numero_simit.sql", include_str!("../../migrations/0015_comparendo_numero_simit.sql")),
     ("0016_atribucion_comparendo_renta.sql", include_str!("../../migrations/0016_atribucion_comparendo_renta.sql")),
     ("0017_empresa_config.sql", include_str!("../../migrations/0017_empresa_config.sql")),
+    ("0018_empresa_ciudad.sql", include_str!("../../migrations/0018_empresa_ciudad.sql")),
 ];
 
 /// Aplica las migraciones pendientes. `migrations_dir` = src-tauri/migrations

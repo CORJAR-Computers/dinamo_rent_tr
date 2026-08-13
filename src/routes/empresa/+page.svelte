@@ -17,7 +17,8 @@
 		direccion: '',
 		telefono: '',
 		email: '',
-		web: ''
+		web: '',
+		ciudad: ''
 	});
 
 	// Logo: data URL (persistida) mientras no se cambie; null = sin logo.
@@ -35,6 +36,7 @@
 			form.telefono = cfg.telefono ?? '';
 			form.email = cfg.email ?? '';
 			form.web = cfg.web ?? '';
+			form.ciudad = cfg.ciudad ?? '';
 			logoDataUrl = cfg.logo;
 		} catch (e) {
 			error = e instanceof ApiError ? e.message : 'No se pudo cargar la configuración de la empresa.';
@@ -85,6 +87,7 @@
 				telefono: form.telefono.trim() || null,
 				email: form.email.trim() || null,
 				web: form.web.trim() || null,
+				ciudad: form.ciudad.trim() || null,
 				logo: logoDataUrl
 			});
 			// Refrescar branding en caliente (login / menú lateral / impresiones).
@@ -173,6 +176,9 @@
 						<input class="input" placeholder="Ej: Cra 12 # 34-56, Bogotá" bind:value={form.direccion} maxlength="200" />
 					</FormField>
 				</div>
+				<FormField label="Ciudad">
+					<input class="input" placeholder="Ej: Bogotá" bind:value={form.ciudad} maxlength="100" />
+				</FormField>
 				<FormField label="Email">
 					<input class="input" type="email" placeholder="contacto@empresa.com" bind:value={form.email} maxlength="120" />
 				</FormField>

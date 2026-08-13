@@ -46,13 +46,14 @@ impl EmpresaService {
     ) -> Result<EmpresaConfig, AppError> {
         let row = EmpresaRepository::obtener(conn)?;
         Ok(match row {
-            Some((nombre, nit, dir, tel, email, web, logo)) => EmpresaConfig {
+            Some((nombre, nit, dir, tel, email, web, ciudad, logo)) => EmpresaConfig {
                 nombre,
                 nit,
                 direccion: dir,
                 telefono: tel,
                 email,
                 web,
+                ciudad,
                 logo: Self::logo_a_data_url(data_dir, logo.as_deref()),
             },
             None => EmpresaConfig::default(),
@@ -70,6 +71,7 @@ impl EmpresaService {
         cfg.telefono = None;
         cfg.email = None;
         cfg.web = None;
+        cfg.ciudad = None;
         Ok(cfg)
     }
 
@@ -92,6 +94,7 @@ impl EmpresaService {
         let telefono = limpiar(&datos.telefono, 40);
         let email = limpiar(&datos.email, 120);
         let web = limpiar(&datos.web, 120);
+        let ciudad = limpiar(&datos.ciudad, 100);
 
         // ── Logo: data URL -> archivo (o eliminar si viene null/vacío) ──
         // Borra siempre los logos previos `empresa.*` para no dejar huérfanos.
@@ -159,6 +162,7 @@ impl EmpresaService {
                 telefono: telefono.clone(),
                 email: email.clone(),
                 web: web.clone(),
+                ciudad: ciudad.clone(),
                 logo: None,
             },
             logo_archivo.as_deref(),
@@ -179,6 +183,7 @@ impl EmpresaService {
             telefono,
             email,
             web,
+            ciudad,
             logo: logo_archivo
                 .as_deref()
                 .and_then(|a| Self::logo_a_data_url(data_dir, Some(a))),
