@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-12** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.1 publicada**
+> Última actualización: **2026-08-13** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.1 publicada · herramientas de operación (importador de datos + verifier de despliegue) en §6**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -607,3 +607,69 @@ arranque; verificar el catálogo al cerrar).
 > **Nota 09-08:** la 0015 se aplicó a la BD dev con un test temporal de una sola ejecución
 > (`tests/aplicar_migraciones_dev_temporal.rs`, creado, ejecutado con `cargo test --test ...` y
 > **eliminado**). Es el atajo equivalente a `npm run tauri dev` cuando solo se necesita migrar.
+
+---
+
+## 6. Herramientas de operación (scripts)
+
+Scripts distribuibles para el equipo de operaciones, independientes de la app (Python 3.10+
+con `firebird-driver`, `cryptography` y `openpyxl`; corren contra la BD de una instalación).
+
+### 6.1 Importador de Autos/Clientes — `scripts/importar_autos_clientes.py`
+
+Lleva datos de **AUTOS** y **CLIENTES** a la BD de una instalación DinamoRent desde un dump SQL
+o desde una hoja de cálculo. Caso de uso: el cliente tiene una copia de su BD (exportada a
+SQL) o los datos están recopilados en Excel y hay que poblar la instalación.
+
+| Modo | Fuente | Notas |
+|---|---|---|
+| `--sql dump.sql` | Sentencias `INSERT INTO autos (...)` / `INSERT INTO clientes (...)` | El resto del archivo se ignora — sirve cualquier dump con INSERTs |
+| `--excel datos.xlsx` | Hojas `autos` y `clientes` (primera fila = encabezados) | Acepta encabezados en español o iguales a la columna de la BD (sin tildes/mayúsculas) |
+
+**Comportamiento (upsert idempotente):** clave = **placa** (autos, PK) y **no_doc** (clientes,
+índice único; si viene vacío se inserta siempre). Si la clave existe → actualiza; si no →
+inserta. Re-ejecutar **no duplica** (segunda pasada reporta 0 nuevos / N actualizados). El `id`
+de clientes lo genera la BD (IDENTITY) — el importador lo salta.
+
+**PII cifrados** con la clave del destino (`db_encryption_key` del `config.ini` — mismo esquema
+`v1:{nonce_b64}:{ct_b64}` AES-256-GCM que `core/crypto.rs`): `celular`, `celular2`, `email`,
+`dir_residencia`, `dir_temporal`, `no_licencia`. Desde SQL, si el valor ya viene cifrado
+(`v1:...`) se intenta un **roundtrip** con la clave del destino: si descifra → se re-cifra
+(coherencia garantizada); si no → se conserva con un aviso (asume misma clave). Desde Excel
+siempre se cifra (los datos vienen en claro).
+
+**Transaccional:** por defecto es **DRY-RUN** (no escribe nada). Con `--commit` aplica en una
+**transacción** (autos + clientes + auditoría `IMPORTACION_DATOS`) o revierte todo si algo
+falla. Opciones: `--db RUTA` (BD destino), `--ini RUTA` (config.ini con la clave PII),
+`--hoja-autos/--hoja-clientes`, `--quiet`.
+
+```bash
+# Cliente con copia de BD en SQL
+python scripts/importar_autos_clientes.py --sql dump_clientes.sql --commit
+
+# Datos recopilados en Excel
+python scripts/importar_autos_clientes.py --excel datos.xlsx --commit
+```
+
+**Validación (12-08):** probado sobre **copias temporales** de la BD dev (la real quedó
+intacta, verificado 22 autos / 42 clientes): SQL y Excel con dry-run → commit (2 autos + 2
+clientes) → PII verificados cifrados (`v1:`) → re-ejecución idempotente (0 nuevos / 2+2
+actualizados) → auditoría registrada. Fixtures de ejemplo en `scripts/fixtures/`
+(`dump_autos_clientes.sql`, `generar_excel_ejemplo.py` → `datos_autos_clientes.xlsx`).
+
+### 6.2 Verificación de despliegue — `scripts/verificar-despliegue.ps1`
+
+Post-instalación en el equipo del cliente: comprueba exe **v1.0.1** instalado, **arranca la
+app** y verifica que siga viva 10 s (el check crítico — el bug del v1.0.0 moría ahí), y luego
+valida los datos que crea el **primer arranque** (`%APPDATA%\com.corjar.dinamorent`: `config.ini`
++ `dinamo_rent_v3.fdb`). Veredicto `OK` / `FALLOS` con checks numerados, exit 0/1.
+
+> **Orden de checks (fix 12-08):** primero se arranca la app y después se comprueban los
+datos — la carpeta `%APPDATA%\com.corjar.dinamorent` se crea en el primer arranque (el
+propio fix de instalación limpia), así que comprobarla antes producía FALLOS falsos.
+Validado de punta a punta en Windows Sandbox con la v1.0.1 oficial: **VEREDICTO OK (6/6)**.
+Harness reutilizable: `scripts/verificar-despliegue-sandbox.ps1` +
+`scripts/dinamorent-sandbox-verificar.wsb`. Ver `DEPLOYMENT_CLIENTES.md` para el plan completo.
+
+También de esta línea: `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-sandbox.ps1`
+(smoke test del instalador en Windows limpio, ver nota de portada 12-08).
