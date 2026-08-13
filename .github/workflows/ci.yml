@@ -79,3 +79,18 @@ jobs:
       - name: Rust check bins de mantenimiento (--features dev)
         working-directory: src-tauri
         run: cargo check --bins --features dev
+
+      # Test del importador de datos (scripts/test_importar_autos_clientes.py):
+      # unittest sin BD (parser puro). firebird-driver + cryptography solo se
+      # instalan por el import del módulo (no abre BD). Python 3.12: desde
+      # 3.11+ date.fromisoformat acepta formatos compactos (YYYYMMDD) — el
+      # entorno donde aparece el bug del no_doc numérico que cubre el test.
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test importador de datos (python unittest)
+        run: |
+          python -m pip install --quiet firebird-driver cryptography
+          python scripts/test_importar_autos_clientes.py
