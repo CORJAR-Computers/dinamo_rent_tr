@@ -694,3 +694,31 @@ Harness reutilizable: `scripts/verificar-despliegue-sandbox.ps1` +
 
 También de esta línea: `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-sandbox.ps1`
 (smoke test del instalador en Windows limpio, ver nota de portada 12-08).
+
+## 7. Setup inicial de la empresa (white-label / branding dinámico)
+
+La app permite a cada empresa configurar su identidad visual y datos de contacto
+sin tocar código: **nombre, NIT, dirección, teléfono, email, web y logo**.
+
+- **Migración 0017** (`0017_empresa_config.sql`): tabla `EMPRESA_CONFIG` de una
+  fila (ID = 1). El logo se guarda como ARCHIVO en `<data_dir>/logos/empresa.*`
+  (el binario no viaja por Firebird); en la tabla solo se persiste el nombre
+  del archivo; null = sin logo.
+- **Backend**: `repositories/empresa.rs` + `services/empresa.rs` +
+  `commands/empresa.rs`:
+  - `empresa_publica` (sin sesión) — nombre + logo para el login y el menú lateral.
+  - `obtener_empresa` (sesión activa) — configuración completa (página /empresa
+    e impresiones).
+  - `guardar_empresa` (roles_con_usuarios, por defecto solo Administrador) —
+    persiste datos + logo (data URL → archivo; PNG/JPG/WebP/SVG, máx 2 MB) y
+    registra auditoría (`CONFIG_EMPRESA`).
+- **Frontend**: página `/empresa` (menú ADMINISTRACIÓN → Empresa, solo admin)
+  con vista previa del logo; store `src/lib/stores/empresa.svelte.ts` con
+  fallbacks estáticos (`FALLBACK_*`) y branding dinámico en login, menú lateral
+  y las 4 impresiones (ContratoRenta, OrdenRenta, OrdenReserva,
+  OrdenComparendo). El ContratoRenta omite los campos vacíos (renderizado
+  condicional) para no imprimir huecos ni datos ajenos.
+- **Uso**: Administrador → Empresa → cargar logo y datos → Guardar. El branding
+  se refleja en caliente (login, menú y documentos). Para un clon comercial solo
+  hay que ajustar los `FALLBACK_*` del store: el clon **DynaRent** los tiene
+  VACÍOS para que cada empresa compradora configure los suyos en el primer uso.
