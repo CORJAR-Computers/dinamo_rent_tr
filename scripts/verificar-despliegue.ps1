@@ -45,7 +45,25 @@ if ($exe) {
     Check "Ejecutable instalado" $false 'no se encontro dinamo-rent.exe'
 }
 
-# 2) Carpeta de datos
+# 2) Arranque: proceso vivo tras 10 s (PRIMERO: el primer arranque es el que
+#    crea %APPDATA%\com.corjar.dinamorent\ con config.ini + BD. Si los datos se
+#    comprobaran antes, una instalacion recien hecha fallaria falsamente.)
+$app = $null
+if ($exe) {
+    Write-Host "  Arrancando la app (10 s)..."
+    $app = Start-Process -FilePath $exe -PassThru
+    Start-Sleep -Seconds 10
+    $app.Refresh()
+    if (-not $app.HasExited) {
+        Check "App viva tras 10 s (sin cuelgue)" $true "PID $($app.Id)"
+    } else {
+        Check "App viva tras 10 s (sin cuelgue)" $false "salio sola con codigo $($app.ExitCode)"
+    }
+} else {
+    Write-Host "  (sin exe: no se puede probar el arranque)"
+}
+
+# 3) Carpeta de datos (debe existir tras el primer arranque)
 $data = "$env:APPDATA\com.corjar.dinamorent"
 $fdb = Join-Path $data 'dinamo_rent_v3.fdb'
 $ini = Join-Path $data 'config.ini'
@@ -58,24 +76,13 @@ if (Test-Path $fdb) {
     Check "BD dinamo_rent_v3.fdb existe" $false 'no se creo (bug v1.0.0: cuelgue aqui)'
 }
 
-# 3) Arranque: proceso vivo tras 10 s
-$app = $null
-if ($exe) {
-    Write-Host "  Arrancando la app (10 s)..."
-    $app = Start-Process -FilePath $exe -PassThru
-    Start-Sleep -Seconds 10
-    $app.Refresh()
-    if (-not $app.HasExited) {
-        Check "App viva tras 10 s (sin cuelgue)" $true "PID $($app.Id)"
-    } else {
-        Check "App viva tras 10 s (sin cuelgue)" $false "salio sola con codigo $($app.ExitCode)"
-    }
-    # Cierre de prueba
+# 4) Cierre de prueba
+if ($app) {
     try { $app.CloseMainWindow() | Out-Null } catch {}
     Start-Sleep -Seconds 2
 }
 
-# 4) Veredicto
+# 5) Veredicto
 Write-Host ""
 if ($failed.Count -eq 0) {
     Write-Host "=== VEREDICTO: OK ==="

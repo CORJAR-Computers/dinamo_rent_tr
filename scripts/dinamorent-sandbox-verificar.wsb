@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+dinamorent-sandbox-verificar.wsb - Variante del Sandbox para validar de punta
+a punta scripts\verificar-despliegue.ps1: instala la v1.0.1 limpia y ejecuta
+el script de verificacion de produccion. El resultado queda en
+C:\shared\out\verificar-result.txt (scripts/ del host).
+-->
+<Configuration>
+  <VGpu>Disable</VGpu>
+  <MemoryInMB>4096</MemoryInMB>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>D:\dinamo_rent_tr\src-tauri\target\release\bundle</HostFolder>
+      <SandboxFolder>C:\shared\bundle</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>D:\dinamo_rent_tr\scripts</HostFolder>
+      <SandboxFolder>C:\shared\out</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell -ExecutionPolicy Bypass -File C:\shared\out\verificar-despliegue-sandbox.ps1</Command>
+  </LogonCommand>
+</Configuration>

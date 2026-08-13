@@ -82,10 +82,10 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
 | # | Comprobación | Esperado |
 |---|---|---|
 | 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.1** |
-| 2 | `%APPDATA%\com.corjar.dinamorent\` | existe |
-| 3 | `config.ini` | existe |
-| 4 | `dinamo_rent_v3.fdb` | existe y pesa > 0 (BD creada o migrada) |
-| 5 | Arranque: proceso vivo a los 10 s | **no** se cuelga ni muere (el bug del v1.0.0) |
+| 2 | Arranque: proceso vivo a los 10 s | **no** se cuelga ni muere (el bug del v1.0.0) |
+| 3 | `%APPDATA%\com.corjar.dinamorent\` | existe (la crea el **primer arranque**; por eso se comprueba después del arranque) |
+| 4 | `config.ini` | existe |
+| 5 | `dinamo_rent_v3.fdb` | existe y pesa > 0 (BD creada o migrada) |
 | 6 | Migraciones: `schema_migrations` tiene 16 versiones | 16 (comprobación opcional con tooling dev) |
 | 7 | Login manual | `admin` + contraseña del cliente (primer ingreso: cambio forzado) |
 
