@@ -8,6 +8,7 @@ pub mod business;
 pub mod comparendo;
 pub mod cliente;
 pub mod dashboard;
+pub mod empresa;
 pub mod gasto;
 pub mod informe;
 pub mod mantenimiento;

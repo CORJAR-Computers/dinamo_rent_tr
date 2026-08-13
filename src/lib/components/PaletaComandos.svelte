@@ -66,6 +66,7 @@
 			mantenimiento: 'wrench',
 			usuarios: 'users',
 			auditoria: 'document',
+			empresa: 'empresa',
 			comparendos: 'check',
 			alertas: 'alert',
 			informes: 'chart',

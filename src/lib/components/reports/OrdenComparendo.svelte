@@ -1,7 +1,15 @@
 <script lang="ts">
 	// OrdenComparendo.svelte — Documento imprimible A4 para Comparendos
+	import { onMount } from 'svelte';
 	import type { Comparendo } from '$lib/api';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
+	import { empresa } from '$lib/stores/empresa.svelte';
+	import { sid } from '$lib/stores/session.svelte';
+
+	// Datos + logo de la empresa (setup inicial); fallback estático si no hay config.
+	onMount(() => {
+		void empresa.cargarCompleta(sid());
+	});
 
 	let { comparendo }: { comparendo: Comparendo } = $props();
 
@@ -24,10 +32,10 @@
 	<div class="border-b-2 border-slate-800 pb-4 mb-5 flex items-start justify-between gap-4">
 		<div class="flex items-center gap-3">
 			<div class="w-16 h-16 rounded-lg bg-red-900 text-white flex items-center justify-center shrink-0 p-1.5">
-				<img src="/LogoDinamo.png" alt="Logo" class="w-12 h-12 object-contain rounded-md" />
+				<img src={empresa.logoSrc} alt={empresa.nombreMostrar} class="w-12 h-12 object-contain rounded-md" />
 			</div>
 			<div>
-				<p class="text-lg font-black tracking-tight">DINAMO RENT A CAR</p>
+				<p class="text-lg font-black tracking-tight">{empresa.nombreMostrar.toUpperCase()}</p>
 				<p class="text-[11px] text-slate-600">Gestión de Infracciones y Comparendos</p>
 			</div>
 		</div>
@@ -117,13 +125,13 @@
 			<p class="text-[10px] text-slate-500 mt-0.5">Firma / Cédula</p>
 		</div>
 		<div class="text-center">
-			<div class="border-t border-slate-400 pt-2 text-xs font-semibold">Dinamo Rent a Car</div>
+			<div class="border-t border-slate-400 pt-2 text-xs font-semibold">{empresa.nombreMostrar}</div>
 			<p class="text-[10px] text-slate-500 mt-0.5">Gestión Administrativa</p>
 		</div>
 	</div>
 
 	<!-- Pie -->
 	<p class="text-center text-[9px] text-slate-400 mt-8">
-		Dinamo Rent a Car · Comparendo Ref. {String(comparendo.id).padStart(4, '0')} · Impreso el {hoy}
+		{empresa.nombreMostrar} · Comparendo Ref. {String(comparendo.id).padStart(4, '0')} · Impreso el {hoy}
 	</p>
 </div>

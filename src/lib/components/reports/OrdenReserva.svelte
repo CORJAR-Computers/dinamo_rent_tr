@@ -2,8 +2,16 @@
 	// OrdenReserva.svelte — Documento imprimible A4 (puerto de orden_reserva_jinja.html)
 	// Se imprime con window.print(); las reglas @media print de app.css muestran
 	// solo el área .print-area cuando el body tiene la clase .printing.
+	import { onMount } from 'svelte';
 	import type { Reserva } from '$lib/api';
 	import { formatCOP, formatDate } from '$lib/utils/format';
+	import { empresa } from '$lib/stores/empresa.svelte';
+	import { sid } from '$lib/stores/session.svelte';
+
+	// Datos + logo de la empresa (setup inicial); fallback estático si no hay config.
+	onMount(() => {
+		void empresa.cargarCompleta(sid());
+	});
 
 	let { reserva }: { reserva: Reserva } = $props();
 
@@ -30,10 +38,10 @@
 	<div class="border-b-2 border-slate-800 pb-4 mb-5 flex items-start justify-between gap-4">
 		<div class="flex items-center gap-3">
 			<div class="w-16 h-16 rounded-lg bg-blue-900 text-white flex items-center justify-center shrink-0 p-1.5">
-				<img src="/LogoDinamo.png" alt="Logo" class="w-12 h-12 object-contain rounded-md" />
+				<img src={empresa.logoSrc} alt={empresa.nombreMostrar} class="w-12 h-12 object-contain rounded-md" />
 			</div>
 			<div>
-				<p class="text-lg font-black tracking-tight">DINAMO RENT A CAR</p>
+				<p class="text-lg font-black tracking-tight">{empresa.nombreMostrar.toUpperCase()}</p>
 				<p class="text-[11px] text-slate-600">Renta de vehículos · Reservas</p>
 			</div>
 		</div>
@@ -151,12 +159,12 @@
 		</div>
 		<div class="text-center">
 			<div class="border-t border-slate-400 pt-2 text-xs font-semibold">Firma del representante</div>
-			<p class="text-[10px] text-slate-500 mt-0.5">Dinamo Rent a Car</p>
+			<p class="text-[10px] text-slate-500 mt-0.5">{empresa.nombreMostrar}</p>
 		</div>
 	</div>
 
 	<!-- Pie -->
 	<p class="text-center text-[9px] text-slate-400 mt-8">
-		Dinamo Rent a Car · Reserva No. {String(reserva.id).padStart(4, '0')} · Impresa el {hoy}
+		{empresa.nombreMostrar} · Reserva No. {String(reserva.id).padStart(4, '0')} · Impresa el {hoy}
 	</p>
 </div>

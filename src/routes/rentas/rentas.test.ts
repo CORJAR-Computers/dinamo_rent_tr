@@ -402,7 +402,8 @@ describe('página de Rentas', () => {
 		// El documento imprimible muestra el desglose completo
 		expect(screen.getByText('ORDEN DE RENTA')).toBeInTheDocument();
 		expect(screen.getByText(/TOTAL/)).toBeInTheDocument();
-		expect(screen.getByText('DINAMO RENT A CAR')).toBeInTheDocument();
+		// Nombre de la empresa dinámico (fallback estático en el test)
+		expect(screen.getByText('DINAMO RENT')).toBeInTheDocument();
 		// Pagos e inspecciones (que solo vienen con obtener_renta)
 		expect(screen.getByText('Abono renta')).toBeInTheDocument();
 		expect(screen.getByText('Inspección de salida')).toBeInTheDocument();

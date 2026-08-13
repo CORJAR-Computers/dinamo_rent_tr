@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { session } from '$lib/stores/session.svelte';
+	import { empresa } from '$lib/stores/empresa.svelte';
 	import { authApi } from '$lib/api';
 	import { validarSesion } from '$lib/utils/guards';
 	import Toast from '$lib/components/Toast.svelte';
@@ -46,6 +47,9 @@
 		await validarSesion();
 		checking = false;
 		ready = true;
+		// Branding de la empresa (nombre + logo) para el menú lateral;
+		// best-effort: ante error se conserva el fallback estático.
+		void empresa.cargarPublica();
 	});
 
 	// ── Tema por usuario (persistido en BD, tabla usuarios) ──
@@ -154,6 +158,7 @@
 			items: [
 				{ label: 'Usuarios', href: '/usuarios', icon: 'usuarios', adminOnly: true },
 				{ label: 'Auditoría', href: '/auditoria', icon: 'auditoria', adminOnly: true },
+				{ label: 'Empresa', href: '/empresa', icon: 'empresa', adminOnly: true },
 				{ label: 'Comparendos', href: '/comparendos', icon: 'comparendos' },
 				{ label: 'Alertas', href: '/alertas', icon: 'alertas' }
 			]
@@ -223,6 +228,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			'/mantenimiento': 'Mantenimiento',
 			'/usuarios': 'Usuarios',
 			'/auditoria': 'Auditoría',
+			'/empresa': 'Empresa',
 			'/comparendos': 'Comparendos',
 			'/alertas': 'Alertas',
 			'/informes': 'Informes',
@@ -268,11 +274,11 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			<!-- Logo -->
 			<div class="flex items-center gap-3 px-4 py-5 h-16 border-b border-white/10">
 				<div class="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0 overflow-hidden p-1">
-					<img src="/LogoDinamo.png" alt="Logo" class="w-full h-full object-contain" />
+					<img src={empresa.logoSrc} alt="Logo" class="w-full h-full object-contain" />
 				</div>
 				{#if sidebarOpen}
 					<div class="overflow-hidden">
-						<p class="font-bold text-sm leading-tight">Dinamo Rent</p>
+						<p class="font-bold text-sm leading-tight">{empresa.nombreMostrar}</p>
 						<p class="text-[11px] text-white/60">ERP v3.2.0</p>
 					</div>
 				{/if}

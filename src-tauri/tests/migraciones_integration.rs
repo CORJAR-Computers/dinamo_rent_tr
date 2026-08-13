@@ -33,6 +33,7 @@ use dinamo_rent_lib::services::renta::RentaService;
 
 use dinamo_rent_lib::core::config::AppConfig;
 use dinamo_rent_lib::core::db::{create_pool, Pool};
+use dinamo_rent_lib::core::migrations::MIGRACIONES_EMBEDIDAS;
 use dinamo_rent_lib::core::migrations::{has_initial_schema, run_migrations, split_sql_statements};
 
 /// Borra el .fdb temporal al salir del scope (panic-safe).
@@ -933,9 +934,11 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
     ));
 
     run_migrations(&pool, &migrations_dir)
-        .expect("el runner debe auto-reparar una instalación nueva a medias");
-
-    assert_eq!(versiones_aplicadas(&pool).len(), 16, "todas las versiones");
+        .expect("el runner debe auto-reparar una instalación nueva a medias");	assert_eq!(
+		versiones_aplicadas(&pool).len(),
+		MIGRACIONES_EMBEDIDAS.len(),
+		"todas las versiones"
+	);
     // 0001 completo: la última tabla y su índice; 0002 completo.
     assert!(existe_objeto(
         &pool,
@@ -985,7 +988,7 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
         "IX_INSPECCIONES_ID_RENTA"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 16);
+    assert_eq!(versiones_aplicadas(&pool).len(), MIGRACIONES_EMBEDIDAS.len());
 }
 
 /// Simula una instalación nueva con 0001+0002 completos y un crash a mitad de
@@ -1031,7 +1034,7 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
     run_migrations(&pool, &migrations_dir)
         .expect("auto-reparar instalación a medias en 0003/0004");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), 16);
+    assert_eq!(versiones_aplicadas(&pool).len(), MIGRACIONES_EMBEDIDAS.len());
     assert!(existe_objeto(
         &pool,
         "SELECT COUNT(*) FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = ?",
@@ -1049,7 +1052,7 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
         "IX_RENTAS_NO_CONTRATO"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), 16);
+    assert_eq!(versiones_aplicadas(&pool).len(), MIGRACIONES_EMBEDIDAS.len());
 }
 
 /// Renta temporal con rango de fechas dado (para el backfill de 0016)

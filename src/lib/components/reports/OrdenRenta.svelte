@@ -3,8 +3,16 @@
 	// Diseño compacto: debe caber en UNA sola hoja carta. La compresión de
 	// impresión vive en app.css (@media print) vía .orden-carta; el estilo de
 	// aquí es el que se ve en pantalla (vista previa) y en papel.
+	import { onMount } from 'svelte';
 	import type { Renta } from '$lib/api';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
+	import { empresa } from '$lib/stores/empresa.svelte';
+	import { sid } from '$lib/stores/session.svelte';
+
+	// Datos + logo de la empresa (setup inicial); fallback estático si no hay config.
+	onMount(() => {
+		void empresa.cargarCompleta(sid());
+	});
 
 	// El cliente y el vehículo se muestran desde `renta` (nombreCliente, vehiculo,
 	// placa — ya denormalizados por el backend); no se necesitan props aparte.
@@ -398,10 +406,10 @@
 	<div class="encabezado">
 		<div class="logo-bloque">
 			<div class="logo-caja">
-				<img src="/LogoDinamo.png" alt="Logo" />
+				<img src={empresa.logoSrc} alt={empresa.nombreMostrar} />
 			</div>
 			<div>
-				<p class="nombre-empresa">DINAMO RENT A CAR</p>
+				<p class="nombre-empresa">{empresa.nombreMostrar.toUpperCase()}</p>
 				<p class="subtitulo-empresa">Renta de vehículos · Contrato de renta</p>
 			</div>
 		</div>
@@ -598,12 +606,12 @@
 		</div>
 		<div class="firma">
 			<div class="firma-linea">Firma del representante</div>
-			<p class="firma-nombre">Dinamo Rent a Car</p>
+			<p class="firma-nombre">{empresa.nombreMostrar}</p>
 		</div>
 	</div>
 
 	<!-- Pie -->
 	<p class="pie">
-		Dinamo Rent a Car · Contrato {formatContrato(renta.anioContrato, renta.noContrato)} · Renta No. {String(renta.id).padStart(4, '0')} · Impresa el {hoy}
+		{empresa.nombreMostrar} · Contrato {formatContrato(renta.anioContrato, renta.noContrato)} · Renta No. {String(renta.id).padStart(4, '0')} · Impresa el {hoy}
 	</p>
 </div>

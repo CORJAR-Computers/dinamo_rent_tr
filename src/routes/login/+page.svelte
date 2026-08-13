@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authApi, ApiError, type LoginStatus } from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
+	import { empresa } from '$lib/stores/empresa.svelte';
 
 	let username = $state('');
 	let password = $state('');
@@ -9,6 +11,12 @@
 	let error = $state('');
 	let showPassword = $state(false);
 	let loginStatus = $state<LoginStatus | null>(null);
+
+	// Branding dinámico: nombre y logo configurados por la empresa (setup inicial),
+	// con fallback estático mientras no haya configuración.
+	onMount(() => {
+		void empresa.cargarPublica();
+	});
 
 	// Debounce: consultar estado de login mientras se escribe el usuario
 	let statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -68,7 +76,7 @@
 </script>
 
 <svelte:head>
-	<title>Iniciar sesión — Dinamo Rent ERP</title>
+	<title>Iniciar sesión — {empresa.nombreMostrar}</title>
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-fondo relative overflow-hidden">
@@ -82,9 +90,9 @@
 		<!-- Logo -->
 		<div class="flex flex-col items-center mb-8">
 			<div class="w-28 h-28 mb-4 rounded-3xl bg-white shadow-lg shadow-primary/20 ring-1 ring-border overflow-hidden">
-				<img src="/LogoDinamo.png" alt="Logo Dinamo Rent" class="w-full h-full object-contain" />
+				<img src={empresa.logoSrc} alt={empresa.nombreMostrar} class="w-full h-full object-contain" />
 			</div>
-			<h1 class="text-2xl font-bold text-text-primary tracking-tight">Dinamo Rent ERP</h1>
+			<h1 class="text-2xl font-bold text-text-primary tracking-tight">{empresa.nombreMostrar}{#if !empresa.nombre} ERP{/if}</h1>
 			<p class="text-sm text-text-secondary mt-1">Sistema de gestión de flota y renta de vehículos</p>
 		</div>
 
@@ -178,7 +186,7 @@
 			</form>
 
 			<footer class="mt-6 pt-5 border-t border-border text-center">
-				<p class="text-xs text-text-secondary">© {new Date().getFullYear()} Dinamo Rent a Car · v3.2.0</p>
+				<p class="text-xs text-text-secondary">© {new Date().getFullYear()} {empresa.nombreMostrar} · v3.2.0</p>
 			</footer>
 		</div>
 	</div>
