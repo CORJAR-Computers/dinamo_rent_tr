@@ -698,12 +698,16 @@ También de esta línea: `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
 La app permite a cada empresa configurar su identidad visual y datos de contacto
-sin tocar código: **nombre, NIT, dirección, teléfono, email, web y logo**.
+sin tocar código: **nombre, NIT, dirección, ciudad, teléfono, email, web y logo**.
 
 - **Migración 0017** (`0017_empresa_config.sql`): tabla `EMPRESA_CONFIG` de una
   fila (ID = 1). El logo se guarda como ARCHIVO en `<data_dir>/logos/empresa.*`
   (el binario no viaja por Firebird); en la tabla solo se persiste el nombre
   del archivo; null = sin logo.
+- **Migración 0018** (`0018_empresa_ciudad.sql`): columna `CIUDAD VARCHAR(100)`
+  en `EMPRESA_CONFIG` (idempotente, patrón 0015). Antes la ciudad se derivaba
+  de la dirección con una heurística frágil (la penúltima parte entre comas);
+  ahora es un campo explícito del setup.
 - **Backend**: `repositories/empresa.rs` + `services/empresa.rs` +
   `commands/empresa.rs`:
   - `empresa_publica` (sin sesión) — nombre + logo para el login y el menú lateral.
@@ -712,6 +716,11 @@ sin tocar código: **nombre, NIT, dirección, teléfono, email, web y logo**.
   - `guardar_empresa` (roles_con_usuarios, por defecto solo Administrador) —
     persiste datos + logo (data URL → archivo; PNG/JPG/WebP/SVG, máx 2 MB) y
     registra auditoría (`CONFIG_EMPRESA`).
+- **Ciudad en el contrato**: la cláusula compromisoria del ContratoRenta
+  ("cámara de comercio de {ciudad} / domicilio en {ciudad}") usa la ciudad
+  configurada; si no hay ninguna, conserva 'Cartagena' (la del contrato
+  original). El store resuelve `ciudadMostrar` en 3 niveles: configurada →
+  derivada de la dirección → `FALLBACK_CIUDAD`.
 - **Frontend**: página `/empresa` (menú ADMINISTRACIÓN → Empresa, solo admin)
   con vista previa del logo; store `src/lib/stores/empresa.svelte.ts` con
   fallbacks estáticos (`FALLBACK_*`) y branding dinámico en login, menú lateral
@@ -722,3 +731,21 @@ sin tocar código: **nombre, NIT, dirección, teléfono, email, web y logo**.
   se refleja en caliente (login, menú y documentos). Para un clon comercial solo
   hay que ajustar los `FALLBACK_*` del store: el clon **DynaRent** los tiene
   VACÍOS para que cada empresa compradora configure los suyos en el primer uso.
+
+### 7.1 Iconos oficiales del clon DynaRent (2026-08-12)
+
+El clon comercial (`D:\Proyectos\DynaRent`) usa los iconos oficiales de la marca,
+no los de Dinamo:
+
+- **Logo UI** (login y menú lateral): `static/dynarent.png` (banner 2816×1536)
+  vía `FALLBACK_LOGO = '/dynarent.png'` en el store.
+- **Icono de la app (Tauri)**: set completo `src-tauri/icons/` regenerado desde
+  `static/dynarent.ico` con `bun tauri icon` (32x32, 128x128, icon.ico/icns/png,
+  Square*, StoreLogo, 64x64 y los sets Android/iOS).
+- **Favicon web**: `static/favicon.ico` = copia de `dynarent.ico`.
+- Se eliminaron el SVG provisional (`LogoDynaRent.svg`) y los duplicados de la
+  raíz del clon; el logo queda solo en `static/`.
+
+⚠️ El `origin` del clon apunta a `D:/dinamo_rent_tr` (ruta local) — **no hacer
+`git push` dentro del clon**; al distribuir hay que crear un repo nuevo
+(ej. `CORJAR-Computers/dynarent`) y cambiar el remote.
