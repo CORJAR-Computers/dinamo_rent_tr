@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Pushes consecutivos a la misma rama: el run nuevo CANCELA el anterior
+# (cancel-in-progress) para no gastar minutos en pipelines obsoletos.
+# Consecuencia: en una cadena de pushes rápida, solo el tope de la rama
+# queda con run completo; los commits intermedios aparecen como "cancelled".
+# Para verificar el CI, revisar el run del HEAD (o el del pull_request), no
+# el de commits intermedios. release.yml (por tag) no usa concurrency.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

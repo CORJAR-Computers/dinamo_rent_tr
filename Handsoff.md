@@ -65,6 +65,15 @@
 > CI verde en el segundo intento → **v1.0.1 es el primer instalador verificado íntegramente
 > por CI**, reproducible en cualquier runner sin SDK de Firebird.
 
+> ℹ️ **Comportamiento del CI (13-08):** `ci.yml` usa `concurrency: { group:
+> workflow-ref, cancel-in-progress: true }` → un push nuevo a la misma rama **cancela el run
+> en curso** del push anterior. En una cadena de pushes rápida, los commits intermedios
+> aparecen como `cancelled` y solo el **tope de la rama** queda con run completo (por eso los
+> runs por `head_sha` de commits intermedios salen vacíos/cancelled). Es intencional (ahorra
+> minutos de CI en pipelines obsoletos). **Para verificar el CI: revisar el run del HEAD**
+> (o del pull_request), no el de commits intermedios. `release.yml` (por tag) no usa
+> concurrency. Detalle documentado también en un comentario del propio `ci.yml`.
+
 > **Atribución comparendos↔rentas (11-08):** cada comparendo ahora responde **quién tenía el
 > vehículo el día de la multa** — cruce con rentas (misma placa, rango
 > `[fecha_recogida, devolución real o retorno]` que contiene la fecha de la infracción, sin
