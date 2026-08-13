@@ -13,6 +13,29 @@
 		void empresa.cargarCompleta(sid());
 	});
 
+	// ── Encabezado de la empresa con renderizado limpio si faltan datos ──
+	const razonSocial = $derived(empresa.nombreMostrar.toUpperCase());
+	// "DYNARENT, RUT 900694866-3, www.dynarent.com, domiciliado en ..." (omite vacíos)
+	const datosArrendador = $derived(
+		[
+			razonSocial,
+			empresa.nitMostrar ? `RUT ${empresa.nitMostrar}` : '',
+			empresa.webMostrar,
+			empresa.direccionMostrar ? `domiciliado en ${empresa.direccionMostrar}` : ''
+		]
+			.filter(Boolean)
+			.join(', ')
+	);
+	const pieContacto = $derived(
+		[
+			empresa.direccionMostrar,
+			empresa.telefonoMostrar ? `Tel: ${empresa.telefonoMostrar}` : '',
+			empresa.emailMostrar
+		]
+			.filter(Boolean)
+			.join(' • ')
+	);
+
 	let {
 		renta,
 		cliente,
@@ -256,8 +279,8 @@
 
 		<div class="info-contacto">
 			<p class="negrita" style="margin-bottom: 3px;">ASISTENCIA A CLIENTES</p>
-			<p style="margin: 0;">{empresa.telefonoMostrar}</p>
-			<p style="margin: 2px 0 0 0; font-size: 6.5pt;">{empresa.webMostrar}</p>
+			{#if empresa.telefonoMostrar}<p style="margin: 0;">{empresa.telefonoMostrar}</p>{/if}
+			{#if empresa.webMostrar}<p style="margin: 2px 0 0 0; font-size: 6.5pt;">{empresa.webMostrar}</p>{/if}
 		</div>
 	</div>
 
@@ -270,8 +293,7 @@
 	<div class="seccion-partes">
 		<p class="negrita" style="text-indent: 0;">ENTRE LOS SUSCRITOS:</p>
 		<p>
-			{empresa.nombreMostrar.toUpperCase()}, RUT {empresa.nitMostrar}, {empresa.webMostrar},
-			domiciliado en {empresa.direccionMostrar} por una parte, como <span class="negrita">arrendador</span>, y
+			{datosArrendador} por una parte, como <span class="negrita">arrendador</span>, y
 			{renta.nombreCliente}, identificado con <span class="campo-resaltado">{tipoDoc} No: {noDoc}</span>,
 			nacionalidad <span class="campo-resaltado">{nacionalidad}</span>, licencia tipo
 			<span class="campo-resaltado">{tipoLicencia}</span>, número teléfono
@@ -310,13 +332,12 @@
 	</table>
 
 	<div class="clausula-contenido">
-		<span class="negrita">PRIMERO:</span> {empresa.nombreMostrar.toUpperCase()} es único y exclusivo
-		poseedor del vehículo anteriormente descrito.
+		<span class="negrita">PRIMERO:</span> {razonSocial} es único y exclusivo poseedor del vehículo
+		anteriormente descrito.
 	</div>
 	<div class="clausula-contenido">
-		<span class="negrita">SEGUNDO:</span> Por este acto {empresa.nombreMostrar.toUpperCase()} viene en
-		dar en arrendamiento el vehículo antes singularizado, a quien lo acepta y recibe para sí y para
-		destinarlo a su uso.
+		<span class="negrita">SEGUNDO:</span> Por este acto {razonSocial} viene en dar en arrendamiento
+		el vehículo antes singularizado, a quien lo acepta y recibe para sí y para destinarlo a su uso.
 	</div>
 
 	<!-- CLÁUSULA SEGUNDA -->
@@ -330,8 +351,8 @@
 	<div class="clausula-contenido">
 		Dejan las partes constancia que se ha verificado por el arrendatario el buen funcionamiento
 		especialmente del sistema de frenos, luces de estacionamiento, de freno, de tránsito y de viraje,
-		así como el cinturón de seguridad en perfectas condiciones de uso, por lo cual el mismo		hará entrega a {empresa.nombreMostrar.toUpperCase()} el valor de los bienes por la pérdida o daño
-		de estos por cualquier naturaleza.
+		así como el cinturón de seguridad en perfectas condiciones de uso, por lo cual el mismo		hará entrega a {razonSocial} el valor de los bienes por la pérdida o daño de estos por cualquier
+		naturaleza.
 	</div>
 
 	<!-- CLÁUSULA TERCERA -->
@@ -487,8 +508,8 @@
 		ARRENDADORA autorizada para retirar el vehículo del lugar donde se encuentre por medio de cualquiera
 		de sus empleados y mediante los duplicados que tienen en su poder. EL ARRENDATARIO autoriza y acepta
 		que el incumplimiento en el pago de las obligaciones económicas adquiridas en el presente contrato
-		dará lugar a un reporte negativo a su historia crediticia con {empresa.nombreMostrar.toUpperCase()}
-		a todas las centrales de riesgo como pro crédito y data crédito. Las controversias a las distintas cláusulas de
+		dará lugar a un reporte negativo a su historia crediticia con {razonSocial} a todas las centrales
+		de riesgo como pro crédito y data crédito. Las controversias a las distintas cláusulas de
 		este contrato configurarán para el ARRENDATARIO la consumación de los delitos penales que las
 		circunstancias indiquen.
 	</div>
@@ -596,7 +617,7 @@
 	<div class="clausula-contenido">
 		El ARRENDATARIO es responsable por todas las fotomultas o comparendos emitidos por la entidad de
 		tránsito encargada, como consecuencia de las infracciones de tránsito practicadas durante el
-		período de vigencia de este contrato,		AUTORIZANDO a {empresa.nombreMostrar.toUpperCase()} (EL ARRENDADOR) para
+		período de vigencia de este contrato,		AUTORIZANDO a {razonSocial} (EL ARRENDADOR) para
 		efectuar la cobranza de las mismas, acrecidas en 15% (QUINCE POR CIENTO) como cargo de gestión
 		administrativa, automáticamente de la tarjeta de crédito presentada como garantía en este contrato
 		de arrendamiento de vehículo. La empresa no es responsable de asumir y asistir a cursos de tránsito
@@ -621,7 +642,7 @@
 
 		<div class="firma-linea"></div>
 		<p style="margin: 2px 0; text-indent: 0; font-weight: bold;">Arrendador</p>
-		<p style="margin: 2px 0; text-indent: 0;">{empresa.nombreMostrar.toUpperCase()} · RUT {empresa.nitMostrar}</p>
+		<p style="margin: 2px 0; text-indent: 0;">{razonSocial}{#if empresa.nitMostrar} · RUT {empresa.nitMostrar}{/if}</p>
 
 		<div class="firma-linea"></div>
 		<p style="margin: 2px 0; text-indent: 0; font-weight: bold; text-transform: uppercase;">
@@ -630,16 +651,13 @@
 		<p style="margin: 2px 0; text-indent: 0;">{tipoDoc} No. {noDoc}</p>
 
 		<p style="margin-top: 18px; text-indent: 0;">
-			Firmaron ante mí en las calidades que comparecen. {empresa.ciudadMostrar}, {hoy}.
+			Firmaron ante mí en las calidades que comparecen. {empresa.ciudadMostrar}{#if empresa.ciudadMostrar}, {/if}{hoy}.
 		</p>
 	</div>
 
 	<!-- PIE DE PÁGINA -->
 	<div class="footer">
-		<p>
-			{empresa.direccionMostrar} • Tel: {empresa.telefonoMostrar} •
-			{empresa.emailMostrar}
-		</p>
+		<p>{pieContacto}</p>
 		<p>Documento legal conforme a la legislación colombiana • Impreso el {hoy}</p>
 	</div>
 </div>
