@@ -1,6 +1,6 @@
 # Resumen Ejecutivo — Dinamo Rent ERP
 
-> **Fecha:** 2026-08-13 · **Estado general:** listo para producción — release v1.0.1 estable publicada por CI y validada de punta a punta en Windows limpio.
+> **Fecha:** 2026-08-14 · **Estado general:** listo para producción — release v1.0.2 estable publicada por CI y validada de punta a punta en Windows limpio.
 
 ---
 
@@ -9,32 +9,40 @@
 | Área | Estado |
 |---|---|
 | **Aplicación** | Todos los módulos operativos (rentas, comparendos + agente SIMIT, alertas, calendario, informes, reservas, contratos) |
-| **Versión estable** | **v1.0.1** — la única release que se distribuye |
+| **Versión estable** | **v1.0.2** — la única release que se distribuye |
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
-| **CI** | ✅ Verde en el tope de `main` (lint, check, 226 tests frontend, 43 tests Rust, 11 migraciones, test del importador) |
+| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 233 tests frontend, cargo 48 lib + 8 rentas + 11 migraciones, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
 
 ## 2. Releases en GitHub
 
 | Release | Estado | Para quién |
 |---|---|---|
-| **v1.0.1** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
-| v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación con enlace a v1.0.1) | Solo referencia — **no instalarla** |
+| **v1.0.2** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
+| v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.2 |
+| v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación) | Solo referencia — **no instalarla** |
 
-**Assets de la v1.0.1:** `DinamoRent_1.0.1_x64-setup.exe` (NSIS, ~21 MB, recomendado) y `DinamoRent_1.0.1_x64_en-US.msi` (~31 MB, despliegue GPO). Enlaces directos y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
+**Assets de la v1.0.2:** [`DinamoRent_1.0.2_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.2/DinamoRent_1.0.2_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.2_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.2/DinamoRent_1.0.2_x64_en-US.msi) (~31 MB, despliegue GPO; sha256 publicados en la release). Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
-**Qué corrige la v1.0.1** (bugs del instalador v1.0.0 en equipos nuevos):
+**Qué corrigió la v1.0.1** (bugs del instalador v1.0.0 en equipos nuevos; histórica):
 
 1. **La BD no se creaba** → la app se colgaba esperando un `.fdb` inexistente. Ahora `create_pool` crea la BD (y su carpeta) al primer arranque.
-2. **Las migraciones no viajaban en el instalador** → las 16 migraciones van embebidas en el binario (fallback automático).
+2. **Las migraciones no viajaban en el instalador** → las migraciones van embebidas en el binario (fallback automático; hoy 19: 0001-0019).
 3. **Crash sin el runtime VC++** (`LoadLibraryExW failed`) → `SetDllDirectoryW(firebird/)` encuentra las DLLs que ya viajan en el instalador; no hace falta instalar redistribuibles.
 
-**Actualizar desde v1.0.0 con datos:** idempotente — la v1.0.1 abre la BD existente y solo aplica migraciones pendientes (no hay que desinstalar ni perder datos).
+**Actualizar (v1.0.0/v1.0.1 → v1.0.2) con datos:** idempotente — la v1.0.2 abre la BD existente y solo aplica las migraciones pendientes (0017-0019 en esta versión; no hay que desinstalar ni se pierden datos).
+
+**Qué añade la v1.0.2** (13-08):
+
+1. **IVA por renta (checkbox)** — el IVA dejó de aplicarse siempre; cada renta decide con «Cobrar IVA» (migración 0019, DEFAULT 1 para rentas existentes).
+2. **Auto-cálculo de días/horas al cerrar** — cada 24 h = 1 día; excedente ≤ 3 h → horas extras (redondeadas hacia arriba); excedente > 3 h → día completo.
+3. **Cambiar vehículo sin cerrar la renta** — transaccional, con auditoría (`CAMBIO AUTO`); el selector de placa se deshabilita al editar.
+4. **Combos con búsqueda** (SearchSelect) en rentas, reservas, comparendos, mantenimiento y gastos (cliente por nombre/documento; vehículo por placa, marca, modelo, tipo o color).
 
 ## 3. CI (GitHub Actions)
 
-- **`ci.yml`** (cada push/PR a main): eslint · svelte-check · **vitest (226 tests)** · vite build · **cargo test --lib (43)** · cargo check (all-targets + bins de mantenimiento) · **test del importador Python (16 casos)**.
-- **`release.yml`** (por tag `v*`): construye y publica el instalador (NSIS + MSI) vía `tauri-action`.
+- **`ci.yml`** (cada push/PR a main): eslint · svelte-check (0/0) · **vitest (233 tests)** · vite build · **cargo test --lib (48)** (integración en dev: 8 rentas + 11 migraciones) · cargo check (all-targets + bins de mantenimiento) · **test del importador Python (16 casos)**.
+- **`release.yml`** (por tag `v*`): construye y publica el instalador (NSIS + MSI) vía `tauri-action`, con **body de release generado automáticamente** (changelog con los commits entre el tag anterior y el nuevo).
 - **Nota de operación:** el CI usa `cancel-in-progress` por rama — en pushes consecutivos solo el run del **tope** de main queda completo (los intermedios salen `cancelled`). Para verificar, mirar el run del HEAD.
 
 ## 4. Herramientas de operación (`scripts/`)
@@ -43,7 +51,7 @@
 |---|---|---|
 | **`importar_autos_clientes.py`** | Poblar Autos/Clientes desde dump SQL o Excel (upsert idempotente por placa/no_doc, PII cifrados con la clave del destino, dry-run por defecto, `--commit` transaccional) | `python scripts/importar_autos_clientes.py --sql dump.sql --commit` |
 | **`test_importar_autos_clientes.py`** | Test de regresión del importador (16 casos, sin BD; corre en CI) | `python scripts/test_importar_autos_clientes.py` |
-| **`verificar-despliegue.ps1`** | Post-instalación en el equipo del cliente: exe v1.0.1, arranque vivo 10 s, `config.ini` + BD del primer arranque — veredicto OK/FALLOS | `powershell -File scripts/verificar-despliegue.ps1` |
+| **`verificar-despliegue.ps1`** | Post-instalación en el equipo del cliente: exe v1.0.2, arranque vivo 10 s, `config.ini` + BD del primer arranque — veredicto OK/FALLOS | `powershell -File scripts/verificar-despliegue.ps1` |
 | **`dinamorent-sandbox.wsb` + `smoke-test-sandbox.ps1`** | Smoke test del instalador en Windows limpio (Sandbox) | abrir el `.wsb`; resultado en `smoke-result.txt` |
 | **`verificar-despliegue-sandbox.ps1` + `dinamorent-sandbox-verificar.wsb`** | Validar el verifier contra una instalación real en Sandbox | abrir el `.wsb` |
 | **`check-simit.mjs` / `watch-simit.mjs` / `test-check-simit.mjs`** | Monitoreo del agente SIMIT: disponibilidad del portal, sonda E2E con token, alertas de total pendiente | `node scripts/check-simit.mjs` |
@@ -61,4 +69,4 @@
 
 ## 6. Veredicto
 
-**El proyecto está listo para producción.** La única release estable es la v1.0.1 (construida por CI y validada en Windows limpio), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT) está documentado y validado. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
+**El proyecto está listo para producción.** La única release estable es la v1.0.2 (construida por CI y validada en Windows limpio), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT) está documentado y validado. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
