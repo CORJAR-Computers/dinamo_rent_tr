@@ -14,7 +14,16 @@ export class ApiError extends Error {
 	detail?: string;
 
 	constructor(payload: ApiErrorPayload) {
-		super(payload.message);
+		// Para errores de BD (kind 'database') el `detail` es el texto real de
+		// Firebird (SQLCODE, nombre de columna, etc.) que de otro modo se pierde:
+		// la UI solo pinta `message` ("Error al acceder a la base de datos.").
+		// Se añade al mensaje mostrado para poder diagnosticar sin logs.
+		const esDatabase = payload.kind === 'database';
+		const conDetalle =
+			esDatabase && payload.detail && payload.detail !== payload.message
+				? `${payload.message} — ${payload.detail}`
+				: payload.message;
+		super(conDetalle);
 		this.name = 'ApiError';
 		this.kind = payload.kind;
 		this.detail = payload.detail;

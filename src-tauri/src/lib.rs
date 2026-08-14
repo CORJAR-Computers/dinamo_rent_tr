@@ -102,12 +102,38 @@ pub fn run() {
                 simit_estado,
             );
 
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
+            // ── Logging ──
+            // En DEBUG se loguea por defecto (stderr del terminal de dev). En
+            // RELEASE también se escribe a archivo (data_dir/logs/app.log): sin
+            // esto los errores de BD (que la UI solo muestra como "Error al
+            // acceder a la base de datos.") quedaban sin registro en producción
+            // y eran imposibles de diagnosticar. Los errores se loguean en
+            // core/error.rs vía `AppError::to_payload()` (el punto por el que
+            // pasan todos los errores hacia la UI).
+            {
+                let mut builder = tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    // 5 MB por archivo (el default de 1 MB se descartaba y podía
+                    // perder justo el error a diagnosticar) + conservar rotados.
+                    .max_file_size(5_000_000)
+                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll);
+                if cfg!(debug_assertions) {
+                    // Dev: consola del terminal
+                } else {
+                    // Prod: archivo rotativo en data_dir/logs/app.log
+                    let log_dir = data_dir.join("logs");
+                    let _ = std::fs::create_dir_all(&log_dir);
+                    builder = builder.targets([
+                        tauri_plugin_log::Target::new(
+                            tauri_plugin_log::TargetKind::Folder {
+                                path: log_dir,
+                                file_name: Some("app".into()),
+                            },
+                        ),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    ]);
+                }
+                app.handle().plugin(builder.build())?;
             }
             Ok(())
         })

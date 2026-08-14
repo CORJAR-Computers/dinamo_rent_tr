@@ -109,6 +109,18 @@ impl AppError {
 
     /// Serializa el error al formato esperado por el frontend
     pub fn to_payload(&self) -> ErrorPayload {
+        // Registro en el log (en producción: data_dir/logs/app.log, ver lib.rs).
+        // TODOS los errores que llegan a la UI pasan por aquí; sin este registro
+        // el detalle real de Firebird (SQLCODE, columna, lock conflict...) quedaba
+        // perdido y solo se veía el mensaje genérico "Error al acceder a la base
+        // de datos.". Los errores de BD van a log::error!; el resto a warn.
+        match self {
+            AppError::Database(d) => log::error!("BD: {d}"),
+            _ => match self.detail() {
+                Some(d) => log::warn!("[{}] {} — {d}", self.kind(), self.mensaje_usuario()),
+                None => log::warn!("[{}] {}", self.kind(), self.mensaje_usuario()),
+            },
+        }
         ErrorPayload {
             kind: self.kind().into(),
             message: self.mensaje_usuario(),

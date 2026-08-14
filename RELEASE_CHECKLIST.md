@@ -1,10 +1,16 @@
 # Checklist de publicación de release — Dinamo Rent ERP
 
-> Procedimiento operativo para publicar una versión nueva (v1.0.3 en adelante)
-> en `github.com/CORJAR-Computers/dinamo_rent_tr`. Cubre el bump de versión,
-> el tag que dispara el CI, la verificación de los assets y el anuncio.
-> Complementa a `INSTALACION_OPERACIONES.md` (instalación), `DEPLOYMENT_CLIENTES.md`
+> Procedimiento operativo para publicar una versión nueva en
+> `github.com/CORJAR-Computers/dinamo_rent_tr`: el bump de versión, el tag que
+> dispara el CI, la verificación de los assets y el anuncio. Complementa a
+> `INSTALACION_OPERACIONES.md` (instalación), `DEPLOYMENT_CLIENTES.md`
 > (despliegue a clientes) y `ANUNCIO_RELEASE_TEMPLATE.md` (mensajes de anuncio).
+>
+> **📋 Objetivo actual: v1.0.4 (pruebas de campo de la tarde, sin publicar aún).**
+> Incluye el rediseño de legibilidad de las órdenes de renta y reserva (tipografía
+> amplia, sin firmas — las lleva el contrato) y la verificación de paginación en
+> el release. Al publicar el tag, el auto-update (v1.0.3+) + el nuevo paso de
+> paginación de `release.yml` quedan probados de punta a punta.
 
 ---
 
@@ -14,13 +20,14 @@
 ya estén bumpeados.** El CI (`release.yml`) compila el código del commit del tag
 y los instaladores se nombran con la versión de `src-tauri/tauri.conf.json`,
 NO con el nombre del tag. Un tag sobre un commit sin bumpear publicaría una
-release `v1.0.3` con instaladores `DinamoRent_1.0.2_*`.
+release `v1.0.4` con instaladores `DinamoRent_1.0.3_*` (si el bump quedara a medias).
 
 ---
 
 ## 1. Pre-requisitos
 
-- [ ] `ci.yml` verde en el tope de `main` (lint, svelte-check, vitest, cargo test --lib, importador).
+- [ ] `ci.yml` verde en el tope de `main` (lint, svelte-check, vitest, cargo test --lib, importador,
+      test de paginación con el 4º caso: orden de reserva 1 página Carta).
       El workflow de release NO valida: un tag sobre un commit roto publicaría igual.
 - [ ] Working tree limpio y `main` local = `origin/main`.
 - [ ] El secret `TAURI_SIGNING_PRIVATE_KEY` está configurado en Settings → Secrets → Actions
@@ -37,9 +44,9 @@ Editar la versión en los **tres** archivos (deben coincidir):
 
 | Archivo | Campo |
 |---|---|
-| `package.json` | `"version": "1.0.3"` |
-| `src-tauri/Cargo.toml` | `version = "1.0.3"` (crate `dinamo-rent`) |
-| `src-tauri/tauri.conf.json` | `"version": "1.0.3"` |
+| `package.json` | `"version": "1.0.4"` |
+| `src-tauri/Cargo.toml` | `version = "1.0.4"` (crate `dinamo-rent`) |
+| `src-tauri/tauri.conf.json` | `"version": "1.0.4"` |
 
 Verificar la consistencia:
 
@@ -68,15 +75,15 @@ cd src-tauri && cargo test --lib
 Mensaje con el estilo del repo (español, prefijo `chore:`):
 
 ```text
-chore: versión 1.0.3 — <resumen corto de los cambios>
+chore: versión 1.0.4 — orden de renta y reserva más legibles (sin firmas, tipografía amplia)
 ```
 
 ## 5. Publicar: push + tag
 
 ```bash
 git push origin main
-git tag v1.0.3
-git push origin v1.0.3
+git tag v1.0.4
+git push origin v1.0.4
 ```
 
 El push del tag dispara `release.yml` (GitHub Actions, `windows-latest`):
@@ -84,7 +91,7 @@ El push del tag dispara `release.yml` (GitHub Actions, `windows-latest`):
 contrato 3-4 páginas con pie, informe A4 — bloquea la release si falla) →
 changelog automático → `tauri build` (NSIS + MSI) → crea la release
 **publicada** (no draft) y sube los assets. ~10 minutos (referencia v1.0.2:
-11 min · v1.0.3: ~10 min).
+11 min · v1.0.3: ~10 min · v1.0.4: pendiente de medir).
 
 > El body de la release se genera solo: lista los commits entre el tag anterior
 > y el nuevo, con hash corto y mensaje. Si quieres verlo antes de publicar,
@@ -97,20 +104,22 @@ changelog automático → `tauri build` (NSIS + MSI) → crea la release
 
 ## 6. Verificar la release (no confiar a ciegas en el CI)
 
-- [ ] Release `v1.0.3` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.3>
-      con **4+ assets**: los 2 instaladores (`DinamoRent_1.0.3_x64-setup.exe` NSIS ~21 MB y
-      `DinamoRent_1.0.3_x64_en-US.msi` ~31 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
+- [ ] Release `v1.0.4` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.4>
+      con **5 assets**: los 2 instaladores (`DinamoRent_1.0.4_x64-setup.exe` NSIS ~21 MB y
+      `DinamoRent_1.0.4_x64_en-US.msi` ~32 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
       y `latest.json`. Los `.sig` son de **minisign** (verificación del updater), NO firma de
       código Authenticode.
 - [ ] `latest.json` existe y `platforms.windows-x86_64.url` apunta al instalador de esta
       release (el CI elige cuál sube al publicar — en la v1.0.3 fue el `.msi`) — es lo que la
-      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse.
+      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse. En la v1.0.4 la app
+      instalada debe DETECTAR la release nueva y ofrecer instalarla (prueba de campo del
+      auto-update).
 - [ ] El **body contiene el changelog** (commits del rango).
 - [ ] Los enlaces responden HTTP 200 y el tamaño coincide:
 
 ```powershell
 # En el PC objetivo
-Get-FileHash .\DinamoRent_1.0.3_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\DinamoRent_1.0.4_x64-setup.exe -Algorithm SHA256
 # comparar contra el sha256 publicado por GitHub en la página de la release
 ```
 
@@ -120,7 +129,7 @@ Get-FileHash .\DinamoRent_1.0.3_x64-setup.exe -Algorithm SHA256
 
 Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
-- [ ] `scripts/verificar-despliegue.ps1` — `Check "Version 1.0.3" ($ver -like '1.0.3*')`.
+- [ ] `scripts/verificar-despliegue.ps1` — `Check "Version 1.0.4" ($ver -like '1.0.4*')`.
 - [ ] `DEPLOYMENT_CLIENTES.md` — versión esperada e instaladores en la tabla de verificación.
 - [ ] `RESUMEN_EJECUTIVO.md` — versión estable, assets, conteos.
 - [ ] `Handsoff.md` — cabecera y nota de portada de la release nueva.
@@ -128,7 +137,7 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
 ## 8. Anunciar
 
-- [ ] Marcar releases anteriores si aplica (la v1.0.2 sigue siendo "estable anterior", no se descontinúa salvo motivo).
+- [ ] Marcar releases anteriores si aplica (la v1.0.3 pasa a "estable anterior"; la v1.0.2 ya lo es — no se descontinúa salvo motivo).
 - [ ] Pegar el mensaje de `ANUNCIO_RELEASE_TEMPLATE.md` (versión larga o corta) en Slack/Teams
       con los enlaces de descarga y el resumen de la release.
 
@@ -138,11 +147,11 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
 ```
 [ ] CI verde en main
-[ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos)
+[ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos, 1.0.4)
 [ ] Docs de descarga actualizadas (INSTALACION_OPERACIONES.md, README.md, ANUNCIO)
-[ ] commit chore: versión X.Y.Z
-[ ] git push origin main && git push origin vX.Y.Z
-[ ] Release publicada por CI con changelog y 2 assets (NSIS + MSI)
+[ ] commit chore: versión 1.0.4
+[ ] git push origin main && git push origin v1.0.4
+[ ] Release publicada por CI con changelog y 5 assets (NSIS + MSI + .sig x2 + latest.json)
 [ ] sha256 verificado contra el publicado
 [ ] verificar-despliegue.ps1 → OK (equipo de prueba)
 [ ] Docs de operación al día (ps1, DEPLOYMENT_CLIENTES, RESUMEN, Handsoff)
