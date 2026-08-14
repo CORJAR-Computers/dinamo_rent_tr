@@ -10,6 +10,8 @@
 //   2. tres-paginas.html → entre 3 y 4 páginas Carta CON pie «Página X de Y».
 //   3. a4.html           → hoja A4 (informe mensual; sin expectativa de
 //                          páginas, solo el tamaño).
+//   4. reserva.html      → exactamente 1 página Carta (orden de reserva;
+//                          tampoco lleva pie: es del contrato).
 //
 // El verificador necesita un navegador Chromium (Chrome/Edge headless): en
 // CI (windows-latest) Edge viene instalado; localmente se usa el del sistema
@@ -88,12 +90,21 @@ await caso(
 	'MediaBox A4 (595×842 pt)'
 );
 
+await caso(
+	'4. Orden de reserva — 1 página Carta (sin pie)',
+	'reserva.html',
+	'=1',
+	['--tamano', 'carta'],
+	'exactamente 1 página en papel Carta'
+);
+
 console.log('');
+const TOTAL = 4;
 if (fallos.length === 0) {
-	console.log(`Resultado: ${3}/${3} casos OK`);
+	console.log(`Resultado: ${TOTAL}/${TOTAL} casos OK`);
 	process.exit(0);
 } else {
-	console.log(`Resultado: ${3 - fallos.length}/3 casos OK · ${fallos.length} fallo(s):`);
+	console.log(`Resultado: ${TOTAL - fallos.length}/${TOTAL} casos OK · ${fallos.length} fallo(s):`);
 	for (const f of fallos) console.log(`  - ${f}`);
 	process.exit(1);
 }
