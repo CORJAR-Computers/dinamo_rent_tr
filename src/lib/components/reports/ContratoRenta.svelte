@@ -79,9 +79,9 @@
 
 <style>
 	/* Contrato de renta — impresión en papel Carta / Letter (ver @page y
-	   .contrato-carta en app.css). Cuerpo 6.8pt, interlineado 1.06: el texto
-	   legal debe caber en 2 hojas (reducción pedida: menos tamaño de letra,
-	   manteniendo legibilidad). */
+	   .contrato-carta en app.css). Cuerpo 6.2pt, interlineado 0.98: el texto
+	   legal cabe en 2 hojas Carta (verificado con el PDF real: printToPDF +
+	   verificar-paginacion = 2 páginas con pie «Página X de Y»). */
 	/* Paleta por rol en variables: el modo oscuro (pantalla) y la impresión
 	   (siempre en claro, en app.css @media print) solo redefinen estas
 	   variables. */
@@ -100,8 +100,8 @@
 		--ct-borde-firma: #333333;
 		--ct-footer-borde: #eeeeee;
 		font-family: 'Arial', sans-serif;
-		font-size: 6.8pt;
-		line-height: 1.06;
+		font-size: 6.2pt;
+		line-height: 0.98;
 		color: var(--ct-texto);
 		text-align: justify;
 		hyphens: auto;
@@ -129,7 +129,7 @@
 
 	.titulo-principal {
 		color: var(--ct-acento);
-		font-size: 9.5pt;
+		font-size: 9pt;
 		font-weight: bold;
 		margin: 0 0 2px 0;
 		text-transform: uppercase;
@@ -151,9 +151,9 @@
 
 	.numero-contrato {
 		text-align: center;
-		font-size: 9pt;
+		font-size: 8.4pt;
 		font-weight: bold;
-		margin: 4px 0 6px 0;
+		margin: 3px 0 4px 0;
 		color: var(--ct-acento);
 		background-color: var(--ct-fondo-suave);
 		padding: 2px;
@@ -161,26 +161,26 @@
 	}
 
 	.seccion-partes {
-		margin-bottom: 6px;
-		padding: 5px;
+		margin-bottom: 4px;
+		padding: 4px;
 		background-color: var(--ct-fondo-caja);
 		border-left: 3px solid var(--ct-acento);
-		font-size: 6.8pt;
-		line-height: 1.06;
+		font-size: 6.2pt;
+		line-height: 0.98;
 	}
 
 	.clausula-titulo {
 		font-weight: bold;
-		margin: 4px 0 1px 0;
+		margin: 3px 0 1px 0;
 		color: var(--ct-texto);
-		font-size: 7.6pt;
+		font-size: 7.2pt;
 		page-break-after: avoid;
 	}
 
 	.clausula-contenido {
-		margin: 0 0 2px 0;
+		margin: 0 0 1px 0;
 		text-align: justify;
-		line-height: 1.06;
+		line-height: 0.98;
 		text-indent: 8px;
 	}
 
@@ -191,7 +191,7 @@
 
 	.lista-numerada li {
 		margin-bottom: 2px;
-		line-height: 1.06;
+		line-height: 0.98;
 	}
 
 	.campo-resaltado {
@@ -199,14 +199,14 @@
 		padding: 1px 3px;
 		border-radius: 2px;
 		font-weight: bold;
-		font-size: 6.8pt;
+		font-size: 6.2pt;
 		border-bottom: 1px dotted var(--ct-borde);
 	}
 
 	.contrato-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 6.8pt;
+		font-size: 6.2pt;
 		margin: 3px 0;
 	}
 
@@ -216,16 +216,16 @@
 	}
 
 	.poliza-container {
-		margin: 4px 0;
-		padding: 5px;
+		margin: 3px 0;
+		padding: 4px;
 		border: 1px dashed var(--ct-borde);
 		background-color: var(--ct-fondo-poliza);
-		font-size: 6.8pt;
+		font-size: 6.2pt;
 		page-break-inside: avoid;
 	}
 
 	.linea-pago {
-		margin: 5px 0;
+		margin: 3px 0;
 	}
 
 	.linea-pago .casilla {
@@ -243,14 +243,14 @@
 	}
 
 	.firmas-container {
-		margin-top: 16px;
+		margin-top: 12px;
 		page-break-inside: avoid;
-		padding-top: 6px;
+		padding-top: 4px;
 		border-top: 1px solid var(--ct-borde);
 	}
 
 	.firma-linea {
-		margin: 14px 0 3px;
+		margin: 10px 0 3px;
 		border-top: 1px solid var(--ct-borde-firma);
 		width: 55%;
 	}
