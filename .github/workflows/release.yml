@@ -14,8 +14,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
+      # Historial completo (fetch-depth: 0): el changelog necesita los commits
+      # y tags anteriores para calcular el rango entre releases.
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # jsdom 30 requiere Node >= 22.4; usamos Node 24 (LTS activo).
       - name: Setup Node 24
@@ -41,6 +45,46 @@ jobs:
       - name: Install dependencies (bun)
         run: bun install --frozen-lockfile
 
+      # Changelog automático: lista los commits entre el tag anterior y este
+      # tag (hash corto + mensaje). Sin tag anterior (primer release), lista
+      # todo el historial. El body se pasa a tauri-action como releaseBody.
+      - name: Generar changelog de la release
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF="${{ github.ref_name }}"
+          # Tag anterior por orden de versión (excluye el actual)
+          PREV=$(git tag --sort=-version:refname | grep -v "^${REF}$" | head -1 || true)
+          if [ -n "$PREV" ]; then
+            LOG=$(git log --format='- %h %s' "${PREV}..HEAD")
+            ORIGEN="desde ${PREV}"
+          else
+            LOG=$(git log --format='- %h %s')
+            ORIGEN="todo el historial"
+          fi
+          [ -n "$LOG" ] || LOG="- (sin commits nuevos)"
+          BODY="# Dinamo Rent ERP ${REF}
+          
+          > Publicada automáticamente por GitHub Actions. Cambios ${ORIGEN} (commit ${GITHUB_SHA:0:7}).
+          
+          ## Cambios en esta versión
+          
+          ${LOG}
+          
+          ## Instalación
+          
+          - **Windows**: descarga el instalador NSIS \`*-setup.exe\` o el MSI \`*.msi\` de los assets de este release.
+          - La app crea su \`config.ini\` en \`%APPDATA%\\com.corjar.dinamorent\\\` en el primer arranque.
+          - Requiere WebView2 Runtime (se instala automáticamente si no está presente).
+          
+          Ver \`SECURITY.md\` para la política de manejo de secretos y respaldo de la clave PII."
+          {
+            echo 'changelog<<CHANGELOG_EOF'
+            echo "${BODY}"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build y publicar release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -48,14 +92,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Dinamo Rent ERP ${{ github.ref_name }}'
-          releaseBody: |
-            Release generado automáticamente por GitHub Actions.
-
-            ## Instalación
-            - **Windows**: descarga el instalador NSIS `*-setup.exe` o el MSI `*.msi` de los assets de este release.
-            - La app crea su `config.ini` en `%APPDATA%\com.corjar.dinamorent\` en el primer arranque.
-            - Requiere WebView2 Runtime (se instala automáticamente si no está presente).
-
-            Ver `SECURITY.md` para la política de manejo de secretos y respaldo de la clave PII.
+          releaseBody: ${{ steps.changelog.outputs.changelog }}
           releaseDraft: false
           prerelease: false
