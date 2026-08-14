@@ -1,8 +1,10 @@
 <script lang="ts">
 	// OrdenRenta.svelte — Orden de renta imprimible en papel Carta (Letter).
-	// Diseño compacto: debe caber en UNA sola hoja carta. La compresión de
-	// impresión vive en app.css (@media print) vía .orden-carta; el estilo de
-	// aquí es el que se ve en pantalla (vista previa) y en papel.
+	// Tipografía amplia (11px) y aire entre secciones para que llene la hoja
+	// y se lea cómodo. No lleva firmas: las firma las lleva el contrato de
+	// renta asociado (nota al pie). La impresión vive en app.css
+	// (@media print) vía .orden-carta; el estilo de aquí es el que se ve en
+	// pantalla (vista previa) y en papel.
 	import { onMount } from 'svelte';
 	import type { Renta } from '$lib/api';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
@@ -68,9 +70,11 @@
 </script>
 
 <style>
-	/* Documento compacto en papel Carta: 8.5x11in ≈ 816px x 1056px a 96dpi.
-	   La tipografía está en px (no en rem) para que el zoom/DPI no la
-	   desborde; el interlineado es 1.3 y las filas de tablas son mínimas. */
+	/* Documento en papel Carta (8.5x11in ≈ 816px x 1056px a 96dpi) con
+	   tipografía amplia (11px) y aire entre secciones para que llene la hoja
+	   y se lea cómodo; interlineado 1.45 y padding generoso en cajas/tablas.
+	   No lleva firmas: el contrato de renta asociado contiene las firmas de
+	   las partes (nota al pie del documento). */
 	/* Paleta por rol en variables: el modo oscuro (pantalla) y la impresión
 	   (siempre en claro, en app.css @media print) solo redefinen estas
 	   variables. */
@@ -91,8 +95,8 @@
 		background: var(--ord-fondo);
 		color: var(--ord-texto);
 		font-family: 'Segoe UI', Arial, sans-serif;
-		font-size: 10px;
-		line-height: 1.3;
+		font-size: 11px;
+		line-height: 1.45;
 		width: 100%;
 		page-break-inside: avoid;
 	}
@@ -101,21 +105,21 @@
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
-		gap: 10px;
+		gap: 12px;
 		border-bottom: 2px solid var(--ord-acento);
-		padding-bottom: 6px;
-		margin-bottom: 6px;
+		padding-bottom: 8px;
+		margin-bottom: 10px;
 	}
 
 	.logo-bloque {
 		display: flex;
 		align-items: center;
-		gap: 7px;
+		gap: 8px;
 	}
 
 	.logo-caja {
-		width: 52px;
-		height: 52px;
+		width: 54px;
+		height: 54px;
 		border-radius: 8px;
 		background: var(--ord-acento);
 		display: flex;
@@ -126,21 +130,21 @@
 	}
 
 	.logo-caja img {
-		width: 44px;
-		height: 44px;
+		width: 46px;
+		height: 46px;
 		object-fit: contain;
 		border-radius: 5px;
 	}
 
 	.nombre-empresa {
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 800;
 		letter-spacing: -0.01em;
 		line-height: 1.1;
 	}
 
 	.subtitulo-empresa {
-		font-size: 8px;
+		font-size: 9px;
 		color: var(--ord-secundario);
 		margin-top: 1px;
 	}
@@ -150,7 +154,7 @@
 	}
 
 	.titulo-orden {
-		font-size: 15px;
+		font-size: 17px;
 		font-weight: 800;
 		letter-spacing: 0.04em;
 		color: var(--ord-acento);
@@ -158,26 +162,26 @@
 	}
 
 	.ref-contrato {
-		font-size: 10px;
+		font-size: 11px;
 		font-weight: 600;
-		margin-top: 1px;
+		margin-top: 2px;
 	}
 
 	.ref-renta {
-		font-size: 8px;
+		font-size: 9px;
 		color: var(--ord-secundario);
-		margin-top: 1px;
+		margin-top: 2px;
 	}
 
 	.fila-estado {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		margin-bottom: 6px;
+		gap: 8px;
+		margin-bottom: 10px;
 	}
 
 	.etiqueta-estado {
-		font-size: 8px;
+		font-size: 9px;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
@@ -189,8 +193,8 @@
 		align-items: center;
 		border-radius: 999px;
 		border: 1px solid;
-		padding: 1px 8px;
-		font-size: 9px;
+		padding: 1px 9px;
+		font-size: 10px;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -219,24 +223,24 @@
 	.malla {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 7px;
-		margin-bottom: 6px;
+		gap: 10px;
+		margin-bottom: 10px;
 	}
 
 	.caja {
 		border: 1px solid var(--ord-borde);
-		border-radius: 6px;
-		padding: 5px 8px;
+		border-radius: 8px;
+		padding: 7px 10px;
 		page-break-inside: avoid;
 	}
 
 	.caja-titulo {
-		font-size: 8px;
+		font-size: 9px;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--ord-secundario);
-		margin-bottom: 3px;
+		margin-bottom: 4px;
 	}
 
 	.linea {
@@ -244,8 +248,8 @@
 		justify-content: space-between;
 		align-items: baseline;
 		gap: 8px;
-		font-size: 10px;
-		line-height: 1.45;
+		font-size: 11px;
+		line-height: 1.5;
 	}
 
 	.linea .l {
@@ -264,27 +268,27 @@
 
 	.nombre-cliente {
 		font-weight: 800;
-		font-size: 10.5px;
+		font-size: 12px;
 	}
 
 	.tabla {
 		width: 100%;
 		border-collapse: collapse;
 		border: 1px solid var(--ord-borde);
-		border-radius: 6px;
+		border-radius: 8px;
 		overflow: hidden;
-		margin-bottom: 7px;
+		margin-bottom: 10px;
 	}
 
 	.tabla th {
 		background: var(--ord-fondo-tabla);
 		text-align: left;
-		font-size: 8px;
+		font-size: 9px;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--ord-secundario);
-		padding: 3px 8px;
+		padding: 5px 10px;
 	}
 
 	.tabla th.derecha {
@@ -292,8 +296,8 @@
 	}
 
 	.tabla td {
-		padding: 2px 8px;
-		font-size: 10px;
+		padding: 5px 10px;
+		font-size: 11px;
 		border-top: 1px solid var(--ord-borde-fila);
 	}
 
@@ -316,12 +320,12 @@
 
 	.fila-total td {
 		font-weight: 800;
-		font-size: 10.5px;
+		font-size: 11.5px;
 	}
 
 	.pagos td {
-		padding: 2px 8px;
-		font-size: 9.5px;
+		padding: 4px 10px;
+		font-size: 10.5px;
 	}
 
 	.pago-concepto {
@@ -333,7 +337,7 @@
 	}
 
 	.inspeccion-lista {
-		font-size: 9.5px;
+		font-size: 10.5px;
 		line-height: 1.5;
 		color: var(--ord-texto-medio);
 	}
@@ -346,58 +350,43 @@
 	.devolucion-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 4px 12px;
+		gap: 6px 14px;
 	}
 
 	.observaciones {
-		font-size: 9.5px;
+		font-size: 10.5px;
 		white-space: pre-wrap;
 		color: var(--ord-texto-medio);
-		line-height: 1.4;
+		line-height: 1.5;
 	}
 
 	.condiciones {
-		font-size: 9px;
+		font-size: 10px;
 		color: var(--ord-secundario);
-		line-height: 1.45;
+		line-height: 1.5;
 		margin-top: 2px;
-		margin-bottom: 8px;
+		margin-bottom: 10px;
 	}
 
 	.condiciones p {
 		margin: 0;
 	}
 
-	.firmas {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 12px;
-		margin-top: 10px;
-		page-break-inside: avoid;
-	}
-
-	.firma {
+	.nota-firmas {
 		text-align: center;
-	}
-
-	.firma-linea {
-		border-top: 1px solid var(--ord-pie);
-		padding-top: 3px;
-		font-size: 9px;
-		font-weight: 600;
-	}
-
-	.firma-nombre {
-		font-size: 8px;
-		color: var(--ord-secundario);
-		margin-top: 2px;
+		font-size: 8.5px;
+		font-style: italic;
+		color: var(--ord-pie);
+		margin-top: 10px;
 	}
 
 	.pie {
+		border-top: 1px solid var(--ord-borde);
+		padding-top: 8px;
+		margin-top: 12px;
 		text-align: center;
-		font-size: 8px;
+		font-size: 9px;
 		color: var(--ord-pie);
-		margin-top: 6px;
 	}
 </style>
 
@@ -600,17 +589,10 @@
 		<p>• El cliente es responsable por daños, multas y comparendos ocurridos durante el periodo de la renta. El saldo pendiente debe cancelarse al momento de la devolución del vehículo.</p>
 	</div>
 
-	<!-- Firmas -->
-	<div class="firmas">
-		<div class="firma">
-			<div class="firma-linea">Firma del cliente</div>
-			<p class="firma-nombre">{renta.nombreCliente}</p>
-		</div>
-		<div class="firma">
-			<div class="firma-linea">Firma del representante</div>
-			<p class="firma-nombre">{empresa.nombreMostrar}</p>
-		</div>
-	</div>
+	<!-- El contrato de renta asociado lleva las firmas de las partes -->
+	<p class="nota-firmas">
+		Documento informativo: las firmas de las partes constan en el contrato de renta correspondiente.
+	</p>
 
 	<!-- Pie -->
 	<p class="pie">

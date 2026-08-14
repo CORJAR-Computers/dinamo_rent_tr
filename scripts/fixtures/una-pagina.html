@@ -18,83 +18,216 @@
 			background: #fff;
 		}
 		body {
-			font: 9.5pt/1.25 Arial, sans-serif;
-			color: #111;
+			font: 11px/1.45 'Segoe UI', Arial, sans-serif;
+			color: #0f172a;
 			padding: 7mm 9mm;
 		}
 		h1 {
-			font-size: 13pt;
-			letter-spacing: 0.04em;
-			margin-bottom: 1.5mm;
+			font-size: 14px;
+			letter-spacing: -0.01em;
+			margin-bottom: 1px;
 		}
-		h2 {
-			font-size: 9pt;
+		.sub {
+			font-size: 9px;
+			color: #64748b;
+			margin-bottom: 6px;
+		}
+		.cabecera {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			border-bottom: 2px solid #1e40af;
+			padding-bottom: 8px;
+			margin-bottom: 10px;
+		}
+		.titulo-orden {
+			font-size: 17px;
+			font-weight: 800;
+			letter-spacing: 0.04em;
+			color: #1e40af;
+			text-align: right;
+		}
+		.ref {
+			font-size: 11px;
+			font-weight: 600;
+			text-align: right;
+			margin-top: 2px;
+		}
+		.ref-sub {
+			font-size: 9px;
+			color: #64748b;
+			text-align: right;
+			margin-top: 2px;
+		}
+		.malla {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 10px;
+			margin-bottom: 10px;
+		}
+		.caja {
+			border: 1px solid #cbd5e1;
+			border-radius: 8px;
+			padding: 7px 10px;
+		}
+		.caja h2 {
+			font-size: 9px;
 			text-transform: uppercase;
-			color: #333;
-			border-bottom: 0.4pt solid #888;
-			padding-bottom: 0.5mm;
-			margin: 3mm 0 1.2mm;
+			letter-spacing: 0.08em;
+			color: #64748b;
+			margin-bottom: 4px;
+		}
+		.nombre {
+			font-size: 12px;
+			font-weight: 800;
+		}
+		.linea {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			gap: 8px;
+			font-size: 11px;
+			line-height: 1.5;
+			margin-top: 2px;
+		}
+		.linea .l {
+			color: #64748b;
+		}
+		.linea .v {
+			font-weight: 600;
+			text-align: right;
 		}
 		table {
 			width: 100%;
 			border-collapse: collapse;
-			margin: 1.5mm 0;
+			border: 1px solid #cbd5e1;
+			border-radius: 8px;
+			overflow: hidden;
+			margin-bottom: 10px;
 		}
-		td,
+		th,
+		td {
+			padding: 5px 10px;
+			font-size: 11px;
+			border-top: 1px solid #e2e8f0;
+		}
 		th {
-			border: 0.4pt solid #999;
-			padding: 1mm 1.5mm;
-			font-size: 9pt;
+			background: #f1f5f9;
+			text-align: left;
+			font-size: 9px;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			color: #64748b;
+			border-top: none;
 		}
-		.fila {
-			display: flex;
-			justify-content: space-between;
+		td.derecha,
+		th.derecha {
+			text-align: right;
 		}
-		.firmas {
-			display: flex;
-			gap: 20mm;
-			margin-top: 6mm;
+		.fila-total {
+			background: #f1f5f9;
+			font-weight: 800;
+			font-size: 11.5px;
 		}
-		.firma {
-			flex: 1;
+		.condiciones {
+			font-size: 10px;
+			color: #64748b;
+			line-height: 1.5;
+			margin-top: 2px;
+			margin-bottom: 10px;
+		}
+		.condiciones p {
+			margin: 0 0 4px;
+		}
+		.nota-firmas {
 			text-align: center;
-			border-top: 0.5pt solid #444;
-			padding-top: 1mm;
-			font-size: 8.5pt;
+			font-size: 8.5px;
+			font-style: italic;
+			color: #94a3b8;
+			margin-top: 10px;
+		}
+		.pie {
+			border-top: 1px solid #cbd5e1;
+			padding-top: 8px;
+			margin-top: 12px;
+			text-align: center;
+			font-size: 9px;
+			color: #94a3b8;
 		}
 	</style>
 </head>
 <body>
-	<h1>DINAMO RENT A CAR</h1>
-	<p style="font-size: 8.5pt; color: #444">Orden de renta N.º 0001 · Cartagena, 8 de agosto de 2026</p>
+	<div class="cabecera">
+		<div>
+			<h1>DINAMO RENT A CAR</h1>
+			<p class="sub">Renta de vehículos · Contrato de renta</p>
+		</div>
+		<div>
+			<p class="titulo-orden">ORDEN DE RENTA</p>
+			<p class="ref">Contrato 2026-0001</p>
+			<p class="ref-sub">Renta No. 0001 · Emitida: 8 de agosto de 2026</p>
+		</div>
+	</div>
 
-	<h2>Cliente y vehículo</h2>
-	<div class="fila"><span>Cliente: Juan Pérez Gómez</span><span>Placa: XYZ-123</span></div>
+	<div class="malla">
+		<div class="caja">
+			<h2>Cliente</h2>
+			<p class="nombre">Juan Pérez Gómez</p>
+			<div class="linea"><span class="l">Lic. 1045-2233-01 · Colombiana</span></div>
+		</div>
+		<div class="caja">
+			<h2>Vehículo</h2>
+			<p class="nombre">Mazda CX-5</p>
+			<div class="linea">
+				<span class="l">Placa: <strong>XYZ-123</strong></span>
+				<span class="l">Km: 42.150 · Tanque: Lleno</span>
+			</div>
+		</div>
+	</div>
 
-	<h2>Tarifas</h2>
+	<div class="malla">
+		<div class="caja">
+			<h2>Recogida</h2>
+			<div class="linea"><span class="l">Fecha</span><span class="v">08/08/2026</span></div>
+			<div class="linea"><span class="l">Hora</span><span class="v">10:00 AM</span></div>
+			<div class="linea"><span class="l">Lugar</span><span class="v">Aeropuerto</span></div>
+		</div>
+		<div class="caja">
+			<h2>Retorno</h2>
+			<div class="linea"><span class="l">Fecha</span><span class="v">13/08/2026</span></div>
+			<div class="linea"><span class="l">Hora</span><span class="v">10:00 AM</span></div>
+			<div class="linea"><span class="l">Lugar</span><span class="v">Oficina</span></div>
+		</div>
+	</div>
+
 	<table>
-		<tr><th style="text-align: left">Concepto</th><th style="text-align: right">Valor</th></tr>
-		<tr><td>5 días × $150.000</td><td style="text-align: right">$750.000</td></tr>
-		<tr><td>Hora extra</td><td style="text-align: right">$10.000</td></tr>
-		<tr><td><strong>TOTAL</strong></td><td style="text-align: right"><strong>$760.000</strong></td></tr>
+		<tr><th>Concepto</th><th class="derecha">Valor</th></tr>
+		<tr><td>Valor del día × 5 días ($150.000)</td><td class="derecha">$750.000</td></tr>
+		<tr><td>Hora extra (2 × $5.000)</td><td class="derecha">$10.000</td></tr>
+		<tr><td>Lavado</td><td class="derecha">$15.000</td></tr>
+		<tr class="fila-total"><td>TOTAL</td><td class="derecha">$775.000</td></tr>
+		<tr><td>Abono recibido</td><td class="derecha">- $200.000</td></tr>
+		<tr class="fila-total"><td>Saldo pendiente</td><td class="derecha">$575.000</td></tr>
 	</table>
 
-	<h2>Recogida y retorno</h2>
-	<div class="fila">
-		<span>Recogida: 08/08/2026 10:00 · Aeropuerto</span>
-		<span>Retorno: 13/08/2026 10:00 · Oficina</span>
+	<div class="caja">
+		<h2>Observaciones</h2>
+		<p style="font-size: 10.5px; line-height: 1.5; color: #334155">
+			Vehículo entregado en perfecto estado, con tanque lleno y kilometraje 42.150. Se entrega llanta de
+			repuesto, gato y kit de carretera. El cliente se compromete a devolver el vehículo en las mismas
+			condiciones, con el tanque lleno y sin daños.
+		</p>
 	</div>
 
-	<h2>Observaciones</h2>
-	<p>
-		Vehículo entregado en perfecto estado, con tanque lleno y kilometraje 42.150. Se entrega llanta de
-		repuesto, gato y kit de carretera. El cliente se compromete a devolver el vehículo en las mismas
-		condiciones, con el tanque lleno y sin daños.
+	<div class="condiciones">
+		<p>• El vehículo debe devolverse en las mismas condiciones en que fue entregado y con el tanque en el nivel pactado; de lo contrario se aplicarán los costos de lavado y combustible correspondientes.</p>
+		<p>• El cliente es responsable por daños, multas y comparendos ocurridos durante el periodo de la renta. El saldo pendiente debe cancelarse al momento de la devolución del vehículo.</p>
+	</div>
+
+	<p class="nota-firmas">
+		Documento informativo: las firmas de las partes constan en el contrato de renta correspondiente.
 	</p>
 
-	<div class="firmas">
-		<div class="firma">Firma del arrendatario</div>
-		<div class="firma">Firma de Dinamo Rent a Car</div>
-	</div>
+	<p class="pie">Dinamo Rent a Car · Contrato 2026-0001 · Renta No. 0001 · Impresa el 8 de agosto de 2026</p>
 </body>
 </html>
