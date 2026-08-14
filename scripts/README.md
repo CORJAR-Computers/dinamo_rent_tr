@@ -142,6 +142,19 @@ node scripts/verificar-paginacion.mjs contrato.html=3:4 --motor edge --salida ./
 - `--headers` — simula el diálogo con «Encabezados y pies de página» ACTIVADO.
 - `--salida <dir>` / `--conservar` — conservar los PDFs generados.
 
+### Notas de robustez
+
+- Tras imprimir, el script **espera con polling** a que el PDF exista: el proceso
+  padre de Chrome/Edge headless sale con código 0 **antes** de que su renderizador
+  escriba el archivo (sin esa espera, un PDF válido se reportaba como «archivo
+  vacío»).
+- Si el navegador no genera el PDF con `--no-pdf-header-footer` (algunas versiones
+  de Edge headless), se reintenta automáticamente sin ese flag usando un perfil
+  nuevo y se avisa en el output (el PDF queda con el chrome del navegador; la
+  verificación `--pie` puede verse afectada).
+- Los perfiles temporales se limpian al final con reintentos (un proceso Edge
+  rezagado puede bloquear el directorio un instante).
+
 ### Códigos de salida
 
 | Código | Significado                                   |

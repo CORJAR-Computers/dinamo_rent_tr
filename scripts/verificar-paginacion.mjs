@@ -69,6 +69,7 @@ Opciones:
   --tamano carta|letter|a4|AxB   Verifica la hoja (MediaBox) contra ese tamaño
   --pie                      Verifica el pie «Página X de Y» (@page margin box)
   --headers                  Simula el diálogo con «Encabezados y pies» ACTIVADO
+                             (no pasa --no-pdf-header-footer al navegador)
   --salida <dir>             Directorio donde guardar los PDFs (se conservan)
   --conservar                Conserva los PDFs temporales generados
   --tiempo <ms>              Tiempo máximo por archivo (def. 90000)
@@ -79,6 +80,13 @@ Códigos de salida:
   0  todo OK
   1  error técnico (navegador no encontrado, fallo de impresión, timeout...)
   2  verificación fallida (páginas, tamaño o pie incorrectos)
+
+Notas:
+  - Sin --headers, se pasa --no-pdf-header-footer para un documento limpio.
+    Si el navegador no genera el PDF con ese flag (p. ej. ciertas versiones
+    de Edge headless salen con código 0 pero sin archivo), se reintenta sin
+    él automáticamente y se avisa en el output (el PDF queda con el chrome
+    del navegador; la verificación --pie puede verse afectada).
 
 Ejemplos:
   node scripts/verificar-paginacion.mjs scripts/fixtures/una-pagina.html=1
@@ -224,6 +232,30 @@ function buscarBinario(motor) {
 		if (enPath) return enPath;
 	}
 	return null;
+}
+
+/**
+ * Espera (con polling) a que el PDF exista y tenga contenido tras imprimir.
+ * Es necesario: el proceso padre de Chrome/Edge headless sale con código 0
+ * ANTES de que su renderizador escriba el archivo, así que comprobar el PDF
+ * justo después del `close` lo da por «archivo vacío» aunque vaya a generarse
+ * un instante después.
+ */
+function esperarPDF(pdf, timeoutMs) {
+	return new Promise((resolver) => {
+		const inicio = Date.now();
+		const t = setInterval(() => {
+			if (existsSync(pdf) && statSync(pdf).size > 0) {
+				clearInterval(t);
+				resolver(true);
+			} else if (Date.now() - inicio > timeoutMs) {
+				clearInterval(t);
+				resolver(false);
+			}
+		}, 250);
+		// SIN unref: si el interval fuera el único handle pendiente, node saldría
+		// del proceso (código 0) antes de que aparezca el PDF.
+	});
 }
 
 /** Imprime una URL con Chrome/Edge headless y espera el PDF. */
@@ -440,6 +472,11 @@ async function main() {
 	const work = opts.salida ? resolve(opts.salida) : mkdtempSync(join(tmpdir(), 'dinamo-verif-'));
 	mkdirSync(work, { recursive: true });
 	const uidDir = opts.uid ? resolve(opts.uid) : mkdtempSync(join(tmpdir(), 'dinamo-perfil-'));
+	// Perfiles creados para las impresiones (el reintento usa uno nuevo). Se
+	// limpian al final con best-effort: un proceso Edge rezagado puede bloquear
+	// el directorio un instante, y eso no debe romper el run ni dejar basura
+	// permanente.
+	const perfiles = [uidDir];
 
 	console.log(soloPDFs ? 'Modo PDF directo (sin navegador)' : `Navegador: ${binario}`);
 	console.log(`PDFs: ${opts.salida ? work : '(temporales)'}\n`);
@@ -468,6 +505,12 @@ async function main() {
 			}
 
 			const pdf = join(work, nombre.replace(/\.[^.]+$/, '') + '.pdf');
+			// Intento 1: con --no-pdf-header-footer (documento limpio, sin el chrome
+			// del navegador). Tras el `close` del proceso padre hay que ESPERAR a
+			// que el renderizador escriba el PDF (el padre sale con código 0 antes);
+			// si aun así no aparece, se reintenta sin el flag con un perfil NUEVO y
+			// se avisa (el PDF queda con encabezados/pies propios del navegador, lo
+			// que puede interferir con --pie).
 			const args = [
 				'--headless=new',
 				'--no-sandbox',
@@ -477,8 +520,30 @@ async function main() {
 				`--print-to-pdf=${pdf}`,
 				pathToFileURL(resolve(ruta)).href
 			];
-			const res = await imprimir(binario, args, opts.tiempo);
-			if (!res.ok || !existsSync(pdf) || statSync(pdf).size === 0) {
+			// El renderizador escribe el PDF poco después de que el padre cierra;
+			// 15 s de margen bastan (un fallo real no debe colgar los 90 s).
+			const esperaPDF = Math.min(opts.tiempo, 15000);
+			let res = await imprimir(binario, args, opts.tiempo);
+			let pdfOk = (await esperarPDF(pdf, esperaPDF)) && res.ok;
+			if (!pdfOk && !opts.headers) {
+				try { rmSync(pdf, { force: true }); } catch { /* no existía */ }
+				await new Promise((r) => setTimeout(r, 500)); // deja soltar el perfil
+				const uidRetry = mkdtempSync(join(tmpdir(), 'dinamo-perfil-'));
+				perfiles.push(uidRetry);
+				const argsSinFlag = args
+					.filter((a) => a !== '--no-pdf-header-footer' && !a.startsWith('--user-data-dir='))
+					.concat([`--user-data-dir=${uidRetry}`]);
+				res = await imprimir(binario, argsSinFlag, opts.tiempo);
+				pdfOk = (await esperarPDF(pdf, esperaPDF)) && res.ok;
+				if (pdfOk) {
+					console.warn(
+						'  [AVISO] el navegador no generó el PDF con --no-pdf-header-footer: se\n' +
+							'          reintentó sin ese flag. El PDF lleva los encabezados/pies propios\n' +
+							'          del navegador (la verificación --pie puede verse afectada).'
+					);
+				}
+			}
+			if (!pdfOk) {
 				console.error(`  [ERROR] no se generó el PDF: ${res.msg || 'archivo vacío'}\n`);
 				erroresTecnicos++;
 				continue;
@@ -489,7 +554,20 @@ async function main() {
 			if (falloArchivo) fallosVerificacion++;
 		}
 	} finally {
-		rmSync(uidDir, { recursive: true, force: true });
+		// Edge puede tener el perfil bloqueado un instante tras cerrar; se
+		// reintenta con esperas reales (un setTimeout no sobrevive la salida
+		// del proceso). Si sigue bloqueado se deja (temp del SO, no rompe).
+		for (const dir of perfiles) {
+			for (let i = 0; i < 4; i++) {
+				try {
+					rmSync(dir, { recursive: true, force: true });
+					break;
+				} catch {
+					if (i === 3) break;
+					await new Promise((r) => setTimeout(r, 500));
+				}
+			}
+		}
 		if (!opts.salida && !opts.conservar) rmSync(work, { recursive: true, force: true });
 	}
 
