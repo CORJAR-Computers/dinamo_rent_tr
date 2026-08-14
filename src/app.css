@@ -363,12 +363,14 @@ select.input {
 	body.printing .print-hidden {
 		display: none !important;
 	}
-	/* Contrato de renta: documento extenso, se reduce el margen vertical para
-	   aprovechar mejor la altura de la hoja Carta. `page: contrato` activa la
-	   named page con el pie numerado «Página X de Y» (ver @page contrato). */
+	/* Contrato de renta: documento extenso. Margen inferior amplio (16mm) para
+	   que el final del documento (firmas y cláusulas) no se corte en impresoras
+	   reales — el contenido no debe llegar al borde del área imprimible.
+	   `page: contrato` activa la named page con el pie numerado «Página X de Y»
+	   (ver @page contrato). */
 	body.printing .print-clone.contrato-carta,
 	body.printing .print-area.contrato-carta {
-		padding: 8mm 12mm !important;
+		padding: 8mm 12mm 16mm !important;
 		page: contrato;
 	}
 	/* Orden de renta: hoja compacta — margen mínimo seguro para impresoras

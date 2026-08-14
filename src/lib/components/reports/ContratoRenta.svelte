@@ -79,10 +79,11 @@
 
 <style>
 	/* Contrato de renta — impresión en papel Carta / Letter (ver @page y
-	   .contrato-carta en app.css). Cuerpo 6.2pt, interlineado 0.98, logo 70px
-	   y encabezado compacto: el texto legal cabe en 2 hojas Carta (verificado
-	   con el PDF real: printToPDF + verificar-paginacion = 2 páginas con pie
-	   «Página X de Y»). */
+	   .contrato-carta en app.css). Cuerpo 6.2pt, interlineado 0.94, logo 70px
+	   y encabezado compacto: el texto legal cabe en 2 hojas Carta con margen
+	   inferior amplio (16mm) para que las firmas no se corten en impresoras
+	   reales. orphans/widows evitan párrafos cortados a 1 línea al final de
+	   cada hoja. */
 	/* Paleta por rol en variables: el modo oscuro (pantalla) y la impresión
 	   (siempre en claro, en app.css @media print) solo redefinen estas
 	   variables. */
@@ -102,10 +103,13 @@
 		--ct-footer-borde: #eeeeee;
 		font-family: 'Arial', sans-serif;
 		font-size: 6.2pt;
-		line-height: 0.98;
+		line-height: 0.94;
 		color: var(--ct-texto);
 		text-align: justify;
 		hyphens: auto;
+		/* No dejar 1 sola línea de un párrafo al inicio/final de una hoja */
+		orphans: 2;
+		widows: 2;
 	}
 
 	.encabezado-principal {
@@ -167,7 +171,7 @@
 		background-color: var(--ct-fondo-caja);
 		border-left: 3px solid var(--ct-acento);
 		font-size: 6.2pt;
-		line-height: 0.98;
+		line-height: 0.94;
 	}
 
 	.clausula-titulo {
@@ -181,7 +185,7 @@
 	.clausula-contenido {
 		margin: 0 0 1px 0;
 		text-align: justify;
-		line-height: 0.98;
+		line-height: 0.94;
 		text-indent: 8px;
 	}
 
@@ -192,7 +196,7 @@
 
 	.lista-numerada li {
 		margin-bottom: 2px;
-		line-height: 0.98;
+		line-height: 0.94;
 	}
 
 	.campo-resaltado {
