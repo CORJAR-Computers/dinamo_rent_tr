@@ -1,4 +1,4 @@
-# verificar-despliegue.ps1 - Verificacion post-instalacion de DinamoRent v1.0.1
+# verificar-despliegue.ps1 - Verificacion post-instalacion de DinamoRent v1.0.2
 #
 # Corre en el equipo objetivo como usuario normal:
 #   powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
@@ -6,7 +6,7 @@
 # IMPORTANTE: ASCII puro a proposito (Windows PowerShell 5.1 lee los .ps1 sin BOM
 # como ANSI/CP1252 y los acentos/guiones largos UTF-8 rompen el parseo).
 #
-# Comprueba: exe instalado (v1.0.1), %APPDATA%\com.corjar.dinamorent (config.ini
+# Comprueba: exe instalado (v1.0.2), %APPDATA%\com.corjar.dinamorent (config.ini
 # + dinamo_rent_v3.fdb) y que la app arranca y queda viva 10 s (el bug del v1.0.0
 # era justamente morirse antes del Login). Ver DEPLOYMENT_CLIENTES.md.
 
@@ -40,7 +40,7 @@ if (-not $exe) {
 if ($exe) {
     $ver = (Get-Item $exe).VersionInfo.ProductVersion
     Check "Ejecutable instalado" $true $exe
-    Check "Version 1.0.1" ($ver -like '1.0.1*') "ProductVersion=$ver"
+    Check "Version 1.0.2" ($ver -like '1.0.2*') "ProductVersion=$ver"
 } else {
     Check "Ejecutable instalado" $false 'no se encontro dinamo-rent.exe'
 }
