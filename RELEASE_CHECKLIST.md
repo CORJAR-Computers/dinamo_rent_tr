@@ -98,8 +98,9 @@ crea la release **publicada** (no draft) y sube los assets. ~11 minutos (referen
       `DinamoRent_1.0.3_x64_en-US.msi` ~31 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
       y `latest.json`. Los `.sig` son de **minisign** (verificación del updater), NO firma de
       código Authenticode.
-- [ ] `latest.json` existe y `platforms.windows-x86_64.url` apunta al `*_setup.exe` de esta
-      release — es lo que la app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse.
+- [ ] `latest.json` existe y `platforms.windows-x86_64.url` apunta al instalador de esta
+      release (el CI elige cuál sube al publicar — en la v1.0.3 fue el `.msi`) — es lo que la
+      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse.
 - [ ] El **body contiene el changelog** (commits del rango).
 - [ ] Los enlaces responden HTTP 200 y el tamaño coincide:
 

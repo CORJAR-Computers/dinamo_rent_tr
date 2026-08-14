@@ -60,7 +60,7 @@ RESUMEN_EJECUTIVO.md · INSTALACION_OPERACIONES.md · DEPLOYMENT_CLIENTES.md
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.0.3:** `DinamoRent_1.0.3_x64-setup.exe` (NSIS, ~21 MB) y `DinamoRent_1.0.3_x64_en-US.msi` (~31 MB) — sha256 publicados en la release (se pegan aquí al publicar)
+- **Assets de la v1.0.3:** `DinamoRent_1.0.3_x64-setup.exe` (NSIS, ~21 MB, sha256 `d0b8c07f8f49b38c85690fb2133b805ce1c4374e762fa7e897a321cb07709eca`) y `DinamoRent_1.0.3_x64_en-US.msi` (~31 MB, sha256 `bcfa5ac12e672857cac2f62e7cd676d081a5a4819e01deadd6b46e76334978e2`)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
 - **URLs directas de assets v1.0.3:**
   - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64-setup.exe
