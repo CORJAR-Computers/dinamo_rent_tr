@@ -404,15 +404,16 @@ Que valida:
 1. **Firma real**: firma un instalador de prueba (1 MiB) con la clave privada
    de `~/.tauri/dinamorent.key` (la misma que usara el CI con el secret
    `TAURI_SIGNING_PRIVATE_KEY`).
-2. **latest.json**: arma un `latest.json` (v1.0.3 > v1.0.2 instalada) con la
-   firma y lo sirve en un puerto libre de 127.0.0.1.
+2. **latest.json**: arma un `latest.json` (siguiente patch > version del repo,
+   derivado de `tauri.conf.json`) con la firma y lo sirve en un puerto libre
+   de 127.0.0.1.
 3. **Deteccion**: `src-tauri/src/bin/updater_e2e.rs` (dev, `--features dev`)
    monta la app Tauri headless con el plugin real y `check()` debe detectar
-   la v1.0.3.
+   la version nueva.
 4. **Verificacion de firma**: `download()` valida la firma contra la **pubkey
    embebida en `tauri.conf.json`** (la misma que usa la app instalada) y que
    los bytes descargados sean identicos al artifact servido.
-5. **Negativo**: con un `latest.json` de la misma version (1.0.2) -> sin
+5. **Negativo**: con un `latest.json` de la version del repo -> sin
    actualizacion.
 
 Codigos de salida: `0` todo verde · `1` fallo algo o falta entorno (cargo,
@@ -422,9 +423,7 @@ bun o la clave de firma).
 > cuando la clave no tiene; el script pasa `-p ""` para firmar de forma no
 > interactiva (sin eso, cuelga esperando input).
 
-> Nota: esto valida el flujo local completo. Para el flujo real hace falta
-> publicar la v1.0.3 con el secret `TAURI_SIGNING_PRIVATE_KEY` configurado
-> (RELEASE_CHECKLIST.md): el CI generara los `.sig` y `latest.json` que la app
-> instalada consulta al arrancar. Hoy el endpoint real responde 404 (aun no
-> existe `latest.json`), asi que la app detecta correctamente «sin
-> actualizacion».
+> Nota: valida localmente el flujo completo. El flujo real ya esta activo desde
+> la v1.0.3 (publicada y firmada con el secret `TAURI_SIGNING_PRIVATE_KEY`
+> configurado; ver RELEASE_CHECKLIST.md) — el endpoint real ya sirve
+> `latest.json` con la version vigente.

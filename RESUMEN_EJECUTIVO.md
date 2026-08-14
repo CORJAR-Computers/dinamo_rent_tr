@@ -1,6 +1,6 @@
 # Resumen Ejecutivo — Dinamo Rent ERP
 
-> **Fecha:** 2026-08-14 · **Estado general:** listo para producción — release v1.0.2 estable publicada por CI y validada de punta a punta en Windows limpio. **Auto-actualización implementada (v1.0.3+): feature commiteada y verificada E2E en local; falta configurar el secret `TAURI_SIGNING_PRIVATE_KEY` en GitHub.**
+> **Fecha:** 2026-08-14 · **Estado general:** listo para producción — release v1.0.3 publicada por CI, firmada para el auto-update y validada de punta a punta en Windows limpio.
 
 ---
 
@@ -9,28 +9,30 @@
 | Área | Estado |
 |---|---|
 | **Aplicación** | Todos los módulos operativos (rentas, comparendos + agente SIMIT, alertas, calendario, informes, reservas, contratos) |
-| **Versión estable** | **v1.0.2** — la única release que se distribuye (la **v1.0.3**, próxima, añade el auto-update) |
+| **Versión estable** | **v1.0.3** — la única release que se distribuye (con auto-update activo) |
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
 | **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 233 tests frontend, cargo 48 lib + 8 rentas + 11 migraciones, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
-| **Auto-actualización** | ✅ Implementada (updater de Tauri v2, feature commiteada y verificada E2E en local) — activa desde la **v1.0.3** | ⚠️ Falta configurar el secret `TAURI_SIGNING_PRIVATE_KEY` en GitHub para que la próxima release salga firmada |
+| **Auto-actualización** | ✅ Activa desde la **v1.0.3** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.3 publicada y firmada |
 
 ## 2. Releases en GitHub
 
 | Release | Estado | Para quién |
 |---|---|---|
-| **v1.0.2** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
-| v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.2 |
+| **v1.0.3** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
+| v1.0.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3 (transición al auto-update) |
+| v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3 |
 | v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación) | Solo referencia — **no instalarla** |
 
-**Assets de la v1.0.2:** [`DinamoRent_1.0.2_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.2/DinamoRent_1.0.2_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.2_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.2/DinamoRent_1.0.2_x64_en-US.msi) (~31 MB, despliegue GPO; sha256 publicados en la release). Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
+**Assets de la v1.0.3:** [`DinamoRent_1.0.3_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.3_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64_en-US.msi) (~31 MB, despliegue GPO; sha256 publicados en la release). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
-**Auto-actualización (a partir de la v1.0.3):** la app chequea al arrancar el
+**Auto-actualización (activa desde la v1.0.3):** la app chequea al arrancar el
 `latest.json` de GitHub Releases y ofrece instalar la versión nueva (firma minisign
 verificada contra la pubkey embebida). Las instalaciones **v1.0.2 no tienen updater**: se
-actualizan una vez a mano con el instalador de la v1.0.3. La release v1.0.3 incluirá además
-los `.sig` y el `latest.json` (el CI los genera al configurar el secret
-`TAURI_SIGNING_PRIVATE_KEY`).
+actualizan una vez a mano con el instalador de la v1.0.3. La release v1.0.3 salió firmada
+(.sig + `latest.json` generados por el CI con el secret `TAURI_SIGNING_PRIVATE_KEY`, ya
+configurado) y los artefactos publicados validan criptográficamente contra la pubkey
+embebida.
 
 **Qué corrigió la v1.0.1** (bugs del instalador v1.0.0 en equipos nuevos; histórica):
 
@@ -38,7 +40,7 @@ los `.sig` y el `latest.json` (el CI los genera al configurar el secret
 2. **Las migraciones no viajaban en el instalador** → las migraciones van embebidas en el binario (fallback automático; hoy 19: 0001-0019).
 3. **Crash sin el runtime VC++** (`LoadLibraryExW failed`) → `SetDllDirectoryW(firebird/)` encuentra las DLLs que ya viajan en el instalador; no hace falta instalar redistribuibles.
 
-**Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). De v1.0.0/v1.0.1 → **v1.0.2**, y de v1.0.2 → **v1.0.3** (transición al auto-update; desde ahí las siguientes son automáticas).
+**Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). Cualquier versión anterior → **v1.0.3** (las v1.0.2 sin updater se instalan a mano una vez; desde la v1.0.3 las siguientes son automáticas).
 
 **Qué añade la v1.0.2** (13-08):
 
@@ -47,10 +49,14 @@ los `.sig` y el `latest.json` (el CI los genera al configurar el secret
 3. **Cambiar vehículo sin cerrar la renta** — transaccional, con auditoría (`CAMBIO AUTO`); el selector de placa se deshabilita al editar.
 4. **Combos con búsqueda** (SearchSelect) en rentas, reservas, comparendos, mantenimiento y gastos (cliente por nombre/documento; vehículo por placa, marca, modelo, tipo o color).
 
+**Qué añade la v1.0.3** (14-08):
+
+1. **Auto-actualización** — updater de Tauri v2: chequea `latest.json` de GitHub al arrancar y ofrece instalar la versión nueva (diálogo «Actualización disponible» con Instalar ahora / Más tarde; firma minisign verificada contra la pubkey embebida antes de instalar).
+
 ## 3. CI (GitHub Actions)
 
 - **`ci.yml`** (cada push/PR a main): eslint · svelte-check (0/0) · **vitest (233 tests)** · vite build · **cargo test --lib (48)** (integración en dev: 8 rentas + 11 migraciones) · cargo check (all-targets + bins de mantenimiento) · **test del importador Python (16 casos)**.
-- **`release.yml`** (por tag `v*`): construye y publica el instalador (NSIS + MSI) vía `tauri-action`, con **body de release generado automáticamente** (changelog con los commits entre el tag anterior y el nuevo). **Firma los bundles para el auto-update** (`.sig` + `latest.json`) con el secret `TAURI_SIGNING_PRIVATE_KEY` — **pendiente de configurar** en GitHub (sin él, la próxima release saldría sin firma y la app no podría auto-actualizarse).
+- **`release.yml`** (por tag `v*`): construye y publica el instalador (NSIS + MSI) vía `tauri-action`, con **body de release generado automáticamente** (changelog con los commits entre el tag anterior y el nuevo). **Firma los bundles para el auto-update** (`.sig` + `latest.json`) con el secret `TAURI_SIGNING_PRIVATE_KEY` (configurado — la v1.0.3 salió firmada).
 - **Nota de operación:** el CI usa `cancel-in-progress` por rama — en pushes consecutivos solo el run del **tope** de main queda completo (los intermedios salen `cancelled`). Para verificar, mirar el run del HEAD.
 
 ## 4. Herramientas de operación (`scripts/`)
@@ -78,4 +84,4 @@ los `.sig` y el `latest.json` (el CI los genera al configurar el secret
 
 ## 6. Veredicto
 
-**El proyecto está listo para producción.** La única release estable es la v1.0.2 (construida por CI y validada en Windows limpio), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater) está documentado y validado. La **auto-actualización está implementada y verificada E2E en local**; lo único que falta para activarla en producción es configurar el secret `TAURI_SIGNING_PRIVATE_KEY` en GitHub antes de publicar la v1.0.3. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
+**El proyecto está listo para producción.** La única release estable es la v1.0.3 (construida por CI, firmada para el auto-update y validada en Windows limpio), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater) está documentado y validado. La **auto-actualización está activa desde la v1.0.3**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.

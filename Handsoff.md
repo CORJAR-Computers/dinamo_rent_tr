@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.2 publicada (IVA por renta, auto-cálculo de días/horas, cambio de vehículo, combos con búsqueda) · auto-actualización implementada (v1.0.3+): feature commiteada y verificada E2E en local — pendiente el secret `TAURI_SIGNING_PRIVATE_KEY` en GitHub · herramientas de operación (importador de datos + verifier de despliegue) en §6**
+> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.3 publicada y firmada (auto-update activo; secret `TAURI_SIGNING_PRIVATE_KEY` configurado) · herramientas de operación (importador de datos + verifier de despliegue) en §6**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -67,12 +67,14 @@
 > antes de instalar (`tauri.conf.json` → `plugins.updater`; `release.yml` firma con
 > `TAURI_SIGNING_PRIVATE_KEY`). Verificación E2E local en verde
 > (`scripts/verificar-updater-e2e.sh`: firma real → `latest.json` → `check()` detecta la
-> v1.0.3 → `download()` verifica firma + bytes idénticos). ⚠️ **Pendiente (única acción):**
-> configurar el secret `TAURI_SIGNING_PRIVATE_KEY` en Settings → Secrets → Actions del repo
-> (contenido de `~/.tauri/dinamorent.key`, respaldado fuera del repo) — sin él la próxima
-> release no firmaría los bundles y la app no podría auto-actualizarse. Las instalaciones
-> **v1.0.2 no tienen updater**: se actualizan una vez a mano a la v1.0.3 (ver
-> `RELEASE_CHECKLIST.md` e `INSTALACION_OPERACIONES.md` §6).
+> v1.0.3 → `download()` verifica firma + bytes idénticos; las versiones del fixture se
+> derivan de `tauri.conf.json` para no quedar fijas). ✅ **Publicado (14-08):** el secret
+> `TAURI_SIGNING_PRIVATE_KEY` quedó configurado (contenido de `~/.tauri/dinamorent.key`,
+> respaldado fuera del repo) y la **release v1.0.3 salió firmada** — los `.sig` y el
+> `latest.json` validan criptográficamente contra la pubkey embebida (Ed25519/BLAKE2b
+> sobre los artefactos reales). Las instalaciones **v1.0.2 no tienen updater**: se
+> actualizan una vez a mano a la v1.0.3 (ver `RELEASE_CHECKLIST.md` e
+> `INSTALACION_OPERACIONES.md` §6).
 > 🐛 **Hallazgo del CI (12-08) — el feature `linking` de rsfbclient rompía el build de
 > release**: el release v1.0.0 **nunca había pasado por CI** (se publicó con artefactos
 > locales) y el primer build en GitHub Actions fallaba en el linkeo de `dinamo_rent_lib.dll`

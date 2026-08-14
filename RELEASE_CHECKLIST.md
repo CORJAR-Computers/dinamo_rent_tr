@@ -29,6 +29,7 @@ release `v1.0.3` con instaladores `DinamoRent_1.0.2_*`.
       → la app instalada no podría auto-actualizarse. La clave privada vive SOLO en
       `~/.tauri/dinamorent.key` de la máquina que la generó: respáldala (si se pierde,
       las instalaciones v1.0.3+ dejarían de actualizarse).
+      → Configurar y verificar por CLI: [`SECRET_FIRMA_UPDATER.md`](SECRET_FIRMA_UPDATER.md)
 
 ## 2. Bump de versión
 
@@ -80,7 +81,7 @@ git push origin v1.0.3
 
 El push del tag dispara `release.yml` (GitHub Actions, `windows-latest`):
 `checkout` (fetch-depth 0) → changelog automático → `tauri build` (NSIS + MSI) →
-crea la release **publicada** (no draft) y sube los assets. ~11 minutos (referencia v1.0.2).
+crea la release **publicada** (no draft) y sube los assets. ~10 minutos (referencia v1.0.2: 11 min · v1.0.3: ~10 min).
 
 > El body de la release se genera solo: lista los commits entre el tag anterior
 > y el nuevo, con hash corto y mensaje. Si quieres verlo antes de publicar,

@@ -4,11 +4,12 @@
 #
 #   1. Genera un artifact de prueba (instalador falso) y lo FIRMA con la clave
 #      real (~/.tauri/dinamorent.key).
-#   2. Arma un latest.json (v1.0.3 > actual 1.0.2) y lo sirve desde 127.0.0.1.
-#   3. Ejecuta updater_e2e: check() debe detectar la v1.0.3 y download() debe
-#      validar la firma contra la pubkey embebida en tauri.conf.json y devolver
-#      los bytes exactos del artifact.
-#   4. Caso negativo: latest.json con la misma versión (1.0.2) → sin actualización.
+#   2. Arma un latest.json (siguiente patch > versión del repo) y lo sirve desde
+#      127.0.0.1.
+#   3. Ejecuta updater_e2e: check() debe detectar la versión nueva y download()
+#      debe validar la firma contra la pubkey embebida en tauri.conf.json y
+#      devolver los bytes exactos del artifact.
+#   4. Caso negativo: latest.json con la versión del repo → sin actualización.
 #
 # Requiere: toolchain Rust, bun (con @tauri-apps/cli) y la clave privada de
 # firma en ~/.tauri/dinamorent.key (la genera `bunx tauri signer generate`;
@@ -32,8 +33,20 @@ export PATH="/c/Program Files/nodejs:$HOME/.cargo/bin:$NPM_GLOBAL:$PATH"
 
 KEY="$HOME/.tauri/dinamorent.key"
 PUBKEY_FILE="$HOME/.tauri/dinamorent.key.pub"
-VERSION_NUEVA="1.0.3"
-VERSION_ACTUAL="1.0.2"
+# Versión actual = la del repo (tauri.conf.json); la "nueva" = siguiente patch.
+# Así el E2E nunca queda fijo a una versión (tras el bump, la versión del repo
+# ya no es "más nueva" que la app compilada).
+read VERSION_ACTUAL VERSION_NUEVA <<< "$(python -c "
+import json
+v = json.load(open('src-tauri/tauri.conf.json'))['version']
+p = v.split('.')
+p[-1] = str(int(p[-1]) + 1)
+print(v, '.'.join(p))
+")"
+if [ -z "${VERSION_ACTUAL:-}" ] || [ -z "${VERSION_NUEVA:-}" ]; then
+  echo "❌ No se pudo leer la versión de src-tauri/tauri.conf.json (cwd del repo)."
+  exit 1
+fi
 NOMBRE_ARTIFACT="DinamoRent_${VERSION_NUEVA}_x64-setup.exe"
 
 echo "== Verificación del entorno =="
@@ -95,21 +108,21 @@ PORT="$(python -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); pr
 [ -n "$PORT" ] || PORT=48321
 
 echo "== 2/4 Armando latest.json (v$VERSION_NUEVA) y sirviéndolo en 127.0.0.1:$PORT =="
-python - "$SIG_FILE" "$SRV/update/latest.json" "$SRV/no-update/latest.json" "$PORT" "$NOMBRE_ARTIFACT" <<'EOF'
+python - "$SIG_FILE" "$SRV/update/latest.json" "$SRV/no-update/latest.json" "$PORT" "$NOMBRE_ARTIFACT" "$VERSION_NUEVA" "$VERSION_ACTUAL" <<'EOF'
 import json, sys
 
-sig_file, json_pos, json_neg, port, artifact = sys.argv[1:]
+sig_file, json_pos, json_neg, port, artifact, v_nueva, v_actual = sys.argv[1:]
 sig = open(sig_file, encoding="utf-8").read().strip()
 url = f"http://127.0.0.1:{port}/update/{artifact}"
 
 positivo = {
-    "version": "1.0.3",
+    "version": v_nueva,
     "notes": "Release de prueba del E2E del updater (firma real, sin publicar en GitHub).",
     "pub_date": "2026-08-14T12:00:00Z",
     "platforms": {"windows-x86_64": {"signature": sig, "url": url}},
 }
 negativo = {
-    "version": "1.0.2",
+    "version": v_actual,
     "notes": "Misma version que la instalada: no debe ofrecer actualizacion.",
     "pub_date": "2026-08-14T12:00:00Z",
     "platforms": {"windows-x86_64": {"signature": sig, "url": url}},
@@ -118,8 +131,8 @@ with open(json_pos, "w", encoding="utf-8") as f:
     json.dump(positivo, f, indent=2)
 with open(json_neg, "w", encoding="utf-8") as f:
     json.dump(negativo, f, indent=2)
-print("  latest.json positivo -> v1.0.3")
-print("  latest.json negativo -> v1.0.2")
+print("  latest.json positivo -> v" + v_nueva)
+print("  latest.json negativo -> v" + v_actual)
 EOF
 
 python -m http.server "$PORT" --bind 127.0.0.1 --directory "$SRV" >/dev/null 2>&1 &
@@ -161,7 +174,6 @@ echo "  Verificación firma : OK (download() contra la pubkey de tauri.conf.json
 echo "  Bytes descargados  : idénticos al artifact servido"
 echo "  Sin actualización  : OK (v$VERSION_ACTUAL no ofrece update)"
 echo
-echo "Nota: esto valida el flujo local. Para el flujo real en GitHub hace falta"
-echo "publicar la v$VERSION_NUEVA con el secret TAURI_SIGNING_PRIVATE_KEY"
-echo "configurado (ver RELEASE_CHECKLIST.md) — tauri-action subirá latest.json"
-echo "y los .sig, que es lo que la app instalada consulta al arrancar."
+echo "Nota: valida localmente el mismo camino que usa la app en producción."
+echo "El flujo real ya está activo desde la v1.0.3 (publicada y firmada con el"
+echo "secret TAURI_SIGNING_PRIVATE_KEY configurado; ver RELEASE_CHECKLIST.md)."
