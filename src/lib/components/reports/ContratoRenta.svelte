@@ -79,9 +79,10 @@
 
 <style>
 	/* Contrato de renta — impresión en papel Carta / Letter (ver @page y
-	   .contrato-carta en app.css). Cuerpo 6.2pt, interlineado 0.98: el texto
-	   legal cabe en 2 hojas Carta (verificado con el PDF real: printToPDF +
-	   verificar-paginacion = 2 páginas con pie «Página X de Y»). */
+	   .contrato-carta en app.css). Cuerpo 6.2pt, interlineado 0.98, logo 70px
+	   y encabezado compacto: el texto legal cabe en 2 hojas Carta (verificado
+	   con el PDF real: printToPDF + verificar-paginacion = 2 páginas con pie
+	   «Página X de Y»). */
 	/* Paleta por rol en variables: el modo oscuro (pantalla) y la impresión
 	   (siempre en claro, en app.css @media print) solo redefinen estas
 	   variables. */
@@ -110,33 +111,33 @@
 	.encabezado-principal {
 		display: flex;
 		align-items: flex-start;
-		margin-bottom: 9px;
-		padding-bottom: 6px;
+		margin-bottom: 5px;
+		padding-bottom: 3px;
 		border-bottom: 1px solid var(--ct-acento);
 	}
 
 	.logo-container {
-		flex: 0 0 17%;
+		flex: 0 0 12%;
 		text-align: left;
-		padding-top: 5px;
+		padding-top: 2px;
 	}
 
 	.titulo-container {
 		flex: 1;
 		text-align: center;
-		padding: 0 12px;
+		padding: 0 8px;
 	}
 
 	.titulo-principal {
 		color: var(--ct-acento);
-		font-size: 9pt;
+		font-size: 8.2pt;
 		font-weight: bold;
 		margin: 0 0 2px 0;
 		text-transform: uppercase;
 	}
 
 	.subtitulo {
-		font-size: 6.3pt;
+		font-size: 5.8pt;
 		color: var(--ct-secundario);
 		margin: 0;
 	}
@@ -146,14 +147,14 @@
 		text-align: right;
 		font-size: 6.3pt;
 		color: var(--ct-contacto);
-		padding-top: 4px;
+		padding-top: 2px;
 	}
 
 	.numero-contrato {
 		text-align: center;
 		font-size: 8.4pt;
 		font-weight: bold;
-		margin: 3px 0 4px 0;
+		margin: 2px 0 3px 0;
 		color: var(--ct-acento);
 		background-color: var(--ct-fondo-suave);
 		padding: 2px;
@@ -273,7 +274,7 @@
 	<!-- ENCABEZADO -->
 	<div class="encabezado-principal">
 		<div class="logo-container">
-			<img src={empresa.logoSrc} alt={empresa.nombreMostrar} class="w-[110px] h-[110px] object-contain rounded-md" />
+			<img src={empresa.logoSrc} alt={empresa.nombreMostrar} class="w-[70px] h-[70px] object-contain rounded-md" />
 		</div>
 
 		<div class="titulo-container">
