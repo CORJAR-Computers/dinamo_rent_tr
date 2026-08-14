@@ -43,6 +43,15 @@ path = "src/bin/verificar_instalacion_limpia.rs"
 # construye con `--features dev` para no llegar al bundle de release.
 required-features = ["dev"]
 
+[[bin]]
+name = "updater_e2e"
+path = "src/bin/updater_e2e.rs"
+# Verificación E2E del flujo de auto-actualización (updater) contra un endpoint
+# local que sirve un latest.json firmado con la clave real. Solo se compila con
+# `--features dev` para no llegar al bundle de release; el `main` además está
+# detrás de #[cfg(debug_assertions)] como defense-in-depth.
+required-features = ["dev"]
+
 [features]
 default = []
 # Feature de desarrollo: habilita el binario `dev_reset_admin`.

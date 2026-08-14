@@ -384,3 +384,47 @@ señalado) · `2` opción desconocida.
 > `fbclient.dll` en `PATH`; el script la añade en formato MSYS (el importador
 > trae hardcodeada una ruta `D:\...` que no aplica en todos los clones, así que
 > el PATH del script es lo que hace funcionar la conexión).
+
+
+---
+
+# Verificación E2E del auto-update (sin publicar en GitHub)
+
+`scripts/verificar-updater-e2e.sh` comprueba de punta a punta el flujo de
+auto-actualizacion (`tauri-plugin-updater`, feature de la v1.0.3) **sin tocar
+GitHub**: firma un artifact de prueba con la clave real, lo sirve desde
+127.0.0.1 y valida que la app lo detecte y verifique su firma.
+
+```bash
+bash scripts/verificar-updater-e2e.sh
+```
+
+Que valida:
+
+1. **Firma real**: firma un instalador de prueba (1 MiB) con la clave privada
+   de `~/.tauri/dinamorent.key` (la misma que usara el CI con el secret
+   `TAURI_SIGNING_PRIVATE_KEY`).
+2. **latest.json**: arma un `latest.json` (v1.0.3 > v1.0.2 instalada) con la
+   firma y lo sirve en un puerto libre de 127.0.0.1.
+3. **Deteccion**: `src-tauri/src/bin/updater_e2e.rs` (dev, `--features dev`)
+   monta la app Tauri headless con el plugin real y `check()` debe detectar
+   la v1.0.3.
+4. **Verificacion de firma**: `download()` valida la firma contra la **pubkey
+   embebida en `tauri.conf.json`** (la misma que usa la app instalada) y que
+   los bytes descargados sean identicos al artifact servido.
+5. **Negativo**: con un `latest.json` de la misma version (1.0.2) -> sin
+   actualizacion.
+
+Codigos de salida: `0` todo verde · `1` fallo algo o falta entorno (cargo,
+bun o la clave de firma).
+
+> Nota Git Bash: el signer de tauri-cli pregunta la contrasena por stdin aun
+> cuando la clave no tiene; el script pasa `-p ""` para firmar de forma no
+> interactiva (sin eso, cuelga esperando input).
+
+> Nota: esto valida el flujo local completo. Para el flujo real hace falta
+> publicar la v1.0.3 con el secret `TAURI_SIGNING_PRIVATE_KEY` configurado
+> (RELEASE_CHECKLIST.md): el CI generara los `.sig` y `latest.json` que la app
+> instalada consulta al arrancar. Hoy el endpoint real responde 404 (aun no
+> existe `latest.json`), asi que la app detecta correctamente «sin
+> actualizacion».
