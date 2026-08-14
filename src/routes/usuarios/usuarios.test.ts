@@ -39,6 +39,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: ['Administrador'],
 	rolesConEliminar: [],
 	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador']
+,
+	impuestoPorcentaje: 19,
 };	beforeEach(() => {
 		session.clear();
 		tauri.register('get_business_lists', () => LISTS);

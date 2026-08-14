@@ -23,6 +23,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import SearchSelect, { type SearchSelectOpcion } from '$lib/components/SearchSelect.svelte';
 	import ClienteFormModal from '$lib/components/ClienteFormModal.svelte';
 	import OrdenRenta from '$lib/components/reports/OrdenRenta.svelte';
 	import ContratoRenta from '$lib/components/reports/ContratoRenta.svelte';
@@ -37,6 +38,23 @@
 	let rentas = $state<Renta[]>([]);
 	let clientes = $state<ClienteConPii[]>([]);
 	let autos = $state<Auto[]>([]);
+
+	// Opciones para los combos con búsqueda: el cliente filtra por nombre y
+	// por número de documento; el auto por placa, marca, modelo, tipo o color.
+	const opcionesClientes = $derived<SearchSelectOpcion[]>(
+		clientes.map((c) => ({
+			value: String(c.cliente.id),
+			label: c.cliente.nombreCompleto,
+			sub: [c.cliente.tipoDoc ?? '', c.cliente.noDoc ?? ''].filter(Boolean).join(' ').trim()
+		}))
+	);
+	const opcionesAutos = $derived<SearchSelectOpcion[]>(
+		autos.map((a) => ({
+			value: a.placa,
+			label: `${a.placa} · ${a.marca} ${a.modelo}`,
+			sub: [a.tipo ?? '', a.color ?? ''].filter(Boolean).join(' ').trim()
+		}))
+	);
 	let lists = $state<BusinessLists | null>(null);
 	let loading = $state(true);
 
@@ -68,6 +86,7 @@
 	let cierre = $state<RentaCierreDatos>(defaultCierre());
 	let cerrando = $state(false);
 	let cierreError = $state('');
+	let cerrarRenta = $state<Renta | null>(null);
 
 	// Modal pago
 	let pagandoId = $state<number | null>(null);
@@ -122,6 +141,7 @@
 			costoCables: '0',
 			costoInversor: '0',
 			descuento: '0',
+			cobraIva: false,
 			abono: '0',
 			observaciones: '',
 			kmSalida: '',
@@ -166,7 +186,8 @@
 		};
 	}
 
-	// ── Calculadora en vivo (espejo del cálculo del backend, sin IVA para vista previa) ──
+	// ── Calculadora en vivo (espejo del cálculo del backend) ──
+	// El IVA solo se aplica si el checkbox «cobrar IVA» está activo.
 	const brutoCalc = $derived(
 		(parseFloat(form.valorDia) || 0) * form.diasCalculados +
 			(parseFloat(form.valorHoraExtra) || 0) * form.horasExtras
@@ -176,7 +197,11 @@
 			.reduce((acc, k) => acc + (parseFloat(form[k as keyof RentaDatos] as string) || 0), 0)
 	);
 	const subtotalCalc = $derived(Math.max(0, brutoCalc + extrasCalc - (parseFloat(form.descuento) || 0)));
-	const totalCalc = $derived(subtotalCalc);
+	const tasaIva = $derived(lists?.impuestoPorcentaje ?? 19);
+	const ivaCalc = $derived(
+		form.cobraIva ? Math.round(subtotalCalc * (tasaIva / 100) * 100) / 100 : 0
+	);
+	const totalCalc = $derived(subtotalCalc + ivaCalc);
 	const saldoCalc = $derived(Math.max(0, totalCalc - (parseFloat(form.abono) || 0)));
 
 	function recalcularDias() {
@@ -190,8 +215,40 @@
 		form.diasCalculados = Math.max(0, d);
 	}
 
-	function onClienteChange(e: Event) {
-		const v = (e.currentTarget as HTMLSelectElement).value;
+	// ── Auto-cálculo de días/horas en el cierre (espejo del backend) ──
+	// Regla de negocio: cada 24 h desde la recogida = 1 día; el excedente de
+	// hasta 3 h se cobra como horas extras (redondeadas hacia arriba); si el
+	// excedente supera 3 h se cobra el día completo.
+	const HORAS_TOLERANCIA_DIA_COMPLETO = 3;
+	function parseFechaHora(fecha?: string, hora?: string): Date | null {
+		if (!fecha) return null;
+		const [hh = '00', mm = '00'] = (hora || '00:00').split(':');
+		return new Date(`${fecha}T${hh}:${mm}:00`);
+	}
+	function calcularCierre() {
+		const r = cerrarRenta;
+		if (!r) return;
+		// Solo se auto-calculan días/horas cuando hay hora de devolución real
+		// (sin ella no se puede aplicar la regla; los campos quedan «Mantener»
+		// y el backend conserva el valor original de la renta).
+		if (!cierre.horaDevolucionReal || !r.horaRecogida) return;
+		const a = parseFechaHora(r.fechaRecogida, r.horaRecogida ?? undefined);
+		const b = parseFechaHora(cierre.fechaDevolucionReal, cierre.horaDevolucionReal ?? undefined);
+		if (!a || !b) return;
+		const minutos = Math.max(0, (b.getTime() - a.getTime()) / 60000);
+		const diaMin = 24 * 60;
+		const dias = Math.floor(minutos / diaMin);
+		const rem = minutos % diaMin;
+		if (rem > HORAS_TOLERANCIA_DIA_COMPLETO * 60) {
+			cierre.diasCalculados = dias + 1;
+			cierre.horasExtras = 0;
+		} else {
+			cierre.diasCalculados = dias;
+			cierre.horasExtras = Math.ceil(rem / 60);
+		}
+	}
+
+	function onClienteChange(v: string) {
 		form.idCliente = v === '' ? null : Number(v);
 		const c = clientes.find((x) => x.cliente.id === form.idCliente);
 		form.nombreCliente = c?.cliente.nombreCompleto ?? '';
@@ -215,8 +272,7 @@
 		}
 	}
 
-	function onPlacaChange(e: Event) {
-		const v = (e.currentTarget as HTMLSelectElement).value;
+	function onPlacaChange(v: string) {
 		form.placa = v === '' ? null : v;
 		const a = autos.find((x) => x.placa === v);
 		if (a && !form.kmSalida) form.kmSalida = String(a.kilometraje || '');
@@ -310,6 +366,7 @@
 			costoCables: r.costoCables,
 			costoInversor: r.costoInversor,
 			descuento: r.descuento,
+			cobraIva: r.cobraIva,
 			abono: r.abono,
 			observaciones: r.observaciones ?? '',
 			kmSalida: r.kmSalida,
@@ -357,9 +414,11 @@
 	// ── Cierre ──
 	function abrirCierre(r: Renta) {
 		cerrandoId = r.id;
+		cerrarRenta = r;
 		cierre = defaultCierre();
 		cierre.kmFinal = r.kmSalida;
 		cierreError = '';
+		calcularCierre();
 	}
 
 	async function confirmarCierre() {
@@ -375,6 +434,41 @@
 			cierreError = e instanceof ApiError ? e.message : 'No se pudo cerrar la renta.';
 		} finally {
 			cerrando = false;
+		}
+	}
+
+	// ── Cambiar vehículo (sin cerrar la renta) ──
+	let cambiarAutoId = $state<number | null>(null);
+	let cambiarAutoPlaca = $state('');
+	let cambiarAutoError = $state('');
+	let guardandoCambioAuto = $state(false);
+
+	const autosParaCambio = $derived.by(() => {
+		const actual = rentas.find((r) => r.id === cambiarAutoId);
+		return autos.filter((a) => a.estado === 'Disponible' || a.placa === actual?.placa);
+	});
+
+	function abrirCambiarAuto(r: Renta) {
+		cambiarAutoId = r.id;
+		cambiarAutoPlaca = r.placa ?? '';
+		cambiarAutoError = '';
+	}
+
+	async function confirmarCambiarAuto() {
+		if (cambiarAutoId === null) return;
+		cambiarAutoError = '';
+		guardandoCambioAuto = true;
+		try {
+			const cambiada = await rentaApi.cambiarAuto(sid(), cambiarAutoId, cambiarAutoPlaca);
+			toast.success(
+				`Renta #${cambiarAutoId}: vehículo cambiado a ${cambiada.placa ?? 'sin placa'}.`
+			);
+			cambiarAutoId = null;
+			await cargar();
+		} catch (e) {
+			cambiarAutoError = e instanceof ApiError ? e.message : 'No se pudo cambiar el vehículo.';
+		} finally {
+			guardandoCambioAuto = false;
 		}
 	}
 
@@ -637,6 +731,13 @@
 							</button>
 							<button
 								class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
+								title="Cambiar vehículo sin cerrar la renta"
+								onclick={() => abrirCambiarAuto(r)}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+							</button>
+							<button
+								class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 								title="Cerrar renta (devolución)"
 								onclick={() => abrirCierre(r)}
 							>
@@ -713,17 +814,22 @@
 					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Cliente</h3>
 				</div>
 				<div class="grid grid-cols-2 gap-x-3 mb-3">
-					<FormField label="Cliente registrado" hint="Opcional: se autocompleta el nombre." dense class="col-span-2">
-						<div class="flex gap-2">
-							<select class="input flex-1" onchange={onClienteChange}>
-								<option value="">— Sin cliente registrado —</option>
-								{#each clientes as c}
-									<option value={c.cliente.id} selected={form.idCliente === c.cliente.id}>{c.cliente.nombreCompleto}</option>
-								{/each}
-							</select>
+					<div class="col-span-2">
+						<div class="flex items-end gap-2">
+							<SearchSelect
+								class="grow"
+								label="Cliente registrado"
+								hint="Opcional: busca por nombre o número de documento; se autocompleta el resto."
+								dense
+								value={form.idCliente === null ? '' : String(form.idCliente)}
+								opciones={opcionesClientes}
+								onchange={onClienteChange}
+								placeholder="Buscar por nombre o documento…"
+								vacioLabel="— Sin cliente registrado —"
+							/>
 							<button
 								type="button"
-								class="shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
+								class="mb-3 shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
 								onclick={() => (clienteModalOpen = true)}
 								title="Crear nuevo cliente"
 							>
@@ -731,7 +837,7 @@
 								<span class="hidden xl:inline">Nuevo</span>
 							</button>
 						</div>
-					</FormField>
+					</div>
 					<FormField label="Nombre del cliente" required dense>
 						<input class="input" placeholder="Nombre para la renta" bind:value={form.nombreCliente} maxlength="200" />
 					</FormField>
@@ -752,14 +858,18 @@
 					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Vehículo</h3>
 				</div>
 				<div class="grid grid-cols-3 gap-x-3 mb-3">
-					<FormField label="Placa" required hint="Autocompleta km" dense>
-						<select class="input" onchange={onPlacaChange}>
-							<option value="">— Seleccionar —</option>
-							{#each autos as a}
-								<option value={a.placa} selected={form.placa === a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
-							{/each}
-						</select>
-					</FormField>
+					<SearchSelect
+						label="Placa"
+						required
+						dense
+						hint={editando ? 'Para cambiar el auto de una renta activa usa la acción «Cambiar vehículo» de la lista.' : 'Busca por placa, marca o modelo; autocompleta km'}
+						value={form.placa ?? ''}
+						opciones={opcionesAutos}
+						onchange={onPlacaChange}
+						placeholder="Buscar placa, marca o modelo…"
+						vacioLabel="— Seleccionar —"
+						disabled={editando}
+					/>
 					<FormField label="Km de salida" dense>
 						<input class="input" inputmode="numeric" placeholder="Ej: 42000" bind:value={form.kmSalida} />
 					</FormField>
@@ -819,6 +929,10 @@
 						<input class="input" type="number" min="0" step="1" bind:value={form.horasExtras} />
 					</FormField>
 				</div>
+				<label class="flex items-center gap-2 text-sm text-text-primary cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-alt-row/60 transition-colors mb-3 w-fit">
+					<input type="checkbox" class="accent-primary" bind:checked={form.cobraIva} />
+					Cobrar IVA <span class="text-xs text-text-secondary">({tasaIva}% — solo si se marca)</span>
+				</label>
 
 				<!-- ── 5. Costos adicionales (colapsable) ── -->
 				<button
@@ -884,7 +998,9 @@
 					<div class="rounded-lg bg-gradient-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2">
 						<p class="text-[10px] uppercase tracking-wide opacity-80 font-semibold">Total estimado</p>
 						<p class="text-xl font-black tabular-nums leading-tight">{formatCOP(totalCalc)}</p>
-						<p class="text-[10px] opacity-80 mt-0.5">el sistema recalcula IVA al guardar</p>
+						<p class="text-[10px] opacity-80 mt-0.5">
+							{form.cobraIva ? `IVA ${tasaIva}% incluido` : 'Sin IVA (checkbox desactivado)'}
+						</p>
 					</div>
 					<!-- Desglose compacto -->
 					<div class="space-y-1 text-xs">
@@ -892,6 +1008,12 @@
 							<span class="text-text-secondary">Subtotal</span>
 							<span class="font-semibold text-text-primary tabular-nums">{formatCOP(subtotalCalc)}</span>
 						</div>
+						{#if form.cobraIva}
+							<div class="flex justify-between">
+								<span class="text-text-secondary">IVA ({tasaIva}%)</span>
+								<span class="font-semibold text-text-primary tabular-nums">{formatCOP(ivaCalc)}</span>
+							</div>
+						{/if}
 						<div class="flex justify-between">
 							<span class="text-text-secondary">Abono</span>
 							<span class="font-semibold text-text-primary tabular-nums">{formatCOP(form.abono)}</span>
@@ -949,10 +1071,10 @@
 		{/if}
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
 			<FormField label="Fecha de devolución real" required>
-				<input class="input" type="date" bind:value={cierre.fechaDevolucionReal} />
+				<input class="input" type="date" bind:value={cierre.fechaDevolucionReal} onchange={calcularCierre} />
 			</FormField>
-			<FormField label="Hora de devolución">
-				<input class="input" type="time" bind:value={cierre.horaDevolucionReal} />
+			<FormField label="Hora de devolución" hint="Al cambiar se recalculan días/horas">
+				<input class="input" type="time" bind:value={cierre.horaDevolucionReal} onchange={calcularCierre} />
 			</FormField>
 			<FormField label="Km final">
 				<input class="input" inputmode="numeric" placeholder="Km al devolver" bind:value={cierre.kmFinal} />
@@ -964,14 +1086,17 @@
 					{/each}
 				</select>
 			</FormField>
-			<FormField label="Días cobrados" hint="Opcional: ajusta los días reales.">
+			<FormField label="Días cobrados" hint="Auto desde la devolución real (excedente > 3 h = día completo).">
 				<input class="input" type="number" min="0" step="1" placeholder="Mantener" bind:value={cierre.diasCalculados} />
 			</FormField>
-			<FormField label="Horas extras finales">
+			<FormField label="Horas extras finales" hint="Excedente ≤ 3 h, redondeadas hacia arriba.">
 				<input class="input" type="number" min="0" step="1" placeholder="Mantener" bind:value={cierre.horasExtras} />
 			</FormField>
 			<FormField label="Valor día final (COP)">
 				<input class="input" inputmode="decimal" placeholder="Mantener" bind:value={cierre.valorDia} />
+			</FormField>
+			<FormField label="Valor hora extra final (COP)">
+				<input class="input" inputmode="decimal" placeholder="Mantener" bind:value={cierre.valorHoraExtra} />
 			</FormField>
 			<FormField label="Descuento final (COP)">
 				<input class="input" inputmode="decimal" placeholder="Mantener" bind:value={cierre.descuento} />
@@ -990,6 +1115,44 @@
 				Cerrando...
 			{:else}
 				Cerrar renta
+			{/if}
+		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal cambiar vehículo (sin cerrar la renta) -->
+<Modal
+	open={cambiarAutoId !== null}
+	title={cambiarAutoId !== null ? `Cambiar vehículo — renta #${cambiarAutoId}` : ''}
+	subtitle="Libera el auto anterior y asigna uno nuevo; la renta sigue activa."
+	onClose={() => (cambiarAutoId = null)}
+	width="max-w-md"
+>
+	{#snippet children()}
+		{#if cambiarAutoError}
+			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{cambiarAutoError}</div>
+		{/if}
+		<FormField label="Vehículo nuevo" required hint="Solo se listan autos disponibles (más el actual).">
+			<select class="input" bind:value={cambiarAutoPlaca}>
+				<option value="">— Seleccionar —</option>
+				{#each autosParaCambio as a}
+					<option value={a.placa}>{a.placa} · {a.marca} {a.modelo}{a.estado === 'Disponible' ? '' : ' (actual)'}</option>
+				{/each}
+			</select>
+		</FormField>
+		{#if autosParaCambio.length === 0}
+			<p class="text-xs text-alerta">No hay autos disponibles para el cambio. Libera uno desde la sección Autos.</p>
+		{/if}
+	{/snippet}
+
+	{#snippet footer()}
+		<button class="btn-ghost" onclick={() => (cambiarAutoId = null)} disabled={guardandoCambioAuto}>Cancelar</button>
+		<button class="btn-primary" onclick={confirmarCambiarAuto} disabled={guardandoCambioAuto || !cambiarAutoPlaca}>
+			{#if guardandoCambioAuto}
+				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				Cambiando...
+			{:else}
+				Cambiar vehículo
 			{/if}
 		</button>
 	{/snippet}

@@ -80,6 +80,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
+,
+	impuestoPorcentaje: 19,
 };
 
 function setSesion(rol = 'Administrador') {
@@ -164,11 +166,13 @@ describe('página de Mantenimiento', () => {
 		const dialogo = await screen.findByRole('dialog');
 		expect(dialogo).toBeInTheDocument();
 
-		// FormField usa <span> como label (sin `for`): localizamos los selects
-		// por su valor actual — hay dos con 'Selecciona...' (placa y tipo)
-		const selects = within(dialogo).getAllByDisplayValue('Selecciona...');
-		await fireEvent.change(selects[0], { target: { value: 'ABC123' } });
-		await fireEvent.change(selects[1], { target: { value: 'Frenos' } });
+		// Vehículo: combobox con búsqueda (escribir placa + Enter). Tipo: select.
+		const placaCombo = within(dialogo).getByPlaceholderText('Buscar placa, marca o modelo…');
+		await fireEvent.focus(placaCombo);
+		await fireEvent.input(placaCombo, { target: { value: 'ABC123' } });
+		await fireEvent.keyDown(placaCombo, { key: 'Enter' });
+		const tipoSelect = within(dialogo).getByDisplayValue('Selecciona...');
+		await fireEvent.change(tipoSelect, { target: { value: 'Frenos' } });
 		await fireEvent.input(screen.getByPlaceholderText('Ej: 350000'), {
 			target: { value: '150000' }
 		});

@@ -1083,6 +1083,7 @@ fn datos_renta_backfill(placa: &str, recogida: &str, retorno: &str) -> RentaDato
         descuento: "0".into(),
         subtotal: String::new(),
         impuestos: String::new(),
+        cobra_iva: true,
         total: String::new(),
         abono: "0".into(),
         saldo_pendiente: String::new(),

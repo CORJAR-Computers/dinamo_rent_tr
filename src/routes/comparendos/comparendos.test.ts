@@ -87,6 +87,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
+,
+	impuestoPorcentaje: 19,
 };
 
 function setSesion(rol = 'Administrador') {
@@ -195,9 +197,11 @@ describe('página de Comparendos', () => {
 		const dialogo = await screen.findByRole('dialog');
 		expect(dialogo).toBeInTheDocument();
 
-		await fireEvent.change(within(dialogo).getByDisplayValue('— Seleccionar vehículo —'), {
-			target: { value: 'ABC123' }
-		});
+		// Placa: combobox con búsqueda (escribir placa + Enter selecciona la coincidencia)
+		const placaCombo = within(dialogo).getByPlaceholderText('Buscar placa, marca o modelo…');
+		await fireEvent.focus(placaCombo);
+		await fireEvent.input(placaCombo, { target: { value: 'ABC123' } });
+		await fireEvent.keyDown(placaCombo, { key: 'Enter' });
 		await fireEvent.input(screen.getByPlaceholderText('Ej: 580000'), {
 			target: { value: '580000' }
 		});

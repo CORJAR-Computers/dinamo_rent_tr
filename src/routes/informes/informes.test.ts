@@ -23,6 +23,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: ['Administrador'],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador']
+,
+	impuestoPorcentaje: 19,
 };
 
 function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {

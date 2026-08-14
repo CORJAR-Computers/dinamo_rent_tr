@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use chrono::{Datelike, Duration, Local};
+use rsfbclient::{Execute, Queryable};
 use serial_test::serial;
 
 use dinamo_rent_lib::core::config::AppConfig;
@@ -80,6 +81,7 @@ fn datos_renta(placa: &str, id_cliente: Option<i64>) -> RentaDatos {
         descuento: "0".into(),
         subtotal: String::new(),
         impuestos: String::new(),
+        cobra_iva: true,
         total: String::new(),
         abono: "0".into(),
         saldo_pendiente: String::new(),
@@ -386,4 +388,139 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
     assert_eq!(err.kind(), "validation");
 
     RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+}
+
+/// Dos autos reales de la BD de dev en estado Disponible (lectura) — o None
+/// si no hay al menos dos. El test restaura sus estados al final.
+fn dos_autos(state: &AppState) -> Option<(String, String)> {
+    let mut conn = state.pool.get().expect("conn");
+    let autos = AutoRepository::obtener_todos(&mut conn).expect("autos");
+    let placas: Vec<String> = autos
+        .iter()
+        .filter(|a| a.estado == "Disponible")
+        .map(|a| a.placa.clone())
+        .collect();
+    if placas.len() >= 2 {
+        Some((placas[0].clone(), placas[1].clone()))
+    } else {
+        None
+    }
+}
+
+#[test]
+#[serial]
+fn renta_cambiar_auto_sin_cerrar() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some((placa_a, placa_b)) = dos_autos(&state) else {
+        eprintln!("Sin 2 autos disponibles en la BD de dev — test omitido");
+        return;
+    };
+
+    let creada = RentaService::crear(&mut conn, cfg, datos_renta(&placa_a, None)).expect("crear");
+    let id = creada.id;
+    assert_eq!(creada.placa.as_deref(), Some(placa_a.as_str()));
+
+    // ── Cambio de vehículo sin cerrar ──
+    let cambiada = RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect("cambiar auto");
+    assert_eq!(cambiada.placa.as_deref(), Some(placa_b.as_str()), "placa nueva");
+    assert_eq!(cambiada.estado, "Activo", "la renta sigue activa");
+
+    // El auto anterior queda Disponible y el nuevo Rentado
+    let estado_a: Option<(String,)> =
+        conn.query_first("SELECT estado FROM autos WHERE placa = ?", (placa_a.clone(),))
+            .expect("estado a");
+    assert_eq!(estado_a.map(|r| r.0).as_deref(), Some("Disponible"));
+    let estado_b: Option<(String,)> =
+        conn.query_first("SELECT estado FROM autos WHERE placa = ?", (placa_b.clone(),))
+            .expect("estado b");
+    assert_eq!(estado_b.map(|r| r.0).as_deref(), Some("Rentado"));
+
+    // ── Mismo vehículo → no-op ──
+    let misma = RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect("mismo auto");
+    assert_eq!(misma.placa.as_deref(), Some(placa_b.as_str()));
+
+    // ── Vehículo no disponible → business ──
+    // Marcar B en Mantenimiento, volver a A (disponible) e intentar cambiar a B
+    conn.execute(
+        "UPDATE autos SET estado = 'Mantenimiento' WHERE placa = ?",
+        (placa_b.clone(),),
+    )
+    .expect("marcar mantenimiento");
+    RentaService::cambiar_auto(&mut conn, id, &placa_a, "tester").expect("volver a a");
+    // La marca Mantenimiento de B se conserva (no se sobrescribe al liberarlo)
+    let estado_b: Option<(String,)> =
+        conn.query_first("SELECT estado FROM autos WHERE placa = ?", (placa_b.clone(),))
+            .expect("estado b mantenimiento");
+    assert_eq!(estado_b.map(|r| r.0).as_deref(), Some("Mantenimiento"));
+    let err = RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect_err("no disponible");
+    assert_eq!(err.kind(), "business");
+
+    // ── Placa inexistente → business ──
+    let err = RentaService::cambiar_auto(&mut conn, id, "ZZZ999", "tester").expect_err("placa inexistente");
+    assert_eq!(err.kind(), "business");
+
+    // ── Limpieza: restaurar estados y eliminar la renta ──
+    conn.execute(
+        "UPDATE autos SET estado = 'Disponible' WHERE placa = ?",
+        (placa_b.clone(),),
+    )
+    .expect("restaurar b");
+    conn.execute(
+        "UPDATE autos SET estado = 'Disponible' WHERE placa = ?",
+        (placa_a.clone(),),
+    )
+    .expect("restaurar a");
+    RentaService::eliminar(&mut conn, id).expect("limpieza");
+}
+
+#[test]
+#[serial]
+fn renta_cierre_calcula_dias_horas_automatico() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        eprintln!("Sin autos en la BD de dev — test omitido");
+        return;
+    };
+
+    // Renta de 2 días: recogida 2026-01-01 10:00 → retorno 2026-01-03 10:00
+    let mut base = datos_renta(&placa, None);
+    base.fecha_recogida = "2026-01-01".into();
+    base.hora_recogida = Some("10:00".into());
+    base.fecha_retorno = "2026-01-03".into();
+    base.hora_retorno = Some("10:00".into());
+    base.dias_calculados = 2;
+
+    // ── Excedente 6 h (> 3 h) → día completo ──
+    let creada = RentaService::crear(&mut conn, cfg, base.clone()).expect("crear");
+    let cierre = RentaCierreDatos {
+        fecha_devolucion_real: Some("2026-01-03".into()),
+        hora_devolucion_real: Some("16:00".into()),
+        dias_calculados: None,
+        horas_extras: None,
+        ..Default::default()
+    };
+    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar tarde");
+    assert_eq!(cerrada.dias_calculados, 3, "6 h de excedente → día completo");
+    assert_eq!(cerrada.horas_extras, 0);
+    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+
+    // ── Excedente 2 h (≤ 3 h) → 2 horas extras ──
+    let creada2 = RentaService::crear(&mut conn, cfg, base).expect("crear2");
+    let cierre2 = RentaCierreDatos {
+        fecha_devolucion_real: Some("2026-01-03".into()),
+        hora_devolucion_real: Some("12:00".into()),
+        dias_calculados: None,
+        horas_extras: None,
+        ..Default::default()
+    };
+    let cerrada2 = RentaService::cerrar(&mut conn, cfg, creada2.id, cierre2).expect("cerrar puntual");
+    assert_eq!(cerrada2.dias_calculados, 2);
+    assert_eq!(cerrada2.horas_extras, 2, "2 h de excedente → horas extras");
+    RentaService::eliminar(&mut conn, creada2.id).expect("limpieza2");
 }

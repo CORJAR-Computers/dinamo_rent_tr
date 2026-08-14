@@ -19,12 +19,22 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import SearchSelect, { type SearchSelectOpcion } from '$lib/components/SearchSelect.svelte';
 
 	const sid = () => session.token ?? '';
 
 	let gastos = $state<Gasto[]>([]);
 	let totales = $state<TotalesGastos | null>(null);
 	let autos = $state<Auto[]>([]);
+
+	// Opciones del combo de placa (filtra por placa, marca, modelo, tipo o color).
+	const opcionesAutos = $derived<SearchSelectOpcion[]>(
+		autos.map((a) => ({
+			value: a.placa,
+			label: `${a.placa} · ${a.marca} ${a.modelo}`,
+			sub: [a.tipo, a.color ?? ''].filter(Boolean).join(' ').trim()
+		}))
+	);
 	let lists = $state<BusinessLists | null>(null);
 
 	// ¿El rol actual puede eliminar registros? (roles_con_eliminar de config.ini)
@@ -392,14 +402,15 @@
 			<FormField label="Fecha" required>
 				<input class="input" type="date" bind:value={form.fecha} />
 			</FormField>
-			<FormField label="Placa" hint="Opcional — gasto general de la empresa.">
-				<select class="input" bind:value={form.placa}>
-					<option value="">Sin vehículo</option>
-					{#each autos as a}
-						<option value={a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
-					{/each}
-				</select>
-			</FormField>
+			<SearchSelect
+				label="Placa"
+				hint="Opcional — gasto general de la empresa."
+				value={form.placa ?? ''}
+				opciones={opcionesAutos}
+				onchange={(v) => (form.placa = v)}
+				placeholder="Buscar placa, marca o modelo…"
+				vacioLabel="Sin vehículo"
+			/>
 			<FormField label="Categoría" required>
 				<select class="input" bind:value={form.categoria}>
 					<option value="">Selecciona...</option>

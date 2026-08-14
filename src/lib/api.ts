@@ -272,6 +272,7 @@ export interface BusinessLists {
 	rolesConUsuarios: string[];
 	rolesConEliminar: string[];
 	rolesDisponibles: string[];
+	impuestoPorcentaje: number;
 }
 
 export const businessApi = {
@@ -675,6 +676,7 @@ export interface Renta {
 	descuento: string;
 	subtotal: string;
 	impuestos: string;
+	cobraIva: boolean;
 	total: string;
 	abono: string;
 	saldoPendiente: string;
@@ -723,6 +725,7 @@ export interface RentaDatos {
 	descuento: string;
 	subtotal?: string;
 	impuestos?: string;
+	cobraIva: boolean;
 	total?: string;
 	abono: string;
 	saldoPendiente?: string;
@@ -767,6 +770,8 @@ export const rentaApi = {
 		invokeCmd<Renta>('actualizar_renta', { sessionId, id, datos }),
 	cerrar: (sessionId: string, id: number, datos: RentaCierreDatos) =>
 		invokeCmd<Renta>('cerrar_renta', { sessionId, id, datos }),
+	cambiarAuto: (sessionId: string, id: number, placa: string) =>
+		invokeCmd<Renta>('cambiar_auto_renta', { sessionId, id, placa }),
 	cancelar: (sessionId: string, id: number) =>
 		invokeCmd<RentaCancelada>('cancelar_renta', { sessionId, id }),
 	eliminar: (sessionId: string, id: number) =>

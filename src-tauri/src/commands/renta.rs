@@ -60,6 +60,19 @@ pub fn actualizar_renta(
     RentaService::actualizar(&mut c, &state.config, id, datos).map_err(|e| e.to_payload())
 }
 
+/// Cambia el vehículo asignado a una renta activa sin cerrarla
+#[tauri::command]
+pub fn cambiar_auto_renta(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: i64,
+    placa: String,
+) -> Cmd<Renta> {
+    let sesion = require_session(&state, &session_id)?;
+    let mut c = conn(&state)?;
+    RentaService::cambiar_auto(&mut c, id, &placa, &sesion.username).map_err(|e| e.to_payload())
+}
+
 /// Cierra una renta con la devolución real y recalcula los totales
 #[tauri::command]
 pub fn cerrar_renta(

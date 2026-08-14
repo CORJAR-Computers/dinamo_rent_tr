@@ -36,6 +36,7 @@ function renta(overrides: Partial<Renta> = {}): Renta {
 		descuento: '0.00',
 		subtotal: '450000.00',
 		impuestos: '85500.00',
+		cobraIva: true,
 		total: '535500.00',
 		abono: '0.00',
 		saldoPendiente: '535500.00',
@@ -103,6 +104,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
+,
+	impuestoPorcentaje: 19,
 };
 
 function setSesion(rol = 'Administrador') {
@@ -173,9 +176,11 @@ describe('página de Rentas', () => {
 		await fireEvent.input(screen.getByPlaceholderText('Nombre para la renta'), {
 			target: { value: 'Cliente Nuevo' }
 		});
-		await fireEvent.change(within(dialogo).getByDisplayValue('— Seleccionar —'), {
-			target: { value: 'ABC123' }
-		});
+		// Placa: combobox con búsqueda (escribir placa + Enter selecciona la coincidencia)
+		const placaCombo = within(dialogo).getByPlaceholderText('Buscar placa, marca o modelo…');
+		await fireEvent.focus(placaCombo);
+		await fireEvent.input(placaCombo, { target: { value: 'ABC123' } });
+		await fireEvent.keyDown(placaCombo, { key: 'Enter' });
 		await fireEvent.input(screen.getByPlaceholderText('Ej: 42000'), {
 			target: { value: '42100' }
 		});

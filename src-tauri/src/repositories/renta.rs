@@ -79,6 +79,8 @@ pub struct Renta {
     pub descuento: String,
     pub subtotal: String,
     pub impuestos: String,
+    /// ¿Cobra IVA esta renta? (checkbox del formulario; false = sin IVA)
+    pub cobra_iva: bool,
     pub total: String,
     pub abono: String,
     pub saldo_pendiente: String,
@@ -130,6 +132,8 @@ pub struct RentaDatos {
     /// Campos calculados por el servicio (subtotal/impuestos/total/saldo)
     pub subtotal: String,
     pub impuestos: String,
+    /// ¿Cobra IVA? (checkbox del formulario; el servicio lo aplica al calcular)
+    pub cobra_iva: bool,
     pub total: String,
     pub abono: String,
     pub saldo_pendiente: String,
@@ -214,7 +218,8 @@ pub const SELECT_COLS_B: &str = "\
     r.km_final, r.tanque_final, CAST(r.km_salida AS VARCHAR(20)), r.tanque_salida, \
     r.id_reserva, CAST(r.created_at AS VARCHAR(30)), \
     COALESCE(a.marca || ' ' || a.modelo, ''), \
-    r.no_contrato, r.anio_contrato";
+    r.no_contrato, r.anio_contrato, \
+    r.cobra_iva = 1";
 
 /// Fila A (26 columnas) — mantener alineada con `SELECT_COLS_A`
 #[allow(clippy::type_complexity)]
@@ -267,6 +272,7 @@ pub type RentaRowB = (
     String,
     i64,
     i64,
+    bool,
 );
 
 fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
@@ -298,6 +304,7 @@ fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
         descuento: a.23,
         subtotal: a.24,
         impuestos: a.25,
+        cobra_iva: b.17,
         no_contrato: b.15,
         anio_contrato: b.16,
         total: b.1,
@@ -499,7 +506,7 @@ impl RentaRepository {
                     valor_dia, valor_hora_extra, valor_dia_extra, \
                     costo_lavado, costo_silla, costo_retorno, costo_domicilio, costo_cables, costo_inversor, \
                     descuento, subtotal, impuestos, total, abono, saldo_pendiente, \
-                    estado, observaciones, km_salida, tanque_salida, id_reserva, no_contrato, anio_contrato \
+                    cobra_iva, estado, observaciones, km_salida, tanque_salida, id_reserva, no_contrato, anio_contrato \
                  ) VALUES (\
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
                     ?, ?, ?, CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
@@ -507,7 +514,7 @@ impl RentaRepository {
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
-                    'Activo', ?, CAST(? AS DOUBLE PRECISION), ?, ?, \
+                    ?, 'Activo', ?, CAST(? AS DOUBLE PRECISION), ?, ?, \
                     (SELECT COALESCE(MAX(no_contrato), 0) + 1 FROM rentas WHERE anio_contrato = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)), \
                     EXTRACT(YEAR FROM CURRENT_TIMESTAMP) \
                  ) RETURNING id",
@@ -540,6 +547,7 @@ impl RentaRepository {
                     d.total.to_string(),
                     d.abono.to_string(),
                     d.saldo_pendiente.to_string(),
+                    bool_to_i(d.cobra_iva),
                     opt_str(&d.observaciones),
                     d.km_salida.parse::<f64>().unwrap_or(0.0),
                     opt_str(&d.tanque_salida),
@@ -566,7 +574,7 @@ impl RentaRepository {
                 descuento = CAST(? AS DECIMAL(12,2)), \
                 subtotal = CAST(? AS DECIMAL(12,2)), impuestos = CAST(? AS DECIMAL(12,2)), \
                 total = CAST(? AS DECIMAL(12,2)), saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
-                observaciones = ?, km_salida = CAST(? AS DOUBLE PRECISION), tanque_salida = ?, \
+                cobra_iva = ?, observaciones = ?, km_salida = CAST(? AS DOUBLE PRECISION), tanque_salida = ?, \
                 id_reserva = ? \
              WHERE id = ?",
             params![
@@ -597,6 +605,7 @@ impl RentaRepository {
                 d.impuestos.to_string(),
                 d.total.to_string(),
                 d.saldo_pendiente.to_string(),
+                bool_to_i(d.cobra_iva),
                 opt_str(&d.observaciones),
                 d.km_salida.parse::<f64>().unwrap_or(0.0),
                 opt_str(&d.tanque_salida),

@@ -24,6 +24,7 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import SearchSelect, { type SearchSelectOpcion } from '$lib/components/SearchSelect.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import OrdenComparendo from '$lib/components/reports/OrdenComparendo.svelte';
 	import AvisoImpresion from '$lib/components/AvisoImpresion.svelte';
@@ -70,6 +71,15 @@
 	let guardando = $state(false);
 	let form = $state<ComparendoDatos>(defaultForm());
 	let formError = $state('');
+
+	// Opciones del combo de placa (filtra por placa, marca, modelo, tipo o color).
+	const opcionesAutos = $derived<SearchSelectOpcion[]>(
+		autos.map((a) => ({
+			value: a.placa,
+			label: `${a.placa} · ${a.marca} ${a.modelo}`,
+			sub: [a.tipo ?? '', a.color ?? ''].filter(Boolean).join(' ').trim()
+		}))
+	);
 
 	// Marcar pagado / eliminar
 	let pagandoId = $state<number | null>(null);
@@ -776,14 +786,15 @@
 		{/if}
 
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-			<FormField label="Placa" required>
-				<select class="input" bind:value={form.placa}>
-					<option value="">— Seleccionar vehículo —</option>
-					{#each autos as a}
-						<option value={a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
-					{/each}
-				</select>
-			</FormField>
+			<SearchSelect
+				label="Placa"
+				required
+				value={form.placa}
+				opciones={opcionesAutos}
+				onchange={(v) => (form.placa = v)}
+				placeholder="Buscar placa, marca o modelo…"
+				vacioLabel="— Seleccionar vehículo —"
+			/>
 			<FormField label="Monto (COP)" required>
 				<input class="input" inputmode="decimal" placeholder="Ej: 580000" bind:value={form.monto} />
 			</FormField>

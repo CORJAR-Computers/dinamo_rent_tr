@@ -20,6 +20,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import SearchSelect, { type SearchSelectOpcion } from '$lib/components/SearchSelect.svelte';
 	import ClienteFormModal from '$lib/components/ClienteFormModal.svelte';
 	import OrdenReserva from '$lib/components/reports/OrdenReserva.svelte';
 	import AvisoImpresion from '$lib/components/AvisoImpresion.svelte';
@@ -110,13 +111,21 @@
 		form.diasCalculados = Math.max(0, d);
 	}
 
-	function onClienteChange(e: Event) {
-		const v = (e.currentTarget as HTMLSelectElement).value;
+	function onClienteChange(v: string) {
 		form.idCliente = v === '' ? null : Number(v);
 		const c = clientes.find((x) => x.cliente.id === form.idCliente);
 		form.nombreCliente = c?.cliente.nombreCompleto ?? '';
 		form.nacionalidad = c?.cliente.nacionalidad ?? '';
 	}
+
+	// Opciones para el combo de cliente (filtra por nombre y número de documento).
+	const opcionesClientes = $derived<SearchSelectOpcion[]>(
+		clientes.map((c) => ({
+			value: String(c.cliente.id),
+			label: c.cliente.nombreCompleto,
+			sub: [c.cliente.tipoDoc ?? '', c.cliente.noDoc ?? ''].filter(Boolean).join(' ').trim()
+		}))
+	);
 
 	// Cliente creado desde el modal embebido: autoseleccionarlo en la reserva
 	async function onNuevoClienteGuardado(r: ClienteConPii) {
@@ -135,6 +144,15 @@
 
 	const autosCategoria = $derived(
 		form.categoriaVehiculo ? autos.filter((a) => a.tipo === form.categoriaVehiculo) : autos
+	);
+
+	// Opciones para el combo de vehículo (filtra por placa, marca, modelo, tipo o color).
+	const opcionesAutos = $derived<SearchSelectOpcion[]>(
+		autosCategoria.map((a) => ({
+			value: a.placa,
+			label: `${a.placa} · ${a.marca} ${a.modelo}`,
+			sub: [a.tipo ?? '', a.color ?? ''].filter(Boolean).join(' ').trim()
+		}))
 	);
 
 	// ── Carga de datos ──
@@ -532,13 +550,16 @@
 					Cliente
 				</h3>
 			</div>
-			<FormField label="Cliente registrado" hint="Opcional: se autocompleta el nombre.">
-				<select class="input" onchange={onClienteChange}>
-					<option value="">— Sin cliente registrado —</option>
-					{#each clientes as c}
-						<option value={c.cliente.id} selected={form.idCliente === c.cliente.id}>{c.cliente.nombreCompleto}</option>
-					{/each}
-				</select>
+			<div>
+				<SearchSelect
+					label="Cliente registrado"
+					hint="Opcional: busca por nombre o número de documento; se autocompleta el nombre."
+					value={form.idCliente === null ? '' : String(form.idCliente)}
+					opciones={opcionesClientes}
+					onchange={onClienteChange}
+					placeholder="Buscar por nombre o documento…"
+					vacioLabel="— Sin cliente registrado —"
+				/>
 				<button
 					type="button"
 					class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-focus transition-colors"
@@ -547,7 +568,7 @@
 					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 					¿No está registrado? Crear nuevo cliente
 				</button>
-			</FormField>
+			</div>
 			<FormField label="Nombre del cliente" required>
 				<input class="input" placeholder="Nombre para la reserva" bind:value={form.nombreCliente} maxlength="200" />
 			</FormField>
@@ -569,14 +590,14 @@
 					{/each}
 				</select>
 			</FormField>
-			<FormField label="Placa asignada">
-				<select class="input" bind:value={form.placaAsignada}>
-					<option value="">— Sin asignar —</option>
-					{#each autosCategoria as a}
-						<option value={a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
-					{/each}
-				</select>
-			</FormField>
+			<SearchSelect
+				label="Placa asignada"
+				value={form.placaAsignada ?? ''}
+				opciones={opcionesAutos}
+				onchange={(v) => (form.placaAsignada = v)}
+				placeholder="Buscar placa, marca o modelo…"
+				vacioLabel="— Sin asignar —"
+			/>
 
 			<!-- Itinerario -->
 			<div class="col-span-full mt-4 mb-1">

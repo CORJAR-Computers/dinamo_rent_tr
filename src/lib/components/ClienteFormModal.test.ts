@@ -55,6 +55,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: [],
 	rolesConEliminar: [],
 	rolesDisponibles: []
+,
+	impuestoPorcentaje: 19,
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

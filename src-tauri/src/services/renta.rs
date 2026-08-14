@@ -10,7 +10,7 @@ use std::sync::Arc;
 use chrono::{NaiveDate, NaiveTime};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
-use rsfbclient::{Execute, IntoParam, ParamsType};
+use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
@@ -110,6 +110,88 @@ impl RentaService {
         Self::obtener(conn, id)
     }
 
+    /// Cambia el vehículo asignado a una renta activa sin cerrarla. En una sola
+    /// transacción: libera el auto anterior (solo si no está en otra renta
+    /// activa) y marca el nuevo como Rentado. El vehículo nuevo debe existir y
+    /// estar Disponible.
+    pub fn cambiar_auto(
+        conn: &mut PooledConnection,
+        id: i64,
+        placa_nueva: &str,
+        usuario: &str,
+    ) -> Result<Renta, AppError> {
+        let actual = Self::obtener(conn, id)?;
+        if actual.estado == "Cerrada" || actual.estado == "Cancelada" {
+            return Err(AppError::Business(
+                "No se puede cambiar el vehículo de una renta cerrada o cancelada.".into(),
+            ));
+        }
+        let nueva = placa_nueva.trim().to_uppercase();
+        if nueva.is_empty() {
+            return Err(AppError::Validation(
+                "Debes seleccionar un vehículo para el cambio.".into(),
+            ));
+        }
+        if actual.placa.as_deref() == Some(nueva.as_str()) {
+            return Ok(actual); // mismo vehículo: no-op
+        }
+        // El vehículo nuevo debe existir y estar Disponible
+        let estado: Option<(String,)> = conn.query_first(
+            "SELECT estado FROM autos WHERE placa = ?",
+            (nueva.clone(),),
+        )?;
+        let Some((estado,)) = estado else {
+            return Err(AppError::Business(format!(
+                "El vehículo {nueva} no existe."
+            )));
+        };
+        if estado != "Disponible" {
+            return Err(AppError::Business(format!(
+                "El vehículo {nueva} no está disponible (estado: {estado})."
+            )));
+        }
+        let placa_anterior = actual.placa.clone();
+        let mensaje_audit = format!(
+            "renta={id}, {} → {}",
+            placa_anterior.as_deref().unwrap_or("-"),
+            nueva
+        );
+        conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
+            // Liberar el auto anterior solo si está en estado Rentado Y no está
+            // en otra renta activa (no sobrescribe marcas manuales como
+            // Mantenimiento/Vendido).
+            if let Some(old) = placa_anterior.as_ref() {
+                tx.execute(
+                    "UPDATE autos SET estado = 'Disponible', updated_at = CURRENT_TIMESTAMP \
+                     WHERE placa = ? AND estado = 'Rentado' AND NOT EXISTS (\
+                        SELECT 1 FROM rentas WHERE placa = ? AND estado IN ('Activa', 'Activo') AND id <> ?)",
+                    (old.clone(), old.clone(), id),
+                )?;
+            }
+            tx.execute(
+                "UPDATE rentas SET placa = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (nueva.clone(), id),
+            )?;
+            tx.execute(
+                "UPDATE autos SET estado = 'Rentado', updated_at = CURRENT_TIMESTAMP WHERE placa = ?",
+                (nueva.clone(),),
+            )?;
+            tx.execute(
+                "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (
+                    usuario.to_string(),
+                    "CAMBIO AUTO".to_string(),
+                    mensaje_audit.clone(),
+                    "local".to_string(),
+                ),
+            )?;
+            Ok(())
+        })
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Self::obtener(conn, id)
+    }
+
     /// Cierra una renta: registra la devolución real y recalcula los totales
     pub fn cerrar(
         conn: &mut PooledConnection,
@@ -130,9 +212,18 @@ impl RentaService {
         normalizar_cierre(&mut datos);
         validar_cierre(&datos)?;
 
-        // Totales con los valores del cierre (o los de la renta si no se ajustan)
-        let dias = datos.dias_calculados.unwrap_or(actual.dias_calculados).max(0);
-        let horas = datos.horas_extras.unwrap_or(actual.horas_extras).max(0);
+        // Totales con los valores del cierre (o los de la renta si no se ajustan).
+        // Si el operador no envió días/horas y la devolución real tiene fecha y
+        // hora, se calculan automáticamente (regla: excedente > 3 h = día completo).
+        let (dias_auto, horas_auto) = calcular_dias_horas(
+            &actual.fecha_recogida,
+            actual.hora_recogida.as_deref(),
+            datos.fecha_devolucion_real.as_deref(),
+            datos.hora_devolucion_real.as_deref(),
+        )
+        .unwrap_or((actual.dias_calculados, actual.horas_extras));
+        let dias = datos.dias_calculados.unwrap_or(dias_auto).max(0);
+        let horas = datos.horas_extras.unwrap_or(horas_auto).max(0);
         let vdia = dec(datos.valor_dia.as_deref().unwrap_or(""), &actual.valor_dia);
         let vhe = dec(datos.valor_hora_extra.as_deref().unwrap_or(""), &actual.valor_hora_extra);
         let desc = dec(datos.descuento.as_deref().unwrap_or(""), &actual.descuento);
@@ -148,7 +239,8 @@ impl RentaService {
             &actual.costo_inversor,
         ]);
         let subtotal = (bruto + extras - desc).max(Decimal::ZERO);
-        let imp = impuesto(cfg);
+        // IVA según el flag guardado en la renta (checkbox del formulario)
+        let imp = if actual.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
         let impuestos = (subtotal * imp).round_dp(2);
         let total = subtotal + impuestos;
         let abono = dec_str(&actual.abono);
@@ -488,7 +580,9 @@ fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
     ]);
     let desc = dec(&d.descuento, "");
     let subtotal = (vdia * Decimal::from(dias) + vhe * Decimal::from(horas) + extras - desc).max(Decimal::ZERO);
-    let impuestos = (subtotal * impuesto(cfg)).round_dp(2);
+    // IVA solo si el formulario marcó «cobrar IVA» (checkbox por renta)
+    let imp = if d.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
+    let impuestos = (subtotal * imp).round_dp(2);
     let total = subtotal + impuestos;
     d.subtotal = subtotal.round_dp(2).to_string();
     d.impuestos = impuestos.to_string();
@@ -501,6 +595,52 @@ fn impuesto(cfg: &Arc<AppConfig>) -> Decimal {
     Decimal::from_str(&cfg.impuesto_porcentaje.to_string())
         .unwrap_or(Decimal::ZERO)
         / Decimal::from(100)
+}
+
+/// Umbral de tolerancia: si el excedente sobre el último día completo supera
+/// estas horas, se cobra un día completo en vez de horas extras.
+const HORAS_TOLERANCIA_DIA_COMPLETO: i64 = 3;
+
+/// Calcula días y horas extras entre la recogida y la devolución real
+/// (regla de negocio: cada 24 h = 1 día; el excedente de hasta 3 h se cobra
+/// como horas extras redondeadas hacia arriba; más de 3 h = día completo).
+/// Devuelve `None` si falta fecha u hora en cualquiera de los dos extremos.
+fn calcular_dias_horas(
+    fecha_recogida: &str,
+    hora_recogida: Option<&str>,
+    fecha_dev: Option<&str>,
+    hora_dev: Option<&str>,
+) -> Option<(i64, i64)> {
+    let recogida = NaiveDate::parse_from_str(fecha_recogida.trim(), "%Y-%m-%d").ok()?;
+    let rec_h = parse_hora_ref(hora_recogida)?;
+    let fecha_dev = parse_fecha_ref(fecha_dev)?;
+    let dev_h = parse_hora_ref(hora_dev)?;
+    let inicio = recogida.and_time(rec_h);
+    let fin = fecha_dev.and_time(dev_h);
+    let minutos = (fin - inicio).num_minutes().max(0);
+    let dia_min = 24 * 60;
+    let dias = minutos / dia_min;
+    let rem = minutos % dia_min;
+    if rem > HORAS_TOLERANCIA_DIA_COMPLETO * 60 {
+        // Excedente > 3 h → se cobra el día completo
+        Some((dias + 1, 0))
+    } else {
+        // Fracciones de hora redondeadas hacia arriba (1 min = 1 hora)
+        Some((dias, (rem + 59) / 60))
+    }
+}
+
+/// Parsea `Option<&str>` (HH:MM o HH:MM:SS) → `NaiveTime`; `None`/vacío → None
+fn parse_hora_ref(v: Option<&str>) -> Option<NaiveTime> {
+    let h = v.map(str::trim).filter(|s| !s.is_empty())?;
+    let h = if h.len() == 5 { format!("{h}:00") } else { h.to_string() };
+    NaiveTime::parse_from_str(&h, "%H:%M:%S").ok()
+}
+
+/// Parsea `Option<&str>` (AAAA-MM-DD) → `NaiveDate`; `None`/vacío → None
+fn parse_fecha_ref(v: Option<&str>) -> Option<NaiveDate> {
+    let s = v.map(str::trim).filter(|s| !s.is_empty())?;
+    NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
 }
 
 /// Parsea un decimal desde un string, con fallback si está vacío
@@ -704,5 +844,58 @@ fn parse_hora(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
                 .map(Some)
                 .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dias_horas_exacto_sin_excedente() {
+        // 2026-01-01 10:00 → 2026-01-03 10:00 = 48 h = 2 días, 0 horas
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("10:00"));
+        assert_eq!(r, Some((2, 0)));
+    }
+
+    #[test]
+    fn excedente_menor_igual_3_horas_se_cobra_por_horas() {
+        // 2 h de excedente → 2 horas extras
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("12:00"));
+        assert_eq!(r, Some((2, 2)));
+        // exactamente 3 h → horas extras (el día completo es solo si SUPERA 3 h)
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("13:00"));
+        assert_eq!(r, Some((2, 3)));
+        // 3 h y 1 minuto → día completo
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("13:01"));
+        assert_eq!(r, Some((3, 0)));
+    }
+
+    #[test]
+    fn excedente_mayor_3_horas_cobra_dia_completo() {
+        // 6 h de excedente → 3 días, 0 horas extras
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("16:00"));
+        assert_eq!(r, Some((3, 0)));
+        // 25 h de excedente (73 h totales) → 3 días completos + 1 h; la 1 h
+        // restante ≤ 3 h se cobra como 1 hora extra
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-04"), Some("11:00"));
+        assert_eq!(r, Some((3, 1)));
+    }
+
+    #[test]
+    fn fracciones_de_hora_se_redondean_hacia_arriba() {
+        // 30 min de excedente → 1 hora extra
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("10:30"));
+        assert_eq!(r, Some((2, 1)));
+        // 2 h 20 min → 3 horas extra
+        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("12:20"));
+        assert_eq!(r, Some((2, 3)));
+    }
+
+    #[test]
+    fn faltan_horas_o_fechas_devuelve_none() {
+        assert_eq!(calcular_dias_horas("2026-01-01", None, Some("2026-01-03"), Some("10:00")), None);
+        assert_eq!(calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), None), None);
+        assert_eq!(calcular_dias_horas("2026-01-01", Some("10:00"), None, Some("10:00")), None);
     }
 }

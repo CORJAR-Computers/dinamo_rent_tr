@@ -53,6 +53,7 @@ function renta(overrides: Partial<Renta> = {}): Renta {
 		descuento: '0.00',
 		subtotal: '450000.00',
 		impuestos: '0.00',
+		cobraIva: true,
 		total: '450000.00',
 		abono: '0.00',
 		saldoPendiente: '450000.00',

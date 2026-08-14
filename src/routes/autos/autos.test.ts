@@ -54,6 +54,8 @@ const LISTS: BusinessLists = {
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
 	rolesDisponibles: []
+,
+	impuestoPorcentaje: 19,
 };
 
 function setSesion(rol = 'Administrador') {

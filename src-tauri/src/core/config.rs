@@ -443,6 +443,9 @@ pub struct BusinessLists {
     pub roles_con_usuarios: Vec<String>,
     pub roles_con_eliminar: Vec<String>,
     pub roles_usuarios: Vec<String>,
+    /// Porcentaje de impuesto (IVA) configurado; el formulario de rentas lo usa
+    /// para la vista previa cuando el checkbox «cobrar IVA» está activo.
+    pub impuesto_porcentaje: f64,
 }
 
 impl AppConfig {
@@ -464,6 +467,7 @@ impl AppConfig {
             roles_con_usuarios: self.roles_con_usuarios.iter().cloned().collect(),
             roles_con_eliminar: self.roles_con_eliminar.iter().cloned().collect(),
             roles_usuarios: self.roles_usuarios.clone(),
+            impuesto_porcentaje: self.impuesto_porcentaje,
         }
     }
 }

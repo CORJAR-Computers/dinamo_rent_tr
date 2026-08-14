@@ -504,10 +504,12 @@
 				<td>Subtotal</td>
 				<td class="derecha">{formatCOP(renta.subtotal, true)}</td>
 			</tr>
-			<tr>
-				<td>Impuestos (IVA)</td>
-				<td class="derecha">{formatCOP(renta.impuestos, true)}</td>
-			</tr>
+			{#if (parseFloat(renta.impuestos) || 0) > 0}
+				<tr>
+					<td>Impuestos (IVA)</td>
+					<td class="derecha">{formatCOP(renta.impuestos, true)}</td>
+				</tr>
+			{/if}
 			<tr class="fila-total">
 				<td>TOTAL</td>
 				<td class="derecha">{formatCOP(renta.total, true)}</td>
