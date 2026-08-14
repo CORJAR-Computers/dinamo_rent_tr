@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "dinamo-rent"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "aes",
  "aes-gcm",

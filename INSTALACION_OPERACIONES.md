@@ -1,22 +1,23 @@
-# Instalación de Dinamo Rent ERP — v1.0.1 (estable)
+# Instalación de Dinamo Rent ERP — v1.0.2 (estable)
 
-> Guía para el equipo de operaciones. **Última versión estable: v1.0.1** — corrige el bug
-> de instalación limpia del v1.0.0 (la app se colgaba en equipos nuevos sin BD previa) y
-> está construida y validada por CI en Windows limpio.
+> Guía para el equipo de operaciones. **Última versión estable: v1.0.2** — añade el IVA
+> por renta (checkbox), el auto-cálculo de días/horas al cerrar, el cambio de vehículo sin
+> cerrar la renta y los combos con búsqueda de clientes y vehículos. Construida y validada
+> por CI en Windows limpio.
 
 ---
 
 ## 1. Descarga de los instaladores
 
-Página de la release: <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.1>
+Página de la release: <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.2>
 
 | Instalador | Enlace directo | Tamaño | Uso |
 |---|---|---|---|
-| **NSIS** (`DinamoRent_1.0.1_x64-setup.exe`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.1/DinamoRent_1.0.1_x64-setup.exe> | ~21 MB | **Recomendado** — instalación asistida con atajo de escritorio |
-| **MSI** (`DinamoRent_1.0.1_x64_en-US.msi`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.1/DinamoRent_1.0.1_x64_en-US.msi> | ~31 MB | Despliegue empresarial / GPO |
+| **NSIS** (`DinamoRent_1.0.2_x64-setup.exe`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.2/DinamoRent_1.0.2_x64-setup.exe> | ~21 MB | **Recomendado** — instalación asistida con atajo de escritorio |
+| **MSI** (`DinamoRent_1.0.2_x64_en-US.msi`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.2/DinamoRent_1.0.2_x64_en-US.msi> | ~31 MB | Despliegue empresarial / GPO |
 
 > ⚠️ **No usar la v1.0.0** (descontinuada): falla en equipos sin BD previa. Si un equipo
-> ya la tiene instalada **con datos**, no hay que desinstalar — la v1.0.1 abre la BD
+> ya la tiene instalada **con datos**, no hay que desinstalar — la v1.0.2 abre la BD
 > existente tal cual (arranque idempotente, solo aplica migraciones pendientes).
 
 ---
@@ -36,18 +37,18 @@ Página de la release: <https://github.com/CORJAR-Computers/dinamo_rent_tr/relea
 ## 3. Instalación
 
 ### Opción A — Asistida (NSIS, recomendada)
-1. Ejecutar `DinamoRent_1.0.1_x64-setup.exe` como usuario normal.
+1. Ejecutar `DinamoRent_1.0.2_x64-setup.exe` como usuario normal.
 2. Seguir el asistente (siguiente → instalar → finalizar).
 
 ### Opción B — Silenciosa (NSIS)
 ```powershell
 # Instala sin interacción, sin atajo ni ejecución al final
-DinamoRent_1.0.1_x64-setup.exe /S
+DinamoRent_1.0.2_x64-setup.exe /S
 ```
 
 ### Opción C — Silenciosa (MSI, para GPO/Intune)
 ```powershell
-msiexec /i DinamoRent_1.0.1_x64_en-US.msi /qn /norestart
+msiexec /i DinamoRent_1.0.2_x64_en-US.msi /qn /norestart
 ```
 
 ---
@@ -90,7 +91,7 @@ los usuarios y datos — solo se aplican las migraciones pendientes.
 
 ## 6. Actualizar / rollback
 
-- **Actualizar desde v1.0.0**: instalar la v1.0.1 encima. Idempotente, sin pérdida de datos.
+- **Actualizar desde v1.0.0**: instalar la v1.0.2 encima. Idempotente, sin pérdida de datos.
 - **Rollback**: si algo fallara, desinstalar y reinstalar la versión anterior conservando
   `%APPDATA%\com.corjar.dinamorent\` (los datos están ahí, no en la carpeta de programa).
 - **Desinstalar**: Panel de control → Programas → Dinamo Rent ERP (o `uninstall.exe` en

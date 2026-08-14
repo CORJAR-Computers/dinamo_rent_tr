@@ -7,18 +7,18 @@
 
 ## ⬇️ Descarga e instalación (usuarios finales)
 
-> **Última versión estable: [v1.0.1](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.1)** — corrige el bug de instalación limpia del v1.0.0 y está construida y validada por CI en Windows limpio.
+> **Última versión estable: [v1.0.2](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.2)** — añade el IVA por renta (checkbox), el auto-cálculo de días/horas al cerrar, el cambio de vehículo sin cerrar la renta y los combos con búsqueda de clientes (por nombre o documento) y vehículos. Construida y validada por CI en Windows limpio.
 
 ### 1. Descargar el instalador
 
-Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.0.1**:
+Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.0.2**:
 
 | Instalador | Cuándo usarlo |
 |---|---|
-| `DinamoRent_1.0.1_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio |
-| `DinamoRent_1.0.1_x64_en-US.msi` (MSI, ~31 MB) | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
+| `DinamoRent_1.0.2_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio |
+| `DinamoRent_1.0.2_x64_en-US.msi` (MSI, ~31 MB) | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
 
-> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.0.1 abre tu BD actual tal cual.
+> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.0.2 abre tu BD actual tal cual.
 
 ### 2. Instalar
 
@@ -41,7 +41,7 @@ La app pedirá **cambiar la contraseña** en el primer ingreso. En una instalaci
 
 ### 4. Actualizar desde v1.0.0
 
-Solo instala la v1.0.1 encima (o desinstala y reinstala conservando `%APPDATA%\com.corjar.dinamorent\`): el arranque es idempotente y aplica únicamente las migraciones pendientes. **No se pierde ningún dato.**
+Solo instala la v1.0.2 encima (o desinstala y reinstala conservando `%APPDATA%\com.corjar.dinamorent\`): el arranque es idempotente y aplica únicamente las migraciones pendientes. **No se pierde ningún dato.**
 
 ---
 
@@ -112,7 +112,7 @@ Dinamo_Rent_tr/
 |-----------|-----------|
 | **[PLAN_IMPLEMENTACION_TAURI.md](PLAN_IMPLEMENTACION_TAURI.md)** | 📋 Plan completo de arquitectura y migración técnica desde Python a Tauri |
 | **[Handsoff.md](Handsoff.md)** | 🤖 Registro de decisiones, automatizaciones y guías de desarrollo |
-| **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)** | 🚀 Guía de instalación de la v1.0.1 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
+| **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)** | 🚀 Guía de instalación de la v1.0.2 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
 | **[DEPLOYMENT_CLIENTES.md](DEPLOYMENT_CLIENTES.md)** | 🖥️ Plan de despliegue en equipos de clientes: instalación silenciosa, verificación post-instalación y rollback |
 | **[SECURITY.md](SECURITY.md)** | 🔐 Manejo de secretos, rotación de clave PII y reporte de vulnerabilidades |
 | **[RESUMEN_EJECUTIVO.md](RESUMEN_EJECUTIVO.md)** | 📊 Resumen ejecutivo del estado del proyecto: releases, CI y herramientas de operación |
@@ -131,7 +131,7 @@ Dinamo_Rent_tr/
 
 ---
 
-**Versión estable**: 1.0.1 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.0.x).
+**Versión estable**: 1.0.2 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.0.x).
 
 
 ---
