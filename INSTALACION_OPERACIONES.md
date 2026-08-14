@@ -4,6 +4,10 @@
 > por renta (checkbox), el auto-cálculo de días/horas al cerrar, el cambio de vehículo sin
 > cerrar la renta y los combos con búsqueda de clientes y vehículos. Construida y validada
 > por CI en Windows limpio.
+>
+> **v1.0.3 (proxima):** incorpora el **auto-update** — a partir de ella la app detecta y
+> ofrece instalar las versiones nuevas al arrancar (ver seccion 6). Las instalaciones
+> v1.0.2 se actualizan una vez a mano.
 
 ---
 
@@ -91,9 +95,32 @@ los usuarios y datos — solo se aplican las migraciones pendientes.
 
 ## 6. Actualizar / rollback
 
+### Auto-actualización (a partir de la v1.0.3)
+
+A partir de la **v1.0.3** la app incorpora el **updater de Tauri v2**: al arrancar comprueba
+en GitHub Releases si hay una versión más nueva (`latest.json`) y, si existe, muestra el
+diálogo **«Actualización disponible — vX.Y.Z»** con las notas y los botones **Instalar ahora /
+Más tarde** (descarga con progreso, verifica la **firma minisign** contra la clave pública
+embebida y reinicia la app al terminar).
+
+- **Instalaciones v1.0.3+** → se actualizan **solas**. Requieren conexión a internet en el
+  arranque para el chequeo; sin conexión la app funciona igual y reintenta en el siguiente
+  arranque.
+- **Instalaciones v1.0.2 (sin updater)** → se actualizan **una sola vez a mano**: instalar la
+  v1.0.3 encima (sección 3; idempotente, sin pérdida de datos). A partir de ahí reciben las
+  siguientes versiones automáticamente.
+- Cada release publicada incluye los instaladores, sus firmas (`.sig`) y el `latest.json`;
+  la clave privada de firma vive solo en el secret `TAURI_SIGNING_PRIVATE_KEY` del repo
+  (nunca en el instalador). Publicación: ver `RELEASE_CHECKLIST.md`.
+
 - **Actualizar desde v1.0.0**: instalar la v1.0.2 encima. Idempotente, sin pérdida de datos.
+- **Actualizar desde v1.0.2**: instalar la v1.0.3 encima (transición al auto-update).
+- **Actualizar desde v1.0.3+**: desde el diálogo de la app, o a mano instalando la release
+  nueva encima (idempotente).
 - **Rollback**: si algo fallara, desinstalar y reinstalar la versión anterior conservando
   `%APPDATA%\com.corjar.dinamorent\` (los datos están ahí, no en la carpeta de programa).
+  Un rollback manual funciona igual tras un auto-update (desinstalar la versión actual e
+  instalar la anterior).
 - **Desinstalar**: Panel de control → Programas → Dinamo Rent ERP (o `uninstall.exe` en
   `%LOCALAPPDATA%\DinamoRent\`).
 
