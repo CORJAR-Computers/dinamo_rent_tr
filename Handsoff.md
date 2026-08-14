@@ -706,7 +706,12 @@ También de esta línea: `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-
 
 Receta validada en un clon nuevo (sin `data/config.ini` ni `data/dinamo_rent_v3.fdb`).
 Deja la BD dev (`data/dinamo_rent_v3.fdb`) funcional para que `cargo test --tests`
-corra completo en verde — sin esto, varias suites se omiten silenciosamente:
+corra completo en verde — sin esto, las suites con flota fallan con un mensaje que
+indica correr el setup (antes se omitían silenciosamente):
+
+> **Automatizada:** `bash scripts/setup-bd-dev.sh` ejecuta los 7 pasos de esta
+> receta de punta a punta (idempotente; `--verificar` corre `cargo test --tests`
+> al final). Los pasos siguientes son el detalle manual de lo que hace el script.
 
 1. **Arrancar el entorno**: `cd src-tauri && cargo run --features dev --bin sync_dev -- --solo-total`
    — crea `data/config.ini` desde defaults, crea la BD y aplica las 19 migraciones
@@ -736,8 +741,10 @@ corra completo en verde — sin esto, varias suites se omiten silenciosamente:
    requiere historial dev previo (en BD virgen ambos arrancan en 1).
 
 Resultado: `cargo test --tests` en verde (lib 48 + integración: migraciones 11/11, rentas 8/8
-y el resto de suites). Nota: `services::simit::consulta_401_clasifica_como_unauthorized` es
-un flake conocido (servidor HTTP mock bajo carga paralela) — pasa aislado.
+y el resto de suites). Nota (14-08): el flake de
+`services::simit::consulta_401_clasifica_como_unauthorized` (mock HTTP bajo paralelismo) se
+arregló con agente propio por test + `#[serial]` + mock con timeouts — estresado en verde
+(27 corridas consecutivas + carga real con builds en paralelo).
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
