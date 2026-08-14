@@ -1117,11 +1117,19 @@ fn migracion_0016_backfill_atribuye_comparendos() {
     )
     .expect("dejar 0016 pendiente en la copia");
 
-    let placa: String = conn
-        .query_first("SELECT FIRST 1 placa FROM autos", ())
-        .expect("auto real de la copia")
-        .map(|(p,): (String,)| p)
-        .expect("hay autos en la BD dev");
+    // Auto PROPIO del test insertado en la copia: el test no depende de qué
+    // autos tenga la BD dev (un clon nuevo la tiene vacía y el backfill 0016
+    // exige una placa válida por la FK de rentas/comparendos). Hermético y
+    // determinista, como los demás tests del archivo. `RentaService::crear`
+    // exige `estado = 'Disponible'`.
+    const PLACA_TEST_0016: &str = "0016-TEST";
+    conn.execute(
+        "INSERT INTO autos (placa, marca, modelo, tipo, estado, fecha_ingreso) \
+         VALUES (?, 'Test', 'Test', 'Sedán', 'Disponible', CURRENT_DATE)",
+        (PLACA_TEST_0016,),
+    )
+    .expect("insertar auto de prueba en la copia");
+    let placa = PLACA_TEST_0016.to_string();
 
     let hoy = Local::now().date_naive();
     let recogida = hoy - Duration::days(60);
@@ -1185,4 +1193,6 @@ fn migracion_0016_backfill_atribuye_comparendos() {
         .expect("limpiar comparendo");
     conn.execute("DELETE FROM rentas WHERE id = ?", (renta.id,))
         .expect("limpiar renta");
+    conn.execute("DELETE FROM autos WHERE placa = ?", (PLACA_TEST_0016,))
+        .expect("limpiar auto de prueba");
 }
