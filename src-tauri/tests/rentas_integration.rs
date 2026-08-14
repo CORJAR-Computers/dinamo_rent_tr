@@ -204,6 +204,73 @@ fn renta_crud_cierre_pagos_inspecciones() {
 
 #[test]
 #[serial]
+fn renta_montos_en_blanco_ok() {
+    // Regresión del error real de producción: SQLCODE -303 "conversion error
+    // from string ''" al enlazar campos monetarios vacíos a CAST(? AS DECIMAL).
+    // El formulario arranca valorDia/valorHoraExtra en '' y los costos extra
+    // suelen quedar en blanco; el backend debe normalizarlos a "0.00".
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
+    };
+
+    let mut datos = datos_renta(&placa, None);
+    // Escenario real: tarifas/costos extra y abono en blanco ('' como envía la UI)
+    datos.valor_hora_extra = String::new();
+    datos.valor_dia_extra = String::new();
+    datos.costo_lavado = String::new();
+    datos.costo_silla = String::new();
+    datos.costo_retorno = String::new();
+    datos.costo_domicilio = String::new();
+    datos.costo_cables = String::new();
+    datos.costo_inversor = String::new();
+    datos.descuento = String::new();
+    datos.abono = String::new();
+
+    let creada =
+        RentaService::crear(&mut conn, cfg, datos.clone()).expect("crear con montos en blanco");
+    // 3 días × 150.000 + IVA 19% = 535.500; abono en blanco → 0.00
+    assert_eq!(creada.total, "535500.00");
+    assert_eq!(creada.abono, "0.00", "abono en blanco → 0.00, no -303");
+    assert_eq!(creada.saldo_pendiente, "535500.00");
+
+    // Editar dejando la tarifa en blanco también debe funcionar (antes: -303)
+    datos.valor_dia = String::new();
+    datos.valor_hora_extra = String::new();
+    let editada = RentaService::actualizar(&mut conn, cfg, creada.id, datos)
+        .expect("editar con montos en blanco");
+    assert_eq!(editada.total, "0.00", "sin tarifa → total 0, no -303");
+
+    // Cierre con ajustes en blanco (vacío = mantener el valor actual)
+    let cierre = RentaCierreDatos {
+        fecha_devolucion_real: Some(Local::now().date_naive().format("%Y-%m-%d").to_string()),
+        hora_devolucion_real: Some("18:00".into()),
+        km_final: Some("43000".into()),
+        tanque_final: Some("Lleno".into()),
+        dias_calculados: Some(3),
+        horas_extras: Some(0),
+        valor_dia: Some(String::new()),
+        valor_hora_extra: Some(String::new()),
+        descuento: Some(String::new()),
+        observaciones: None,
+    };
+    let cerrada =
+        RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar con ajustes en blanco");
+    assert_eq!(cerrada.estado, "Cerrada");
+    assert_eq!(cerrada.total, "0.00");
+
+    // ── Limpieza ──
+    RentaService::eliminar(&mut conn, creada.id).expect("eliminar");
+}
+
+#[test]
+#[serial]
 fn renta_no_contrato_secuencial_independiente_del_id() {
     let state = dev_state();
     let cfg = &state.config;

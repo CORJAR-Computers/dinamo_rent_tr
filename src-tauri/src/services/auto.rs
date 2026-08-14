@@ -229,6 +229,10 @@ fn normalizar(d: &mut AutoDatos) {
     d.tipo = d.tipo.trim().to_string();
     d.estado = d.estado.trim().to_string();
     d.costo_fijo_mensual = d.costo_fijo_mensual.trim().replace(',', ".");
+    if d.costo_fijo_mensual.is_empty() {
+        // vacío → "0.00": evita SQLCODE -303 al enlazar '' a CAST(? AS DECIMAL)
+        d.costo_fijo_mensual = "0.00".into();
+    }
     if d.tipo.is_empty() {
         d.tipo = "Automóvil".into();
     }

@@ -131,9 +131,13 @@ fn normalizar(d: &mut ReservaDatos) {
     d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     d.observaciones = d.observaciones.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.valor_dia = d.valor_dia.trim().replace(',', ".");
-    d.valor_hora_adic = d.valor_hora_adic.trim().replace(',', ".");
-    d.abono = d.abono.trim().replace(',', ".");
+    // Montos: vacío → "0.00" (evita SQLCODE -303 al enlazar '' a DECIMAL)
+    for m in [&mut d.valor_dia, &mut d.valor_hora_adic, &mut d.abono] {
+        *m = m.trim().replace(',', ".");
+        if m.is_empty() {
+            *m = "0.00".into();
+        }
+    }
     if d.estado.trim().is_empty() {
         d.estado = "Confirmada".into();
     }

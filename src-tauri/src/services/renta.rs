@@ -521,6 +521,10 @@ fn normalizar(d: &mut RentaDatos) {
     d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     d.observaciones = d.observaciones.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     d.tanque_salida = d.tanque_salida.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    // Montos: vacío → "0.00". Sin esto, un campo monetario en blanco se enlaza
+    // como '' a CAST(? AS DECIMAL) y Firebird falla con SQLCODE -303
+    // "conversion error from string ''" (error real visto en producción al
+    // crear/editar rentas). Incluye `abono`, que antes quedaba fuera de la lista.
     for m in [
         &mut d.valor_dia,
         &mut d.valor_hora_extra,
@@ -532,8 +536,12 @@ fn normalizar(d: &mut RentaDatos) {
         &mut d.costo_cables,
         &mut d.costo_inversor,
         &mut d.descuento,
+        &mut d.abono,
     ] {
         *m = m.trim().replace(',', ".");
+        if m.is_empty() {
+            *m = "0.00".into();
+        }
     }
     if d.km_salida.trim().is_empty() {
         d.km_salida = "0".into();
@@ -547,6 +555,9 @@ fn normalizar_cierre(d: &mut RentaCierreDatos) {
     for m in [&mut d.valor_dia, &mut d.valor_hora_extra, &mut d.descuento] {
         if let Some(v) = m {
             *v = v.trim().replace(',', ".");
+            if v.is_empty() {
+                *m = None; // vacío = "mantener" (COALESCE conserva el valor actual)
+            }
         }
     }
 }
