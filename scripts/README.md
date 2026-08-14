@@ -344,3 +344,42 @@ tests (p. ej. el backfill 0016) necesitan además autos/clientes en esa BD.
 
 Códigos de salida: `0` todo verde · `1` falló el entorno o algún test ·
 `2` opción desconocida.
+
+---
+
+# BD de desarrollo lista desde cero (un comando)
+
+`scripts/setup-bd-dev.sh` ejecuta los **7 pasos de la receta del Handsoff
+(§6.3)** para dejar `data/dinamo_rent_v3.fdb` funcional en un clon nuevo —
+sin esto, `cargo test --tests` sale verde sin probar nada (las suites con
+flota ahora fallan con un mensaje que indica correr este script):
+
+```bash
+bash scripts/setup-bd-dev.sh              # setup completo (idempotente)
+bash scripts/setup-bd-dev.sh --verificar  # + cargo test --tests al final
+```
+
+## Los 7 pasos
+
+1. `sync_dev --solo-total` → crea `config.ini` + la BD + aplica las 19 migraciones
+   (no toca el portal SIMIT).
+2. Paquetes Python → `firebird-driver`, `cryptography` (los necesita el importador).
+3. Clave PII → genera `db_encryption_key` en `[security]` si está vacía (la clave
+   queda SOLO en el config local, nunca en el repo).
+4. Flota de prueba → `importar_autos_clientes.py` con `scripts/fixtures`
+   (dry-run → `--commit`): 2 autos + 2 clientes con PII cifrada.
+5. Admin → seed solo si no existe (verificar_instalacion_limpia) + reset a
+   **`Admin123!`** con `dev_reset_admin` (lo que espera `auth_integration`).
+6. Historial de auditoría → `LOGIN OK` / `LOGIN FALLIDO` (lo exige
+   `auditoria_acciones_y_usuarios`), solo si faltan.
+7. Identidad de rentas → reinicia el IDENTITY a `max(1000, MAX(id)+1)` (lo exige
+   `renta_no_contrato_secuencial_independiente_del_id`); no borra nada.
+
+Todo es **idempotente**: se puede volver a correr sin romper el estado actual.
+Códigos de salida: `0` listo · `1` falló algún paso (aborta con el paso
+señalado) · `2` opción desconocida.
+
+> **Nota para Git Bash en Windows:** el driver de Firebird embedded necesita
+> `fbclient.dll` en `PATH`; el script la añade en formato MSYS (el importador
+> trae hardcodeada una ruta `D:\...` que no aplica en todos los clones, así que
+> el PATH del script es lo que hace funcionar la conexión).
