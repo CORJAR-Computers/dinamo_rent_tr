@@ -85,10 +85,17 @@ jobs:
             echo 'CHANGELOG_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # Firma de los bundles del updater: con createUpdaterArtifacts activo,
+      # tauri build genera los .sig y tauri-action sube además latest.json
+      # (el endpoint estático que la app consulta para auto-actualizarse).
+      # La clave privada vive SOLO en el secret del repo (ver RELEASE_CHECKLIST.md
+      # §bump y el Handsoff §6); nunca se commitea.
       - name: Build y publicar release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Dinamo Rent ERP ${{ github.ref_name }}'

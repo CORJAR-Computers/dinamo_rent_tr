@@ -12,6 +12,7 @@
 	import AtajosModal, { esAtajoAyuda } from '$lib/components/AtajosModal.svelte';
 	import PaletaComandos, { esAtajoPaleta } from '$lib/components/PaletaComandos.svelte';
 	import ConfirmarCierre from '$lib/components/ConfirmarCierre.svelte';
+	import UpdateDisponible from '$lib/components/UpdateDisponible.svelte';
 
 	// Props de SvelteKit (snippet de la página hija)
 	let { children } = $props();
@@ -245,6 +246,9 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 <!-- Confirmación al pulsar la X de la ventana (Sí/No). Se monta a nivel raíz,
      fuera del if/else de sesión, para cubrir también login / cambiar-password. -->
 <ConfirmarCierre />
+<!-- Chequeo de actualizaciones al arrancar (nueva release → pedir instalación).
+     A nivel raíz para cubrir también login / cambiar-password. -->
+<UpdateDisponible />
 <svelte:window onkeydown={onGlobalKeydown} />
 
 <svelte:head>

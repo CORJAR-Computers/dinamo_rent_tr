@@ -23,6 +23,12 @@ release `v1.0.3` con instaladores `DinamoRent_1.0.2_*`.
 - [ ] `ci.yml` verde en el tope de `main` (lint, svelte-check, vitest, cargo test --lib, importador).
       El workflow de release NO valida: un tag sobre un commit roto publicaría igual.
 - [ ] Working tree limpio y `main` local = `origin/main`.
+- [ ] El secret `TAURI_SIGNING_PRIVATE_KEY` está configurado en Settings → Secrets → Actions
+      del repo (y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` solo si la clave tiene password).
+      Sin él, `tauri build` NO firma los bundles y la release saldría sin `.sig`/`latest.json`
+      → la app instalada no podría auto-actualizarse. La clave privada vive SOLO en
+      `~/.tauri/dinamorent.key` de la máquina que la generó: respáldala (si se pierde,
+      las instalaciones v1.0.3+ dejarían de actualizarse).
 
 ## 2. Bump de versión
 
@@ -80,11 +86,20 @@ crea la release **publicada** (no draft) y sube los assets. ~11 minutos (referen
 > y el nuevo, con hash corto y mensaje. Si quieres verlo antes de publicar,
 > cambia `releaseDraft: true` en `release.yml` y publícala a mano.
 
+> **Auto-actualización (v1.0.3+):** la app instalada comprueba al arrancar si hay una
+> release más nueva (endpoint `latest.json` de GitHub) y pide permiso para instalarla.
+> Las instalaciones **v1.0.2 no tienen updater**: se actualizan UNA vez a mano con el
+> instalador de la v1.0.3 y de ahí en adelante reciben las siguientes automáticamente.
+
 ## 6. Verificar la release (no confiar a ciegas en el CI)
 
 - [ ] Release `v1.0.3` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.3>
-      con **2 assets**: `DinamoRent_1.0.3_x64-setup.exe` (NSIS, ~21 MB) y
-      `DinamoRent_1.0.3_x64_en-US.msi` (~31 MB). No debe haber `.sig` (no hay firma de código).
+      con **4+ assets**: los 2 instaladores (`DinamoRent_1.0.3_x64-setup.exe` NSIS ~21 MB y
+      `DinamoRent_1.0.3_x64_en-US.msi` ~31 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
+      y `latest.json`. Los `.sig` son de **minisign** (verificación del updater), NO firma de
+      código Authenticode.
+- [ ] `latest.json` existe y `platforms.windows-x86_64.url` apunta al `*_setup.exe` de esta
+      release — es lo que la app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse.
 - [ ] El **body contiene el changelog** (commits del rango).
 - [ ] Los enlaces responden HTTP 200 y el tamaño coincide:
 

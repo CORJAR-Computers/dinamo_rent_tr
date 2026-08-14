@@ -54,6 +54,12 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
+# Auto-actualización (updater) + reinicio de la app tras instalar el update.
+# - tauri-plugin-updater: chequea la release de GitHub y descarga/instala el
+#   bundle firmado (ver tauri.conf.json → plugins.updater y RELEASE_CHECKLIST.md).
+# - tauri-plugin-process: `relaunch()` del frontend tras instalar.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"

@@ -19,7 +19,17 @@ use crate::core::security::LoginAttemptTracker;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // ── Auto-actualización ──
+            // Registro del plugin updater (Windows): lee tauri.conf.json
+            // (pubkey + endpoints de GitHub Releases) y permite a la UI
+            // comprobar/descargar/instalar la nueva versión (UpdateDisponible.svelte).
+            #[cfg(desktop)]
+            {
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             // ── Configuración ──
             let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             let (resource_dir, data_dir) = if cfg!(debug_assertions) {
