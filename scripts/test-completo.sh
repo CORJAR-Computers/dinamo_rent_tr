@@ -37,6 +37,9 @@ done
 NPM_GLOBAL="$(cygpath -u "${APPDATA:-}" 2>/dev/null)/npm"
 [ -d "$NPM_GLOBAL" ] || NPM_GLOBAL="${APPDATA//\\//}/npm"
 export PATH="/c/Program Files/nodejs:$HOME/.cargo/bin:$NPM_GLOBAL:$PATH"
+# Firebird embedded (fbclient.dll) para los checks de la BD dev con python.
+FB_DIR="$SRC_TAURI/resources/firebird"
+export DINAMO_FB_DIR="$(cygpath -w "$FB_DIR" 2>/dev/null || echo "$FB_DIR")"
 
 fallos_env=0
 ok_env()   { echo "  [OK]    $1"; }
@@ -126,11 +129,48 @@ if [ "$SOLO_FRONTEND" -eq 0 ]; then
 fi
 
 if [ "$INTEGRA" -eq 1 ] && [ "$SOLO_FRONTEND" -eq 0 ]; then
+  # BD dev: avisar ANTES de correr si falta o está sin flota. Los tests de
+  # integración con flota ahora fallan con instrucción, pero mejor evitarlo.
   if [ ! -f "$ROOT/data/dinamo_rent_v3.fdb" ]; then
     echo ""
-    echo "⚠️  No existe la BD dev (data/dinamo_rent_v3.fdb). Créala primero con:"
-    echo "    cd src-tauri && cargo run --features dev --bin sync_dev -- --solo-total"
-    echo "    (los tests de integración 0016 y los de rentas con flota necesitan datos)"
+    echo "⚠️  No existe la BD dev (data/dinamo_rent_v3.fdb). Créala con:"
+    echo "    bash scripts/setup-bd-dev.sh"
+    echo "    (crea la BD, aplica las 19 migraciones y siembra la flota de prueba)"
+  else
+    # Best-effort: cuenta autos en la BD dev (python + firebird-driver).
+    # 0 = con flota · 1 = sin autos · 2 = no se pudo verificar (no avisar).
+    python - "$ROOT" <<'EOF' >/dev/null 2>&1
+import configparser, os, sys
+os.environ["PATH"] = os.environ.get("DINAMO_FB_DIR", "") + os.pathsep + os.environ.get("PATH", "")
+try:
+    from firebird.driver import connect, driver_config
+    driver_config.database_engine = "embedded"
+    root = sys.argv[1]
+    cfg = configparser.ConfigParser()
+    cfg.read(os.path.join(root, "data", "config.ini"))
+    con = connect(
+        os.path.join(root, "data", "dinamo_rent_v3.fdb"),
+        user=cfg.get("database", "user", fallback="sysdba").strip(),
+        password=cfg.get("database", "password", fallback="").strip(),
+        charset="UTF8",
+    )
+    n = con.cursor().execute("SELECT COUNT(*) FROM autos").fetchone()[0]
+    con.close()
+    sys.exit(0 if n > 0 else 1)
+except Exception:
+    sys.exit(2)
+EOF
+    PY_EXIT=$?
+    if [ "$PY_EXIT" -eq 1 ]; then
+      echo ""
+      echo "⚠️  La BD dev existe pero está sin flota (0 autos). Siémbrala con:"
+      echo "    bash scripts/setup-bd-dev.sh   (idempotente — 2 autos + 2 clientes)"
+    elif [ "$PY_EXIT" -eq 2 ]; then
+      echo ""
+      echo "⚠️  No se pudo verificar la flota de la BD dev (¿falta firebird-driver?)."
+      echo "    Si los tests de integración fallan por falta de datos:"
+      echo "    bash scripts/setup-bd-dev.sh"
+    fi
   fi
   paso "Tests de integración (cargo test --tests)"
   (cd "$SRC_TAURI" && cargo test --tests)

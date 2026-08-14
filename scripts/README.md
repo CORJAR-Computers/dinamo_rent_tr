@@ -338,9 +338,10 @@ MSYS: `C:\Program Files\nodejs`, `%USERPROFILE%\.cargo\bin` y
 
 Con `--integra` corre además `cargo test --tests` (suites de integración:
 migraciones, rentas y el resto), que **requieren la BD de desarrollo**
-(`data/dinamo_rent_v3.fdb`, gitignored). Si no existe, el script avisa cómo
-crearla (`cargo run --features dev --bin sync_dev -- --solo-total`); algunos
-tests (p. ej. el backfill 0016) necesitan además autos/clientes en esa BD.
+(`data/dinamo_rent_v3.fdb`, gitignored). Antes de correr, el script avisa si
+la BD **no existe** o está **sin flota** (0 autos), sugiriendo
+`bash scripts/setup-bd-dev.sh` (la receta completa de la §6.3 del Handsoff:
+crea la BD, aplica las migraciones y siembra autos/clientes de prueba).
 
 Códigos de salida: `0` todo verde · `1` falló el entorno o algún test ·
 `2` opción desconocida.
