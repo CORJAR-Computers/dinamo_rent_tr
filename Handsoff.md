@@ -702,6 +702,43 @@ Harness reutilizable: `scripts/verificar-despliegue-sandbox.ps1` +
 También de esta línea: `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-sandbox.ps1`
 (smoke test del instalador en Windows limpio, ver nota de portada 12-08).
 
+### 6.3 Dejar lista la BD de desarrollo desde cero (2026-08-14)
+
+Receta validada en un clon nuevo (sin `data/config.ini` ni `data/dinamo_rent_v3.fdb`).
+Deja la BD dev (`data/dinamo_rent_v3.fdb`) funcional para que `cargo test --tests`
+corra completo en verde — sin esto, varias suites se omiten silenciosamente:
+
+1. **Arrancar el entorno**: `cd src-tauri && cargo run --features dev --bin sync_dev -- --solo-total`
+   — crea `data/config.ini` desde defaults, crea la BD y aplica las 19 migraciones
+   (no toca el portal SIMIT; solo lectura).
+2. **Paquetes Python** (los necesita el importador):
+   `python -m pip install firebird-driver cryptography`.
+3. **Clave PII**: el importador se niega a correr con `db_encryption_key` vacía. Generar
+   una clave Fernet y escribirla en `data/config.ini` (`[security] db_encryption_key`):
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+   — clave local al clon, nunca al repo.
+4. **Sembrar flota de prueba**: `python scripts/importar_autos_clientes.py
+   --sql scripts/fixtures/dump_autos_clientes.sql --db data/dinamo_rent_v3.fdb`
+   — primero dry-run (sin `--commit`) y luego `--commit` (transaccional). Inserta 2 autos +
+   2 clientes con PII cifrada y auditoría `IMPORTACION_DATOS`. Necesario para el test 0016
+   (`expect("hay autos en la BD dev")`) y para que las suites de rentas corran de verdad
+   en vez de omitirse.
+5. **Admin**: `cargo run --features dev --bin verificar_instalacion_limpia` siembra el
+   usuario admin (el seed solo ocurre en el arranque de la app); luego
+   `cargo run --features dev --bin dev_reset_admin` lo deja en **`Admin123!`** — la
+   contraseña que espera `auth_integration` (sin reset queda `admin123` de fábrica y
+   `login_ok_admin` falla).
+6. **Historial de auditoría**: sembrar un evento `LOGIN OK` y uno `LOGIN FALLIDO` en
+   `auditoria` (el test `auditoria_acciones_y_usuarios` los exige).
+7. **Identidad de rentas**: limpiar las rentas artefacto de tests previos y avanzar el
+   IDENTITY de `rentas` (p. ej. a 1000) — el test
+   `renta_no_contrato_secuencial_independiente_del_id` asume `no_contrato != id`, lo que
+   requiere historial dev previo (en BD virgen ambos arrancan en 1).
+
+Resultado: `cargo test --tests` en verde (lib 48 + integración: migraciones 11/11, rentas 8/8
+y el resto de suites). Nota: `services::simit::consulta_401_clasifica_como_unauthorized` es
+un flake conocido (servidor HTTP mock bajo carga paralela) — pasa aislado.
+
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
 La app permite a cada empresa configurar su identidad visual y datos de contacto
