@@ -47,6 +47,7 @@
 			extra('Domicilio', renta.costoDomicilio),
 			extra('Cables', renta.costoCables),
 			extra('Inversor', renta.costoInversor),
+			extra('Gasolina', renta.valorGasolina ?? ''),
 			extra('Día extra', renta.valorDiaExtra)
 		].filter((e): e is { nombre: string; monto: string } => e !== null)
 	);

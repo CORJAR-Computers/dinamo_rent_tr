@@ -76,6 +76,8 @@ pub struct Renta {
     pub costo_domicilio: String,
     pub costo_cables: String,
     pub costo_inversor: String,
+    /// Valor de gasolina a cobrar cuando el cliente entrega/recibe sin tanque lleno
+    pub valor_gasolina: String,
     pub descuento: String,
     pub subtotal: String,
     pub impuestos: String,
@@ -128,6 +130,8 @@ pub struct RentaDatos {
     pub costo_domicilio: String,
     pub costo_cables: String,
     pub costo_inversor: String,
+    /// Valor de gasolina a cobrar (cliente entrega/recibe sin tanquear)
+    pub valor_gasolina: String,
     pub descuento: String,
     /// Campos calculados por el servicio (subtotal/impuestos/total/saldo)
     pub subtotal: String,
@@ -219,7 +223,8 @@ pub const SELECT_COLS_B: &str = "\
     r.id_reserva, CAST(r.created_at AS VARCHAR(30)), \
     COALESCE(a.marca || ' ' || a.modelo, ''), \
     r.no_contrato, r.anio_contrato, \
-    r.cobra_iva = 1";
+    r.cobra_iva = 1, \
+    CAST(r.valor_gasolina AS VARCHAR(12))";
 
 /// Fila A (26 columnas) — mantener alineada con `SELECT_COLS_A`
 #[allow(clippy::type_complexity)]
@@ -273,6 +278,7 @@ pub type RentaRowB = (
     i64,
     i64,
     bool,
+    String,
 );
 
 fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
@@ -307,6 +313,7 @@ fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
         cobra_iva: b.17,
         no_contrato: b.15,
         anio_contrato: b.16,
+        valor_gasolina: b.18,
         total: b.1,
         abono: b.2,
         saldo_pendiente: b.3,
@@ -505,6 +512,7 @@ impl RentaRepository {
                     ubicacion_retorno, dias_calculados, horas_extras, \
                     valor_dia, valor_hora_extra, valor_dia_extra, \
                     costo_lavado, costo_silla, costo_retorno, costo_domicilio, costo_cables, costo_inversor, \
+                    valor_gasolina, \
                     descuento, subtotal, impuestos, total, abono, saldo_pendiente, \
                     cobra_iva, estado, observaciones, km_salida, tanque_salida, id_reserva, no_contrato, anio_contrato \
                  ) VALUES (\
@@ -514,6 +522,7 @@ impl RentaRepository {
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
+                    CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     ?, 'Activo', ?, CAST(? AS DOUBLE PRECISION), ?, ?, \
                     (SELECT COALESCE(MAX(no_contrato), 0) + 1 FROM rentas WHERE anio_contrato = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)), \
                     EXTRACT(YEAR FROM CURRENT_TIMESTAMP) \
@@ -541,6 +550,7 @@ impl RentaRepository {
                     d.costo_domicilio.to_string(),
                     d.costo_cables.to_string(),
                     d.costo_inversor.to_string(),
+                    d.valor_gasolina.to_string(),
                     d.descuento.to_string(),
                     d.subtotal.to_string(),
                     d.impuestos.to_string(),
@@ -571,6 +581,7 @@ impl RentaRepository {
                 costo_lavado = CAST(? AS DECIMAL(12,2)), costo_silla = CAST(? AS DECIMAL(12,2)), \
                 costo_retorno = CAST(? AS DECIMAL(12,2)), costo_domicilio = CAST(? AS DECIMAL(12,2)), \
                 costo_cables = CAST(? AS DECIMAL(12,2)), costo_inversor = CAST(? AS DECIMAL(12,2)), \
+                valor_gasolina = CAST(? AS DECIMAL(12,2)), \
                 descuento = CAST(? AS DECIMAL(12,2)), \
                 subtotal = CAST(? AS DECIMAL(12,2)), impuestos = CAST(? AS DECIMAL(12,2)), \
                 total = CAST(? AS DECIMAL(12,2)), saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
@@ -600,6 +611,7 @@ impl RentaRepository {
                 d.costo_domicilio.to_string(),
                 d.costo_cables.to_string(),
                 d.costo_inversor.to_string(),
+                d.valor_gasolina.to_string(),
                 d.descuento.to_string(),
                 d.subtotal.to_string(),
                 d.impuestos.to_string(),

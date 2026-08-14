@@ -682,6 +682,8 @@ export interface Renta {
 	costoDomicilio: string;
 	costoCables: string;
 	costoInversor: string;
+	/** Valor de gasolina a cobrar (cliente entrega/recibe sin tanquear) */
+	valorGasolina?: string;
 	descuento: string;
 	subtotal: string;
 	impuestos: string;
@@ -731,6 +733,8 @@ export interface RentaDatos {
 	costoDomicilio: string;
 	costoCables: string;
 	costoInversor: string;
+	/** Valor de gasolina a cobrar (cliente entrega/recibe sin tanquear) */
+	valorGasolina?: string;
 	descuento: string;
 	subtotal?: string;
 	impuestos?: string;

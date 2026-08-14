@@ -79,8 +79,9 @@
 
 <style>
 	/* Contrato de renta — impresión en papel Carta / Letter (ver @page y
-	   .contrato-carta en app.css). Cuerpo 7.8pt, interlineado 1.18: el texto
-	   legal debe ocupar 3 hojas (máx. 4). */
+	   .contrato-carta en app.css). Cuerpo 6.8pt, interlineado 1.06: el texto
+	   legal debe caber en 2 hojas (reducción pedida: menos tamaño de letra,
+	   manteniendo legibilidad). */
 	/* Paleta por rol en variables: el modo oscuro (pantalla) y la impresión
 	   (siempre en claro, en app.css @media print) solo redefinen estas
 	   variables. */
@@ -99,8 +100,8 @@
 		--ct-borde-firma: #333333;
 		--ct-footer-borde: #eeeeee;
 		font-family: 'Arial', sans-serif;
-		font-size: 7.8pt;
-		line-height: 1.18;
+		font-size: 6.8pt;
+		line-height: 1.06;
 		color: var(--ct-texto);
 		text-align: justify;
 		hyphens: auto;
@@ -128,14 +129,14 @@
 
 	.titulo-principal {
 		color: var(--ct-acento);
-		font-size: 11pt;
+		font-size: 9.5pt;
 		font-weight: bold;
-		margin: 0 0 4px 0;
+		margin: 0 0 2px 0;
 		text-transform: uppercase;
 	}
 
 	.subtitulo {
-		font-size: 7pt;
+		font-size: 6.3pt;
 		color: var(--ct-secundario);
 		margin: 0;
 	}
@@ -143,43 +144,43 @@
 	.info-contacto {
 		flex: 0 0 25%;
 		text-align: right;
-		font-size: 7pt;
+		font-size: 6.3pt;
 		color: var(--ct-contacto);
-		padding-top: 5px;
+		padding-top: 4px;
 	}
 
 	.numero-contrato {
 		text-align: center;
-		font-size: 10pt;
+		font-size: 9pt;
 		font-weight: bold;
-		margin: 6px 0 9px 0;
+		margin: 4px 0 6px 0;
 		color: var(--ct-acento);
 		background-color: var(--ct-fondo-suave);
-		padding: 3px;
+		padding: 2px;
 		border-radius: 3px;
 	}
 
 	.seccion-partes {
-		margin-bottom: 9px;
-		padding: 7px;
+		margin-bottom: 6px;
+		padding: 5px;
 		background-color: var(--ct-fondo-caja);
 		border-left: 3px solid var(--ct-acento);
-		font-size: 7.5pt;
-		line-height: 1.2;
+		font-size: 6.8pt;
+		line-height: 1.06;
 	}
 
 	.clausula-titulo {
 		font-weight: bold;
-		margin: 6px 0 2px 0;
+		margin: 4px 0 1px 0;
 		color: var(--ct-texto);
-		font-size: 8.5pt;
+		font-size: 7.6pt;
 		page-break-after: avoid;
 	}
 
 	.clausula-contenido {
-		margin: 0 0 3px 0;
+		margin: 0 0 2px 0;
 		text-align: justify;
-		line-height: 1.18;
+		line-height: 1.06;
 		text-indent: 8px;
 	}
 
@@ -190,7 +191,7 @@
 
 	.lista-numerada li {
 		margin-bottom: 2px;
-		line-height: 1.18;
+		line-height: 1.06;
 	}
 
 	.campo-resaltado {
@@ -198,28 +199,28 @@
 		padding: 1px 3px;
 		border-radius: 2px;
 		font-weight: bold;
-		font-size: 7.5pt;
+		font-size: 6.8pt;
 		border-bottom: 1px dotted var(--ct-borde);
 	}
 
 	.contrato-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 7.5pt;
-		margin: 4px 0;
+		font-size: 6.8pt;
+		margin: 3px 0;
 	}
 
 	.contrato-table td {
-		padding: 3px;
+		padding: 2px;
 		border: 1px solid var(--ct-borde-tabla);
 	}
 
 	.poliza-container {
-		margin: 6px 0;
-		padding: 6px;
+		margin: 4px 0;
+		padding: 5px;
 		border: 1px dashed var(--ct-borde);
 		background-color: var(--ct-fondo-poliza);
-		font-size: 7.5pt;
+		font-size: 6.8pt;
 		page-break-inside: avoid;
 	}
 
@@ -242,14 +243,14 @@
 	}
 
 	.firmas-container {
-		margin-top: 24px;
+		margin-top: 16px;
 		page-break-inside: avoid;
-		padding-top: 10px;
+		padding-top: 6px;
 		border-top: 1px solid var(--ct-borde);
 	}
 
 	.firma-linea {
-		margin: 20px 0 3px;
+		margin: 14px 0 3px;
 		border-top: 1px solid var(--ct-borde-firma);
 		width: 55%;
 	}
@@ -259,16 +260,16 @@
 	}
 
 	.footer {
-		font-size: 6.5pt;
+		font-size: 6pt;
 		color: var(--ct-secundario);
 		text-align: center;
-		margin-top: 16px;
-		padding-top: 5px;
+		margin-top: 10px;
+		padding-top: 4px;
 		border-top: 1px solid var(--ct-footer-borde);
 	}
 </style>
 
-<div class="print-area contrato-carta bg-white text-black contrato-body px-8 py-8">
+<div class="print-area contrato-carta bg-white text-black contrato-body px-6 py-6">
 	<!-- ENCABEZADO -->
 	<div class="encabezado-principal">
 		<div class="logo-container">
@@ -398,7 +399,7 @@
 		responsabilidad del ARRENDATARIO el pago de los días restantes para la finalización del contrato,
 		de conformidad con las tarifas plenas en vigencia para alquiler de vehículo tomado en renta. El
 		atraso en la devolución del vehículo hará incurrir al arrendatario en una multa de
-		<span class="campo-resaltado">{formatCOP(renta.valorHoraExtra)} POR HORA</span> de retardo. Sin
+		<span class="campo-resaltado">______________________ POR HORA</span> de retardo. Sin
 		perjuicio de las demás acciones civiles o penales que se pudieren intentar en su contra.
 	</div>
 
@@ -411,7 +412,7 @@
 		deberá ser anotada en la parte inferior del presente contrato. De presentarse cualquier plazo de
 		exceso trascurrido hasta el momento de la devolución al ARRENDADOR del vehículo y su recepción a
 		entera satisfacción, deberá pagar el ARRENDATARIO el valor de
-		<span class="campo-resaltado">{formatCOP(renta.valorHoraExtra)} POR HORA</span>. Lo anterior será
+		<span class="campo-resaltado">______________________ POR HORA</span>. Lo anterior será
 		pagado por el ARRENDATARIO cuando se presenten retardos hasta por tres horas pues en adelante
 		deberá cancelar la tarifa plena del vehículo rentado, estos valores serán descontados de los
 		depósitos anticipados efectuados a favor de la ARRENDADORA; y si el monto resultante de la
@@ -561,15 +562,15 @@
 			PÓLIZA DE SEGURO POR LUCRO CESANTE — SI DESEA TOMAR LA PÓLIZA MARQUE CON UNA X Y FIRME
 		</p>
 		<div class="linea-pago">
-			<span class="casilla"></span>VEHICULO COMPACTO: veinte mil pesos diarios ($20.000)
+			<span class="casilla"></span>VEHICULO COMPACTO: cuarenta mil pesos diarios ($40.000)
 			<span class="firma"></span>
 		</div>
 		<div class="linea-pago">
-			<span class="casilla"></span>VEHICULO SEDAN: treinta y cinco mil pesos diarios ($35.000)
+			<span class="casilla"></span>VEHICULO SEDAN: cincuenta mil pesos diarios ($50.000)
 			<span class="firma"></span>
 		</div>
 		<div class="linea-pago">
-			<span class="casilla"></span>VEHICULO CAMIONETA: cuarenta y nueve mil pesos ($49.000)
+			<span class="casilla"></span>VEHICULO CAMIONETA: setenta mil pesos diarios ($70.000)
 			<span class="firma"></span>
 		</div>
 		<p style="margin: 6px 0 0 0; text-indent: 0;">

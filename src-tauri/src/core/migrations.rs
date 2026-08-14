@@ -54,7 +54,9 @@
 //! 0015 columna numero_comparendo (deduplicación del Agente SIMIT), 0016 atribución
 //! de comparendos a la renta del día (backfill), 0017 configuración de la empresa,
 //! 0018 columna CIUDAD de la empresa (setup inicial), 0019 flag COBRA_IVA por
-//! renta (IVA opcional por checkbox en lugar de automático).
+//! renta (IVA opcional por checkbox en lugar de automático), 0020 columna
+//! VALOR_GASOLINA de la renta (cargo por gasolina al entregar/recibir sin
+//! tanquear).
 //!
 //! # Instalación en equipo limpio (sin el repo)
 //!
@@ -100,6 +102,7 @@ pub const MIGRACIONES_EMBEDIDAS: &[(&str, &str)] = &[
     ("0017_empresa_config.sql", include_str!("../../migrations/0017_empresa_config.sql")),
     ("0018_empresa_ciudad.sql", include_str!("../../migrations/0018_empresa_ciudad.sql")),
     ("0019_renta_cobra_iva.sql", include_str!("../../migrations/0019_renta_cobra_iva.sql")),
+    ("0020_renta_valor_gasolina.sql", include_str!("../../migrations/0020_renta_valor_gasolina.sql")),
 ];
 
 /// Aplica las migraciones pendientes. `migrations_dir` = src-tauri/migrations

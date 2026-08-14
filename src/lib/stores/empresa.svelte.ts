@@ -17,6 +17,23 @@ export const FALLBACK_TELEFONO = '301 613 85 30 • 321 839 44 22';
 export const FALLBACK_EMAIL = 'info@dinamorentacar.com';
 export const FALLBACK_WEB = 'www.dinamorentacar.com';
 export const FALLBACK_DIRECCION = 'Carrera 2 #70-53, Barrio Crespo, Cartagena, Colombia';
+
+/** Añade +57 a los celulares colombianos (10 dígitos que empiezan por 3) de un
+ *  texto de contacto separado por • | , ; - , sin duplicar si ya tienen prefijo. */
+function conPrefijo57(tel: string): string {
+	return tel
+		.split(/\s*[•|,;-]\s*/)
+		.map((t) => t.trim())
+		.filter(Boolean)
+		.map((t) => {
+			const digitos = t.replace(/\D/g, '');
+			if (digitos.length === 10 && digitos.startsWith('3') && !t.includes('+57')) {
+				return `+57 ${t}`;
+			}
+			return t;
+		})
+		.join(' • ');
+}
 export const FALLBACK_CIUDAD = 'CARTAGENA';
 
 class EmpresaStore {
@@ -48,7 +65,7 @@ class EmpresaStore {
 	}
 
 	get telefonoMostrar(): string {
-		return this.telefono?.trim() || FALLBACK_TELEFONO;
+		return conPrefijo57(this.telefono?.trim() || FALLBACK_TELEFONO);
 	}
 
 	get emailMostrar(): string {

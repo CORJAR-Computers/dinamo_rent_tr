@@ -140,6 +140,7 @@
 			costoDomicilio: '0',
 			costoCables: '0',
 			costoInversor: '0',
+			valorGasolina: '0',
 			descuento: '0',
 			cobraIva: false,
 			abono: '0',
@@ -193,7 +194,7 @@
 			(parseFloat(form.valorHoraExtra) || 0) * form.horasExtras
 	);
 	const extrasCalc = $derived(
-		['valorDiaExtra', 'costoLavado', 'costoSilla', 'costoRetorno', 'costoDomicilio', 'costoCables', 'costoInversor']
+		['valorDiaExtra', 'costoLavado', 'costoSilla', 'costoRetorno', 'costoDomicilio', 'costoCables', 'costoInversor', 'valorGasolina']
 			.reduce((acc, k) => acc + (parseFloat(form[k as keyof RentaDatos] as string) || 0), 0)
 	);
 	const subtotalCalc = $derived(Math.max(0, brutoCalc + extrasCalc - (parseFloat(form.descuento) || 0)));
@@ -365,6 +366,7 @@
 			costoDomicilio: r.costoDomicilio,
 			costoCables: r.costoCables,
 			costoInversor: r.costoInversor,
+			valorGasolina: r.valorGasolina ?? '0',
 			descuento: r.descuento,
 			cobraIva: r.cobraIva,
 			abono: r.abono,
@@ -945,7 +947,7 @@
 					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>
 					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Costos adicionales</h3>
 					<span class="text-[10px] text-text-secondary bg-alt-row px-1.5 py-0.5 rounded">
-						{costosOpen ? '7 campos' : '7 opcionales · ocultos'}
+						{costosOpen ? '8 campos' : '8 opcionales · ocultos'}
 					</span>
 					<svg xmlns="http://www.w3.org/2000/svg" class="ml-auto w-4 h-4 text-text-secondary group-hover:text-text-primary transition-transform {costosOpen ? 'rotate-90' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
 				</button>
@@ -971,6 +973,9 @@
 						</FormField>
 						<FormField label="Inversor" hint="COP" dense>
 							<input class="input" inputmode="decimal" placeholder="8000" bind:value={form.costoInversor} />
+						</FormField>
+						<FormField label="Gasolina" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="30000" bind:value={form.valorGasolina} />
 						</FormField>
 					</div>
 				{/if}

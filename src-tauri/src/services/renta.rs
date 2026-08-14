@@ -535,6 +535,7 @@ fn normalizar(d: &mut RentaDatos) {
         &mut d.costo_domicilio,
         &mut d.costo_cables,
         &mut d.costo_inversor,
+        &mut d.valor_gasolina,
         &mut d.descuento,
         &mut d.abono,
     ] {
@@ -588,6 +589,7 @@ fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
         &d.costo_domicilio,
         &d.costo_cables,
         &d.costo_inversor,
+        &d.valor_gasolina,
     ]);
     let desc = dec(&d.descuento, "");
     let subtotal = (vdia * Decimal::from(dias) + vhe * Decimal::from(horas) + extras - desc).max(Decimal::ZERO);
@@ -721,6 +723,7 @@ fn validar(d: &RentaDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
         ("costo de domicilio", &d.costo_domicilio),
         ("costo de cables", &d.costo_cables),
         ("costo de inversor", &d.costo_inversor),
+        ("valor de gasolina", &d.valor_gasolina),
         ("descuento", &d.descuento),
     ] {
         let v = if m.trim().is_empty() {
