@@ -114,6 +114,7 @@ Dinamo_Rent_tr/
 | **[Handsoff.md](Handsoff.md)** | 🤖 Registro de decisiones, automatizaciones y guías de desarrollo |
 | **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)** | 🚀 Guía de instalación de la v1.0.2 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
 | **[DEPLOYMENT_CLIENTES.md](DEPLOYMENT_CLIENTES.md)** | 🖥️ Plan de despliegue en equipos de clientes: instalación silenciosa, verificación post-instalación y rollback |
+| **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** | 🚢 Checklist para publicar una release: bump de versión, tag, verificación de assets y anuncio |
 | **[SECURITY.md](SECURITY.md)** | 🔐 Manejo de secretos, rotación de clave PII y reporte de vulnerabilidades |
 | **[RESUMEN_EJECUTIVO.md](RESUMEN_EJECUTIVO.md)** | 📊 Resumen ejecutivo del estado del proyecto: releases, CI y herramientas de operación |
 | **[ANUNCIO_RELEASE_TEMPLATE.md](ANUNCIO_RELEASE_TEMPLATE.md)** | 📣 Plantilla de anuncio de release para Slack/Teams (reutilizable) |
