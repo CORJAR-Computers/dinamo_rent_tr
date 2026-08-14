@@ -124,8 +124,10 @@ fn renta_crud_cierre_pagos_inspecciones() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
     let id_cliente = cliente_real(&state);
 
@@ -208,8 +210,10 @@ fn renta_no_contrato_secuencial_independiente_del_id() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // Crea dos rentas seguidas: el no_contrato debe ser estrictamente
@@ -244,8 +248,10 @@ fn renta_crear_con_abono_inicial() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // Abono inicial 200.000 sobre total 535.500 → saldo 335.500
@@ -267,8 +273,10 @@ fn renta_validaciones_y_cancelacion() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // Placa inexistente → business
@@ -332,8 +340,10 @@ fn renta_pago_supera_saldo() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let creada = RentaService::crear(&mut conn, cfg, datos_renta(&placa, None)).expect("crear");
@@ -365,8 +375,10 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let creada = RentaService::crear(&mut conn, cfg, datos_renta(&placa, None)).expect("crear");
@@ -415,8 +427,11 @@ fn renta_cambiar_auto_sin_cerrar() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some((placa_a, placa_b)) = dos_autos(&state) else {
-        eprintln!("Sin 2 autos disponibles en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin 2 autos Disponibles — se requiere flota real. Siembra \
+             la BD dev (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures \
+             y --commit)"
+        );
     };
 
     let creada = RentaService::crear(&mut conn, cfg, datos_renta(&placa_a, None)).expect("crear");
@@ -484,8 +499,10 @@ fn renta_cierre_calcula_dias_horas_automatico() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // Renta de 2 días: recogida 2026-01-01 10:00 → retorno 2026-01-03 10:00

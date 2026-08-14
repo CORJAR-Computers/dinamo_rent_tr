@@ -62,8 +62,10 @@ fn mantenimiento_crud_roundtrip() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let mut datos = datos_mantenimiento(&placa, "Frenos", "350000");
@@ -105,8 +107,10 @@ fn mantenimiento_validaciones() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // Placa inexistente → business (no existe el vehículo)
@@ -150,8 +154,10 @@ fn mantenimiento_sincroniza_proximo_aceite_y_alertas() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // El auto real puede tener km real; guardamos el valor previo de proximo_aceite
@@ -193,8 +199,10 @@ fn mantenimiento_totales_y_contar() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let c1 = MantenimientoService::crear(

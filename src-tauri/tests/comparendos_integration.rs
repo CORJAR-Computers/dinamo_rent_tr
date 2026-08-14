@@ -65,8 +65,10 @@ fn comparendo_crud_y_marcar_pagado() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let mut datos = datos_comparendo(&placa, "580000");
@@ -114,8 +116,10 @@ fn comparendo_validaciones() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     // Placa inexistente → business (no existe el vehículo)
@@ -172,8 +176,10 @@ fn comparendo_totales() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let c1 = ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "150000"))
@@ -213,8 +219,10 @@ fn comparendo_numero_oficial_y_dedup() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let mut datos = datos_comparendo(&placa, "320000");
@@ -333,8 +341,10 @@ fn comparendo_cruce_responsable_renta() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let hoy = Local::now().date_naive();

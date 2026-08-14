@@ -188,8 +188,10 @@ fn gasto_por_placa() {
     let mut conn = state.pool.get().expect("conn");
 
     let Some(placa) = auto_real(&state) else {
-        eprintln!("Sin autos en la BD de dev — test de placa omitido");
-        return;
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
     };
 
     let mut datos = datos_gasto("Gasto placa ABC");
