@@ -17,6 +17,7 @@
 		"test:watch": "vitest",
 		"tauri": "tauri",
 	"verificar:paginacion": "node scripts/verificar-paginacion.mjs",
+	"test:paginacion": "node scripts/test-verificar-paginacion.mjs",
 	"smoke:app": "node scripts/smoke-test-app.mjs",
 	"watch:simit": "node scripts/watch-simit.mjs",
 	"check:simit": "node scripts/check-simit.mjs",

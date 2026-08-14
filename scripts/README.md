@@ -165,6 +165,17 @@ node scripts/verificar-paginacion.mjs contrato.html=3:4 --motor edge --salida ./
 
 Útil en CI o en scripts: `node scripts/verificar-paginacion.mjs ... && echo "OK"`.
 
+### Test automatizado
+
+`scripts/test-verificar-paginacion.mjs` valida el verificador contra los
+fixtures de demostración (orden → 1 página Carta · contrato → 3-4 páginas con
+pie · informe → A4) y exige que cada uno cumpla su expectativa real. Corre en
+el CI (windows-latest, Edge headless incluido):
+
+```bash
+node scripts/test-verificar-paginacion.mjs   # o: npm run test:paginacion
+```
+
 ## Uso con los documentos reales de la app
 
 Dos vías para verificar el contrato y la orden reales (componentes Svelte

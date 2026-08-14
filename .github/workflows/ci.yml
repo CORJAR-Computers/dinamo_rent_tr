@@ -94,3 +94,9 @@ jobs:
         run: |
           python -m pip install --quiet firebird-driver cryptography
           python scripts/test_importar_autos_clientes.py
+
+      # Test del verificador de paginación (orden 1 página Carta, contrato
+      # 3-4 páginas con pie, informe A4) — usa Chrome/Edge headless, que viene
+      # instalado en windows-latest. Valida además el fix del polling del PDF.
+      - name: Test verificador de paginación (Chrome/Edge headless)
+        run: node scripts/test-verificar-paginacion.mjs
