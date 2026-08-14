@@ -613,11 +613,23 @@ fn enviar_consulta(
     token: &str,
     url: &str,
 ) -> Result<RespuestaConsulta, ErrorConsulta> {
+    enviar_consulta_con(agente(), placa, token, url)
+}
+
+/// Igual que `enviar_consulta` pero con el agente HTTP inyectado: los tests
+/// usan un agente propio con timeout amplio para no depender del agente
+/// global de producción (evita flakes por timeout bajo carga paralela).
+fn enviar_consulta_con(
+    agente: &ureq::Agent,
+    placa: &str,
+    token: &str,
+    url: &str,
+) -> Result<RespuestaConsulta, ErrorConsulta> {
     let body = serde_json::json!({
         "filtro": placa.trim(),
         "reCaptchaDTO": { "response": token, "consumidor": "1" }
     });
-    let respuesta = match con_headers_browser(agente().post(url))
+    let respuesta = match con_headers_browser(agente.post(url))
         .set("Content-Type", "application/json")
         .send_json(body)
     {
@@ -1566,6 +1578,7 @@ fn resolver_iteracion(question: &str, time: i64, inicio: i64) -> Result<i64, App
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::{Read, Write};
     use std::net::TcpListener;
 
@@ -1745,27 +1758,67 @@ mod tests {
 
     // ─── Fase 1: jar de cookies compartido entre peticiones ────────────────
 
+    /// Timeout generoso para un round-trip HTTP en loopback (evita cuelgues
+    /// del hilo del servidor si el cliente nunca conecta o aborta).
+    const TIMEOUT_MOCK: std::time::Duration = std::time::Duration::from_secs(10);
+
     /// Mini servidor HTTP de test: responde la secuencia dada y devuelve el
     /// header `Cookie` de cada request recibido (para verificar el jar).
+    ///
+    /// Robusto bajo paralelismo (arreglo del flake de `consulta_401`): el
+    /// accept es no bloqueante con deadline, el read tiene timeout y la
+    /// escritura es best-effort — si el cliente aborta la conexión (EPIPE) o
+    /// no llega, el hilo falla con un panic descriptivo en vez de colgar al
+    /// test o paniquear con un mensaje engañoso.
     fn servidor_http(
         respuestas: Vec<(u16, Vec<(&'static str, &'static str)>, String)>,
     ) -> (String, std::thread::JoinHandle<Vec<Option<String>>>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("puerto de test libre");
         let addr = listener.local_addr().expect("dirección del listener");
+        listener
+            .set_nonblocking(true)
+            .expect("listener de test no bloqueante");
         let handle = std::thread::spawn(move || {
             let mut cookies_recibidas = Vec::new();
             for (status, headers, body) in respuestas {
-                let (mut stream, _) = listener.accept().expect("aceptar conexión");
+                // Accept con deadline: espera con backoff de 5 ms y aborta con
+                // un panic claro si el cliente no conecta a tiempo.
+                let inicio = std::time::Instant::now();
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((s, _)) => break s,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            if inicio.elapsed() > TIMEOUT_MOCK {
+                                panic!(
+                                    "servidor de test: el cliente no conectó en {TIMEOUT_MOCK:?}"
+                                );
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                        Err(e) => panic!("servidor de test: accept falló: {e}"),
+                    }
+                };
+                stream
+                    .set_read_timeout(Some(TIMEOUT_MOCK))
+                    .expect("read timeout del socket de test");
                 let mut buf = Vec::new();
                 let mut tmp = [0u8; 2048];
                 loop {
-                    let n = stream.read(&mut tmp).expect("leer request");
-                    if n == 0 {
-                        break;
-                    }
-                    buf.extend_from_slice(&tmp[..n]);
-                    if buf.windows(4).any(|w| w == b"\r\n\r\n") {
-                        break;
+                    match stream.read(&mut tmp) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            buf.extend_from_slice(&tmp[..n]);
+                            if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(e)
+                            if e.kind() == std::io::ErrorKind::WouldBlock
+                                || e.kind() == std::io::ErrorKind::TimedOut =>
+                        {
+                            panic!("servidor de test: timeout leyendo el request ({e})");
+                        }
+                        Err(e) => panic!("servidor de test: error leyendo el request: {e}"),
                     }
                 }
                 let req = String::from_utf8_lossy(&buf);
@@ -1779,7 +1832,12 @@ mod tests {
                     resp.push_str(&format!("{k}: {v}\r\n"));
                 }
                 resp.push_str(&format!("Content-Length: {}\r\n\r\n{}", body.len(), body));
-                stream.write_all(resp.as_bytes()).expect("escribir respuesta");
+                // Best-effort: si el cliente abortó la conexión (EPIPE/RST), no
+                // paniquear — el test del lado cliente ya está fallando con su
+                // propio mensaje. Se registra y se sigue con la siguiente.
+                if let Err(e) = stream.write_all(resp.as_bytes()) {
+                    eprintln!("[servidor de test] cliente abortó al escribir la respuesta: {e}");
+                }
             }
             cookies_recibidas
         });
@@ -1787,6 +1845,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn cookie_jar_compartido_entre_peticiones() {
         let (base, server) = servidor_http(vec![
             (200, vec![("Set-Cookie", "adc_test=xyz123; Path=/")], String::new()),
@@ -1815,6 +1874,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn sembrar_cookies_sitio_siembra_el_jar() {
         let (base, server) = servidor_http(vec![
             (200, vec![("Set-Cookie", "ADC_CONN=abc; Path=/")], "<html>".into()),
@@ -1837,13 +1897,23 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn consulta_401_clasifica_como_unauthorized() {
         let (base, server) = servidor_http(vec![(
             401,
             vec![("Content-Type", "application/json")],
             r#"{"codigo":5,"descripcion":"Autenticación fallida: Acceso denegado"}"#.into(),
         )]);
-        let err = enviar_consulta("ABC123", "TOKEN", &base).expect_err("401 → Unauthorized");
+        // Agente propio del test con timeout amplio: no depende del agente
+        // global de producción ni de su timeout de 30 s (causa del flake bajo
+        // carga paralela — un timeout de transporte rompía la clasificación
+        // del 401 y el test paniqueaba con "se esperaba Unauthorized").
+        let agente = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(60))
+            .cookie_store(CookieStore::default())
+            .build();
+        let err = enviar_consulta_con(&agente, "ABC123", "TOKEN", &base)
+            .expect_err("401 → Unauthorized");
         match err {
             ErrorConsulta::Unauthorized(detalle) => {
                 assert!(
