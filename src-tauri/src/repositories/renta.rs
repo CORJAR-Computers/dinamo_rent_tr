@@ -516,13 +516,14 @@ impl RentaRepository {
                     descuento, subtotal, impuestos, total, abono, saldo_pendiente, \
                     cobra_iva, estado, observaciones, km_salida, tanque_salida, id_reserva, no_contrato, anio_contrato \
                  ) VALUES (\
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-                    ?, ?, ?, CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+                    ?, ?, \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
-                    CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
+                    CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
+                    CAST(? AS DECIMAL(12,2)), \
                     ?, 'Activo', ?, CAST(? AS DOUBLE PRECISION), ?, ?, \
                     (SELECT COALESCE(MAX(no_contrato), 0) + 1 FROM rentas WHERE anio_contrato = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)), \
                     EXTRACT(YEAR FROM CURRENT_TIMESTAMP) \
