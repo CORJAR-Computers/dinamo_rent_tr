@@ -176,7 +176,7 @@
 
 	.clausula-titulo {
 		font-weight: bold;
-		margin: 3px 0 1px 0;
+		margin: 2px 0 1px 0;
 		color: var(--ct-texto);
 		font-size: 7.2pt;
 		page-break-after: avoid;
@@ -248,14 +248,16 @@
 	}
 
 	.firmas-container {
-		margin-top: 12px;
+		margin-top: 6px;
 		page-break-inside: avoid;
 		padding-top: 4px;
 		border-top: 1px solid var(--ct-borde);
 	}
 
 	.firma-linea {
-		margin: 10px 0 3px;
+		/* Espacio amplio sobre la línea para poder firmar (verificado con el PDF
+		   real: 44px sobre + 10px bajo cada línea, sin romper las 2 hojas). */
+		margin: 44px 0 10px;
 		border-top: 1px solid var(--ct-borde-firma);
 		width: 55%;
 	}
@@ -639,9 +641,10 @@
 		los gastos correspondientes al respectivo proceso.
 	</div>
 
-	<!-- CLÁUSULA ADICIONAL -->
+	<!-- CLÁUSULA ADICIONAL (espacio para anotaciones; se redujo para dejar
+	     más aire a las firmas sin romper las 2 hojas) -->
 	<div class="clausula-titulo">CLÁUSULA ADICIONAL</div>
-	<div class="clausula-contenido" style="height: 40px;"></div>
+	<div class="clausula-contenido" style="height: 18px;"></div>
 
 	<!-- FIRMAS -->
 	<div class="firmas-container">
