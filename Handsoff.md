@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.3 publicada y firmada (auto-update activo; secret `TAURI_SIGNING_PRIVATE_KEY` configurado) · herramientas de operación (importador de datos + verifier de despliegue) en §6**
+> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.9 publicada y firmada (auto-update activo; secret `TAURI_SIGNING_PRIVATE_KEY` configurado) · contrato en 2 hojas, campo Gasolina y errores de BD visibles verificados en el equipo de operaciones · herramientas de operación (importador de datos + verifier de despliegue) en §6**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -75,6 +75,21 @@
 > sobre los artefactos reales). Las instalaciones **v1.0.2 no tienen updater**: se
 > actualizan una vez a mano a la v1.0.3 (ver `RELEASE_CHECKLIST.md` e
 > `INSTALACION_OPERACIONES.md` §6).
+> 🚀 **Releases v1.0.4 → v1.0.9 publicadas (14-08, diagnóstico y documento):** la cadena
+> arrancó con la **v1.0.4** (diagnóstico en producción: el toast de errores de BD ahora
+> muestra el detalle real de Firebird — SQLCODE/columna/lock — y el logging se activa en
+> release escribiendo a `%APPDATA%\com.corjar.dinamorent\logs\app.log`, 5 MB por archivo
+> con rotación conservada). Con eso se capturó el **-303 `conversion error from string ""`**
+> al crear/modificar rentas → fix en la **v1.0.5** (`normalizar()` convierte montos vacíos a
+> `"0.00"` antes del `CAST(? AS DECIMAL)` en rentas/reservas/autos + test de regresión).
+> La **v1.0.6** trajo el documento y formulario: contrato a 2 hojas (tipografía), `+57`
+> automático a celulares del encabezado, cláusula 4 con la multa en blanco, póliza de lucro
+> cesante 40/50/70 mil y el **campo Gasolina** (migración 0020, columna
+> `VALOR_GASOLINA`; se muestra en la orden). La **v1.0.8** corrigió el INSERT de rentas
+> (placeholders 34=34 tras el -804 que apareció al crear rentas). La **v1.0.9** dejó el
+> contrato en 2 hojas definitivo (logo 70px + encabezado compacto), verificado con el PDF
+> real vía CDP (printToPDF + `verificar-paginacion.mjs`: 2 páginas Carta, pie «Página X de
+> Y»). La v1.0.7 quedó saltada (INSERT roto, reemplazada por la v1.0.8).
 > 🐛 **Hallazgo del CI (12-08) — el feature `linking` de rsfbclient rompía el build de
 > release**: el release v1.0.0 **nunca había pasado por CI** (se publicó con artefactos
 > locales) y el primer build en GitHub Actions fallaba en el linkeo de `dinamo_rent_lib.dll`
