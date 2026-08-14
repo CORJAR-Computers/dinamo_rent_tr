@@ -323,7 +323,7 @@ fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
         hora_devolucion_real: b.7.map(|h| hora_corta(&h)),
         km_final: b.8,
         tanque_final: b.9,
-        km_salida: b.10,
+        km_salida: km_limpio(&b.10),
         tanque_salida: b.11,
         id_reserva: b.12,
         created_at: b.13,
@@ -489,7 +489,7 @@ impl RentaRepository {
                 id_renta: r.1,
                 tipo: r.2,
                 fecha: r.3,
-                kilometraje: r.4,
+                kilometraje: km_limpio(&r.4),
                 nivel_gasolina: r.5,
                 limpieza: r.6,
                 tiene_repuesto: r.7,
@@ -813,6 +813,15 @@ fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError> {
 /// Recorta 'HH:MM:SS.0000' (Firebird) a 'HH:MM' para la UI
 fn hora_corta(h: &str) -> String {
     h.split(':').take(2).collect::<Vec<_>>().join(":")
+}
+
+/// Normaliza el km (DOUBLE PRECISION serializado por Firebird con cola de
+/// ceros, p. ej. "42000.000000000000") a su forma compacta ("42000").
+/// Conserva los decimales significativos: "12000.5" → "12000.5".
+fn km_limpio(v: &str) -> String {
+    v.parse::<f64>()
+        .map(|n| format!("{n}"))
+        .unwrap_or_else(|_| v.trim().to_string())
 }
 
 /// Parsea hora 'HH:MM[:SS]' a NaiveTime (el servicio ya la validó)

@@ -40,7 +40,7 @@ if (-not $exe) {
 if ($exe) {
     $ver = (Get-Item $exe).VersionInfo.ProductVersion
     Check "Ejecutable instalado" $true $exe
-    Check "Version 1.0.10" ($ver -like '1.0.10*') "ProductVersion=$ver"
+    Check "Version 1.0.11" ($ver -like '1.0.11*') "ProductVersion=$ver"
 } else {
     Check "Ejecutable instalado" $false 'no se encontro dinamo-rent.exe'
 }
