@@ -1,6 +1,6 @@
-# Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.9
+# Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.12
 
-> Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.9** (última
+> Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.12** (última
 > versión estable, con **auto-actualización** activa desde la v1.0.3): instalación
 > silenciosa, verificación post-instalación y rollback. **Este es el último despliegue
 > manual por equipo**: desde la v1.0.3 la app detecta y ofrece las versiones nuevas al
@@ -11,7 +11,7 @@
 
 ## 0. Reglas de oro
 
-1. **Siempre la v1.0.9 (o superior)** — la v1.0.0 está descontinuada (falla en
+1. **Siempre la v1.0.12 (o superior)** — la v1.0.0 está descontinuada (falla en
    instalaciones nuevas) y la v1.0.2 no tiene updater (se actualiza una vez a mano a la
    v1.0.3+ y desde ahí el auto-update).
 2. **Los datos viven en `%APPDATA%\com.corjar.dinamorent\`**, NO en la carpeta de
@@ -37,7 +37,7 @@
 | ¿Backup reciente de la BD? | Crearlo antes de tocar nada (ver §4) |
 
 > Si el equipo **ya tiene una versión anterior con datos**: no hay nada especial —
-> instalar la v1.0.9 encima y verificar (el arranque migra la BD). Solo hay que confirmar
+> instalar la v1.0.12 encima y verificar (el arranque migra la BD). Solo hay que confirmar
 > el backup antes.
 
 ---
@@ -52,14 +52,14 @@
 
 ```powershell
 # NSIS — silenciosa total (sin atajos, sin ejecutar al final)
-& "D:\deploy\DinamoRent_1.0.9_x64-setup.exe" /S
+& "D:\deploy\DinamoRent_1.0.12_x64-setup.exe" /S
 # Esperar a que termine (NSIS /S es síncrono al esperar al proceso)
-# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.0.9_x64-setup.exe" -ArgumentList "/S"
+# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.0.12_x64-setup.exe" -ArgumentList "/S"
 ```
 
 ```powershell
 # MSI — para GPO / Intune / SCCM
-msiexec /i "D:\deploy\DinamoRent_1.0.9_x64_en-US.msi" /qn /norestart
+msiexec /i "D:\deploy\DinamoRent_1.0.12_x64_en-US.msi" /qn /norestart
 ```
 
 > **WebView2**: si el equipo no lo tiene, el instalador lo descarga e instala
@@ -75,7 +75,7 @@ equipos y ejecutar con una herramienta de gestión (Intune, SCCM, GPO `msi` + `c
 
 ```powershell
 # Ejemplo con psexec (máquina de operaciones):
-psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.9_x64-setup.exe" /S
+psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.12_x64-setup.exe" /S
 ```
 
 ---
@@ -94,7 +94,7 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
 
 | # | Comprobación | Esperado |
 |---|---|---|
-| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.9** |
+| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.12** |
 | 2 | Arranque: proceso vivo a los 10 s | **no** se cuelga ni muere (el bug del v1.0.0) |
 | 3 | `%APPDATA%\com.corjar.dinamorent\` | existe (la crea el **primer arranque**; por eso se comprueba después del arranque) |
 | 4 | `config.ini` | existe |
@@ -110,8 +110,8 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
 
 | Síntoma | Acción |
 |---|---|
-| Exe no aparece / versión no es 1.0.9 | Reinstalar (¿el instalador correcto? ¿se descargó una versión anterior?) |
-| `config.ini` pero NO la BD | No borrar nada: reinstalar la v1.0.9 (el arranque crea la BD). Si persiste, revisar exclusión de Defender sobre la carpeta |
+| Exe no aparece / versión no es 1.0.12 | Reinstalar (¿el instalador correcto? ¿se descargó una versión anterior?) |
+| `config.ini` pero NO la BD | No borrar nada: reinstalar la v1.0.12 (el arranque crea la BD). Si persiste, revisar exclusión de Defender sobre la carpeta |
 | Proceso muere en <10 s | Capturar Event Log de Aplicación (módulo con errores) y volcar aquí |
 | La BD existente "no abre" | Nunca borrar la carpeta. Restaurar el backup (ver §4) y reinstalar |
 
@@ -156,7 +156,7 @@ Copy-Item "$env:APPDATA\com.corjar.dinamorent\dinamo_rent_v3.fdb" "D:\backups\di
 
 ```
 [ ] Backup de la BD creado (si el equipo tiene datos)
-[ ] Instalador v1.0.9 descargado (verificar hash/tamaño ~21 MB)
+[ ] Instalador v1.0.12 descargado (verificar hash/tamaño ~21 MB)
 [ ] Instalación silenciosa OK (código 0)
 [ ] scripts\verificar-despliegue.ps1 → VEREDICTO: OK
 [ ] Login con el usuario del cliente (no admin123 salvo primer ingreso)
@@ -164,5 +164,5 @@ Copy-Item "$env:APPDATA\com.corjar.dinamorent\dinamo_rent_v3.fdb" "D:\backups\di
 [ ] Agente SIMIT operativo (si aplica)
 [ ] Credenciales iniciales registradas y contraseña rotada si era admin123
 [ ] (v1.0.3+) la app quedó con auto-update: las próximas versiones no requieren despliegue manual
-    - la v1.0.9 es la última estable al momento de escribir esto (14-08)
+    - la v1.0.12 es la última estable al momento de escribir esto (14-08)
 ```

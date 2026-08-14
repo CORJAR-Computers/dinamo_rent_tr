@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.9 publicada y firmada (auto-update activo; secret `TAURI_SIGNING_PRIVATE_KEY` configurado) · contrato en 2 hojas, campo Gasolina y errores de BD visibles verificados en el equipo de operaciones · herramientas de operación (importador de datos + verifier de despliegue) en §6**
+> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.12 publicada y firmada (auto-update activo; secret `TAURI_SIGNING_PRIVATE_KEY` configurado) · contrato en 2 hojas con firmas amplias, campo Gasolina, km sin cola de ceros y errores de BD visibles verificados en el equipo de operaciones · herramientas de operación (importador de datos + verifier de despliegue) en §6**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -90,6 +90,17 @@
 > contrato en 2 hojas definitivo (logo 70px + encabezado compacto), verificado con el PDF
 > real vía CDP (printToPDF + `verificar-paginacion.mjs`: 2 páginas Carta, pie «Página X de
 > Y»). La v1.0.7 quedó saltada (INSERT roto, reemplazada por la v1.0.8).
+> 🚀 **Releases v1.0.10 → v1.0.12 publicadas (14-08, afinado del contrato):** la
+> **v1.0.10** subió el margen inferior del contrato a 16mm (antes 8mm) con interlineado
+> 0.94 y `orphans/widows: 2` — el contenido de la hoja 2 llegaba al borde del área
+> imprimible y la impresión física cortaba el final (cláusulas de la póliza, foto multa y
+> firmas). La **v1.0.11** normalizó el kilometraje al leer (`km_limpio` en
+> `repositories/renta.rs`): el `CAST(double AS VARCHAR)` de Firebird serializaba
+> `42000.000000000000` y ahora imprime `42000` (orden de renta e inspecciones). La
+> **v1.0.12** dio espacio amplio a las firmas del contrato (44px sobre cada línea, antes
+> 10px — imposible firmar), compensado con espaciados internos (cláusula adicional
+> 40→18px, títulos 3→2px) y verificado con el PDF real: sigue en 2 hojas Carta con las
+> firmas completas.
 > 🐛 **Hallazgo del CI (12-08) — el feature `linking` de rsfbclient rompía el build de
 > release**: el release v1.0.0 **nunca había pasado por CI** (se publicó con artefactos
 > locales) y el primer build en GitHub Actions fallaba en el linkeo de `dinamo_rent_lib.dll`

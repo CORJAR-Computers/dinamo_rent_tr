@@ -7,18 +7,18 @@
 
 ## ⬇️ Descarga e instalación (usuarios finales)
 
-> **Última versión estable: [v1.0.9](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.9)** — con el **auto-update** activo desde la v1.0.3 (la app detecta y ofrece instalar las versiones nuevas al arrancar, firma verificada) y el **documento mejorado**: contrato en 2 hojas, `+57` en los celulares del encabezado, multa de la cláusula 4 en blanco, póliza de lucro cesante 40/50/70 mil y campo **Gasolina** en el formulario de renta. Construida y validada por CI.
+> **Última versión estable: [v1.0.12](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.12)** — con el **auto-update** activo desde la v1.0.3 (la app detecta y ofrece instalar las versiones nuevas al arrancar, firma verificada) y el **documento mejorado**: contrato en 2 hojas, `+57` en los celulares del encabezado, multa de la cláusula 4 en blanco, póliza de lucro cesante 40/50/70 mil y campo **Gasolina** en el formulario de renta. Construida y validada por CI.
 
 ### 1. Descargar el instalador
 
-Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.0.9**:
+Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.0.12**:
 
 | Instalador | Cuándo usarlo |
 |---|---|
-| `DinamoRent_1.0.9_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio |
-| `DinamoRent_1.0.9_x64_en-US.msi` (MSI, ~33 MB) | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
+| `DinamoRent_1.0.12_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio |
+| `DinamoRent_1.0.12_x64_en-US.msi` (MSI, ~33 MB) | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
 
-> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.0.9 abre tu BD actual tal cual.
+> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.0.12 abre tu BD actual tal cual.
 
 ### 2. Instalar
 
@@ -41,7 +41,7 @@ La app pedirá **cambiar la contraseña** en el primer ingreso. En una instalaci
 
 ### 4. Actualizar desde versiones anteriores
 
-Solo instala la v1.0.9 encima (o desinstala y reinstala conservando `%APPDATA%\com.corjar.dinamorent\`): el arranque es idempotente y aplica únicamente las migraciones pendientes. **No se pierde ningún dato.**
+Solo instala la v1.0.12 encima (o desinstala y reinstala conservando `%APPDATA%\com.corjar.dinamorent\`): el arranque es idempotente y aplica únicamente las migraciones pendientes. **No se pierde ningún dato.**
 
 ---
 
@@ -112,7 +112,7 @@ Dinamo_Rent_tr/
 |-----------|-----------|
 | **[PLAN_IMPLEMENTACION_TAURI.md](PLAN_IMPLEMENTACION_TAURI.md)** | 📋 Plan completo de arquitectura y migración técnica desde Python a Tauri |
 | **[Handsoff.md](Handsoff.md)** | 🤖 Registro de decisiones, automatizaciones y guías de desarrollo |
-| **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)** | 🚀 Guía de instalación de la v1.0.9 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
+| **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)** | 🚀 Guía de instalación de la v1.0.12 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
 | **[DEPLOYMENT_CLIENTES.md](DEPLOYMENT_CLIENTES.md)** | 🖥️ Plan de despliegue en equipos de clientes: instalación silenciosa, verificación post-instalación y rollback |
 | **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** | 🚢 Checklist para publicar una release: bump de versión, tag, verificación de assets y anuncio |
 | **[SECURITY.md](SECURITY.md)** | 🔐 Manejo de secretos, rotación de clave PII y reporte de vulnerabilidades |
@@ -132,7 +132,7 @@ Dinamo_Rent_tr/
 
 ---
 
-**Versión estable**: 1.0.9 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.0.x).
+**Versión estable**: 1.0.12 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.0.x).
 
 
 ---
