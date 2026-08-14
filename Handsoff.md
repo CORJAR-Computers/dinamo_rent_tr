@@ -749,3 +749,64 @@ no los de Dinamo:
 ⚠️ El `origin` del clon apunta a `D:/dinamo_rent_tr` (ruta local) — **no hacer
 `git push` dentro del clon**; al distribuir hay que crear un repo nuevo
 (ej. `CORJAR-Computers/dynarent`) y cambiar el remote.
+
+### 7.2 Ajustes del módulo de rentas (2026-08-13)
+
+Tres cambios de negocio en el flujo de rentas:
+
+1. **IVA por renta (checkbox)** — El IVA dejó de aplicarse siempre. El
+   formulario tiene un checkbox «Cobrar IVA» (migración `0019`: columna
+   `COBRA_IVA` en `rentas`, `DEFAULT 1` para conservar el comportamiento de las
+   rentas existentes al cerrarse; las nuevas nacen con el checkbox desactivado).
+   El porcentaje sigue viniendo de `business.impuesto_porcentaje` de config.ini
+   y se expone al frontend vía `BusinessLists.impuestoPorcentaje` para la vista
+   previa en vivo. El resumen de la orden (`OrdenRenta`) omite la fila IVA
+   cuando es $0.
+
+2. **Cálculo automático de días/horas en el cierre** — Con la devolución real
+   (fecha+hora) y la recogida (fecha+hora), el sistema calcula solo:
+   cada 24 h = 1 día; el excedente de **hasta 3 h** se cobra como horas extras
+   (redondeadas hacia arriba); si el excedente **supera 3 h** se cobra el día
+   completo (`HORAS_TOLERANCIA_DIA_COMPLETO = 3` en `services/renta.rs` y el
+   espejo `calcularCierre()` en la página). El modal de cierre llena días/horas
+   automáticamente (siguen siendo editables) y ahora permite fijar el **valor de
+   la hora extra final**. Si faltan horas en alguno de los extremos, se conserva
+   el valor original de la renta.
+
+3. **Cambiar vehículo sin cerrar la renta** — Nueva acción «Cambiar vehículo»
+   en rentas activas: libera el auto anterior (solo si estaba `Rentado` y no
+   está en otra renta activa), asigna el nuevo y lo marca `Rentado`, todo en una
+   transacción con auditoría (`CAMBIO AUTO`). Comando
+   `cambiar_auto_renta` + `RentaService::cambiar_auto`. El selector de placa del
+   modal de edición queda deshabilitado al editar (el cambio se hace desde la
+   nueva acción). El vehículo nuevo debe existir y estar `Disponible`.
+
+Validación: `cargo test` (48 lib + 8 rentas + 11 migraciones + resto), vitest
+226/226, svelte-check 0/0 y lint ✅. La migración `0019` quedó aplicada al dev
+DB vía `verificar_instalacion_limpia`.
+
+### 7.3 — Combos con búsqueda (SearchSelect)
+
+Para listas grandes de clientes y vehículos, los `<select>` tradicionales (scroll
+interminable) se reemplazaron por un combobox con filtro por escritura:
+
+- **Componente nuevo `src/lib/components/SearchSelect.svelte`** — input de texto
+  que abre la lista al enfocar; al escribir filtra en vivo (ignora mayúsculas y
+  tildes); navegación con flechas + Enter/Esc; cierre con clic fuera; opción
+  vacía para deseleccionar; límite de coincidencias con aviso «X más…».
+  Patrón ARIA combobox (`role=combobox`/`listbox`/`option`).
+- **Cliente** (rentas y reservas): filtra por **nombre** y por **número de
+  documento** (`tipoDoc` + `noDoc` en la segunda línea de cada opción).
+- **Vehículo** (rentas, reservas, comparendos, mantenimiento y gastos): filtra
+  por **placa, marca, modelo, tipo o color**.
+- Los handlers del formulario se mantuvieron (`onClienteChange`/`onPlacaChange`
+  ahora reciben el valor `string`); en reservas el combo de placa sigue
+  respetando la categoría seleccionada; en mantenimiento se conserva el
+  autocompletado del km de aceite al cambiar de placa.
+
+Tests: `SearchSelect.test.ts` (7 casos: apertura, filtro por nombre con tildes,
+filtro por documento, selección con clic y con teclado, deselección, sin
+coincidencias). Los tests de página que tocaban los `<select>` viejos ahora
+interactúan con el combobox (rentas, comparendos, mantenimiento).
+
+Validación: vitest 233/233, svelte-check 0/0, lint ✅.
