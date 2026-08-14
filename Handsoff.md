@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-13** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.1 publicada · herramientas de operación (importador de datos + verifier de despliegue) en §6**
+> Última actualización: **2026-08-14** · Estado: **todos los módulos operativos, validación verde · instalación limpia validada E2E · release v1.0.2 publicada (IVA por renta, auto-cálculo de días/horas, cambio de vehículo, combos con búsqueda) · herramientas de operación (importador de datos + verifier de despliegue) en §6**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -53,6 +53,13 @@
 > — instaladores `DinamoRent_1.0.1_x64-setup.exe` (NSIS, 20 MB) y `.msi` (31 MB) construidos
 > **por CI** (workflow `release.yml`, disparado por el tag `v1.0.1`) con los fixes de
 > instalación limpia ya fusionados en main. Notas de la release documentan el bug.
+> 🚀 **Release v1.0.2 publicada (14-08):** [github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.2]
+> — instaladores `DinamoRent_1.0.2_x64-setup.exe` (NSIS, ~21 MB) y `.msi` (~31 MB)
+> construidos por CI. Añade IVA por renta (checkbox, migración 0019), auto-cálculo de
+> días/horas al cerrar, cambio de vehículo sin cerrar la renta y combos con búsqueda
+> (§7.2/§7.3). `release.yml` ahora genera el **body de la release con changelog automático**
+> (commits entre tags) y el kit de operaciones (`verificar-despliegue.ps1` a la v1.0.2),
+> la plantilla de anuncio y el resumen ejecutivo quedaron actualizados.
 > 🐛 **Hallazgo del CI (12-08) — el feature `linking` de rsfbclient rompía el build de
 > release**: el release v1.0.0 **nunca había pasado por CI** (se publicó con artefactos
 > locales) y el primer build en GitHub Actions fallaba en el linkeo de `dinamo_rent_lib.dll`
@@ -680,7 +687,7 @@ actualizados) → auditoría registrada. Fixtures de ejemplo en `scripts/fixture
 
 ### 6.2 Verificación de despliegue — `scripts/verificar-despliegue.ps1`
 
-Post-instalación en el equipo del cliente: comprueba exe **v1.0.1** instalado, **arranca la
+Post-instalación en el equipo del cliente: comprueba exe **v1.0.2** instalado, **arranca la
 app** y verifica que siga viva 10 s (el check crítico — el bug del v1.0.0 moría ahí), y luego
 valida los datos que crea el **primer arranque** (`%APPDATA%\com.corjar.dinamorent`: `config.ini`
 + `dinamo_rent_v3.fdb`). Veredicto `OK` / `FALLOS` con checks numerados, exit 0/1.
@@ -782,7 +789,7 @@ Tres cambios de negocio en el flujo de rentas:
    nueva acción). El vehículo nuevo debe existir y estar `Disponible`.
 
 Validación: `cargo test` (48 lib + 8 rentas + 11 migraciones + resto), vitest
-226/226, svelte-check 0/0 y lint ✅. La migración `0019` quedó aplicada al dev
+233/233, svelte-check 0/0 y lint ✅. La migración `0019` quedó aplicada al dev
 DB vía `verificar_instalacion_limpia`.
 
 ### 7.3 — Combos con búsqueda (SearchSelect)
