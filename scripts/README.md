@@ -294,3 +294,53 @@ Salida `0` = correcto. Resultado esperado (verificado con la app real):
 node scripts/verificar-paginacion.mjs scripts/fixtures/tres-paginas.html=3:4 --tamano carta --pie
 node scripts/verificar-paginacion.mjs scripts/fixtures/una-pagina.html=1 --tamano carta
 ```
+
+---
+
+# Tests completos del proyecto (un comando)
+
+`scripts/test-completo.sh` **verifica el entorno** (node, npm, bun, cargo, rustc
+con el linker MSVC de VS Build Tools) y corre **todos los tests del proyecto**
+desde la raíz, en Git Bash / MSYS2:
+
+```bash
+bash scripts/test-completo.sh                 # lint + svelte-check + vitest + cargo test --lib
+bash scripts/test-completo.sh --instalar      # + bun install --frozen-lockfile primero
+bash scripts/test-completo.sh --integra       # + tests de integración Rust (requiere BD dev)
+bash scripts/test-completo.sh --solo-frontend # solo frontend
+bash scripts/test-completo.sh --solo-backend  # solo backend
+```
+
+## Qué verifica del entorno
+
+| Herramienta | Cómo se comprueba | Si falta, el mensaje da la instalación |
+| ----------- | ----------------- | -------------------------------------- |
+| Node ≥ 22.4 | `node --version` | `winget install --id OpenJS.NodeJS.LTS -e` |
+| npm | `npm --version` | viene con Node |
+| Bun | `bun --version` | `npm install -g bun` |
+| Cargo + rustc | `cargo`/`rustc --version` | rustup (toolchain `stable-x86_64-pc-windows-msvc`) |
+| Linker MSVC | busca `link.exe` en `Program Files (x86)/Microsoft Visual Studio/2022/*/VC/Tools/MSVC/*` | VS Build Tools 2022 con la workload C++ |
+
+> **Por qué importa el linker MSVC:** Tauri v2 en Windows solo compila con el
+> toolchain MSVC; sin `link.exe` (VS Build Tools + workload C++) `cargo` falla
+> al enlazar aunque rustup esté instalado.
+
+El script añade a `PATH` (si faltan) las rutas típicas de Windows en formato
+MSYS: `C:\Program Files\nodejs`, `%USERPROFILE%\.cargo\bin` y
+`%APPDATA%\npm` (bun instalado con `npm -g`).
+
+## Qué tests corre (por defecto)
+
+1. `bun run lint` (eslint) — 0 errores
+2. `bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json` — 0 errores
+3. `bunx vitest run` — 233/233 (frontend)
+4. `cd src-tauri && cargo test --lib` — 48/48 (backend, sin BD)
+
+Con `--integra` corre además `cargo test --tests` (suites de integración:
+migraciones, rentas y el resto), que **requieren la BD de desarrollo**
+(`data/dinamo_rent_v3.fdb`, gitignored). Si no existe, el script avisa cómo
+crearla (`cargo run --features dev --bin sync_dev -- --solo-total`); algunos
+tests (p. ej. el backfill 0016) necesitan además autos/clientes en esa BD.
+
+Códigos de salida: `0` todo verde · `1` falló el entorno o algún test ·
+`2` opción desconocida.
