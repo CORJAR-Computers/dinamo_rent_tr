@@ -45,6 +45,13 @@ jobs:
       - name: Install dependencies (bun)
         run: bun install --frozen-lockfile
 
+      # Validación de paginación antes de publicar: orden (1 página Carta),
+      # contrato (3-4 páginas con pie) e informe (A4) contra los fixtures, con
+      # Chrome/Edge headless (incluido en windows-latest). Si una regresión de
+      # layout rompiera la paginación, la release no se publica.
+      - name: Test verificador de paginación (Chrome/Edge headless)
+        run: node scripts/test-verificar-paginacion.mjs
+
       # Changelog automático: lista los commits entre el tag anterior y este
       # tag (hash corto + mensaje). Sin tag anterior (primer release), lista
       # todo el historial. El body se pasa a tauri-action como releaseBody.

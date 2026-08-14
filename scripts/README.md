@@ -170,7 +170,9 @@ node scripts/verificar-paginacion.mjs contrato.html=3:4 --motor edge --salida ./
 `scripts/test-verificar-paginacion.mjs` valida el verificador contra los
 fixtures de demostración (orden → 1 página Carta · contrato → 3-4 páginas con
 pie · informe → A4) y exige que cada uno cumpla su expectativa real. Corre en
-el CI (windows-latest, Edge headless incluido):
+el CI (`ci.yml`) y en cada release (`release.yml`, antes de publicar — una
+regresión de paginación bloquea la release), siempre con Edge headless de
+windows-latest:
 
 ```bash
 node scripts/test-verificar-paginacion.mjs   # o: npm run test:paginacion

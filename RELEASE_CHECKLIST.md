@@ -80,8 +80,11 @@ git push origin v1.0.3
 ```
 
 El push del tag dispara `release.yml` (GitHub Actions, `windows-latest`):
-`checkout` (fetch-depth 0) → changelog automático → `tauri build` (NSIS + MSI) →
-crea la release **publicada** (no draft) y sube los assets. ~10 minutos (referencia v1.0.2: 11 min · v1.0.3: ~10 min).
+`checkout` (fetch-depth 0) → **test de paginación** (orden 1 página Carta,
+contrato 3-4 páginas con pie, informe A4 — bloquea la release si falla) →
+changelog automático → `tauri build` (NSIS + MSI) → crea la release
+**publicada** (no draft) y sube los assets. ~10 minutos (referencia v1.0.2:
+11 min · v1.0.3: ~10 min).
 
 > El body de la release se genera solo: lista los commits entre el tag anterior
 > y el nuevo, con hash corto y mensaje. Si quieres verlo antes de publicar,
