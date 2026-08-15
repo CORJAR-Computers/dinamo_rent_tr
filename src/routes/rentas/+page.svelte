@@ -18,6 +18,7 @@
 	import { sid, session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
+	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -206,26 +207,23 @@
 	const saldoCalc = $derived(Math.max(0, totalCalc - (parseFloat(form.abono) || 0)));
 
 	function recalcularDias() {
-		if (!form.fechaRecogida || !form.fechaRetorno) {
-			form.diasCalculados = 0;
-			return;
-		}
-		const a = new Date(form.fechaRecogida + 'T00:00:00');
-		const b = new Date(form.fechaRetorno + 'T00:00:00');
-		const d = Math.round((b.getTime() - a.getTime()) / 86_400_000);
-		form.diasCalculados = Math.max(0, d);
+		// Regla unificada (espejo del cierre): cada 24 h = 1 día; excedente ≤ 3 h
+		// → horas extras (redondeadas hacia arriba); excedente > 3 h → día completo.
+		// Sin horas → diferencia de días calendario (comportamiento histórico).
+		const { dias, horas } = calcularDiasHoras(
+			form.fechaRecogida,
+			form.horaRecogida ?? '',
+			form.fechaRetorno,
+			form.horaRetorno ?? ''
+		);
+		form.diasCalculados = dias;
+		form.horasExtras = horas;
 	}
 
 	// ── Auto-cálculo de días/horas en el cierre (espejo del backend) ──
-	// Regla de negocio: cada 24 h desde la recogida = 1 día; el excedente de
+	// Regla unificada en calcularDiasHoras: cada 24 h = 1 día; el excedente de
 	// hasta 3 h se cobra como horas extras (redondeadas hacia arriba); si el
 	// excedente supera 3 h se cobra el día completo.
-	const HORAS_TOLERANCIA_DIA_COMPLETO = 3;
-	function parseFechaHora(fecha?: string, hora?: string): Date | null {
-		if (!fecha) return null;
-		const [hh = '00', mm = '00'] = (hora || '00:00').split(':');
-		return new Date(`${fecha}T${hh}:${mm}:00`);
-	}
 	function calcularCierre() {
 		const r = cerrarRenta;
 		if (!r) return;
@@ -233,20 +231,14 @@
 		// (sin ella no se puede aplicar la regla; los campos quedan «Mantener»
 		// y el backend conserva el valor original de la renta).
 		if (!cierre.horaDevolucionReal || !r.horaRecogida) return;
-		const a = parseFechaHora(r.fechaRecogida, r.horaRecogida ?? undefined);
-		const b = parseFechaHora(cierre.fechaDevolucionReal, cierre.horaDevolucionReal ?? undefined);
-		if (!a || !b) return;
-		const minutos = Math.max(0, (b.getTime() - a.getTime()) / 60000);
-		const diaMin = 24 * 60;
-		const dias = Math.floor(minutos / diaMin);
-		const rem = minutos % diaMin;
-		if (rem > HORAS_TOLERANCIA_DIA_COMPLETO * 60) {
-			cierre.diasCalculados = dias + 1;
-			cierre.horasExtras = 0;
-		} else {
-			cierre.diasCalculados = dias;
-			cierre.horasExtras = Math.ceil(rem / 60);
-		}
+		const { dias, horas } = calcularDiasHoras(
+			r.fechaRecogida,
+			r.horaRecogida ?? '',
+			cierre.fechaDevolucionReal,
+			cierre.horaDevolucionReal ?? ''
+		);
+		cierre.diasCalculados = dias;
+		cierre.horasExtras = horas;
 	}
 
 	function onClienteChange(v: string) {
@@ -895,7 +887,7 @@
 						<input class="input" type="date" bind:value={form.fechaRecogida} onchange={recalcularDias} />
 					</FormField>
 					<FormField label="Hora recogida" dense>
-						<input class="input" type="time" bind:value={form.horaRecogida} />
+						<input class="input" type="time" bind:value={form.horaRecogida} onchange={recalcularDias} />
 					</FormField>
 					<FormField label="Lugar recogida" dense>
 						<input class="input" placeholder="Aeropuerto, oficina…" bind:value={form.ubicacionRecogida} maxlength="200" />
@@ -904,7 +896,7 @@
 						<input class="input" type="date" bind:value={form.fechaRetorno} onchange={recalcularDias} />
 					</FormField>
 					<FormField label="Hora retorno" dense>
-						<input class="input" type="time" bind:value={form.horaRetorno} />
+						<input class="input" type="time" bind:value={form.horaRetorno} onchange={recalcularDias} />
 					</FormField>
 					<FormField label="Lugar retorno" dense>
 						<input class="input" placeholder="Aeropuerto, oficina…" bind:value={form.ubicacionRetorno} maxlength="200" />

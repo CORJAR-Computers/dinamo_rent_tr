@@ -15,6 +15,7 @@
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatDate } from '$lib/utils/format';
+	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -101,14 +102,16 @@
 	const saldoCalc = $derived(Math.max(0, totalCalc - (parseFloat(form.abono) || 0)));
 
 	function recalcularDias() {
-		if (!form.fechaRecogida || !form.fechaRetorno) {
-			form.diasCalculados = 0;
-			return;
-		}
-		const a = new Date(form.fechaRecogida + 'T00:00:00');
-		const b = new Date(form.fechaRetorno + 'T00:00:00');
-		const d = Math.round((b.getTime() - a.getTime()) / 86_400_000);
-		form.diasCalculados = Math.max(0, d);
+		// Regla unificada (espejo del cierre de renta): cada 24 h = 1 día;
+		// excedente ≤ 3 h → horas extras; excedente > 3 h → día completo.
+		const { dias, horas } = calcularDiasHoras(
+			form.fechaRecogida,
+			form.horaRecogida ?? '',
+			form.fechaRetorno,
+			form.horaRetorno ?? ''
+		);
+		form.diasCalculados = dias;
+		form.horasExtras = horas;
 	}
 
 	function onClienteChange(v: string) {
@@ -535,160 +538,201 @@
 	title={editando ? `Editar reserva #${editandoId}` : 'Nueva reserva'}
 	subtitle={editando ? 'Modifica los datos y guarda los cambios.' : 'Registra una reserva para un cliente.'}
 	onClose={() => (modalOpen = false)}
-	width="max-w-2xl"
+	width="max-w-6xl"
+	fullHeight
+	rawBody
 >
 	{#snippet children()}
-		{#if formError}
-			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
-		{/if}
+		<div class="flex grow min-h-0">
+			<!-- ── Panel izquierdo: campos (scrollable si es necesario) ── -->
+			<div class="flex-1 min-w-0 overflow-y-auto din-scroll px-5 py-4">
 
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-			<!-- Cliente -->
-			<div class="col-span-full mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">1</span>
-					Cliente
-				</h3>
-			</div>
-			<div>
-				<SearchSelect
-					label="Cliente registrado"
-					hint="Opcional: busca por nombre o número de documento; se autocompleta el nombre."
-					value={form.idCliente === null ? '' : String(form.idCliente)}
-					opciones={opcionesClientes}
-					onchange={onClienteChange}
-					placeholder="Buscar por nombre o documento…"
-					vacioLabel="— Sin cliente registrado —"
-				/>
-				<button
-					type="button"
-					class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-focus transition-colors"
-					onclick={() => (clienteModalOpen = true)}
-				>
-					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-					¿No está registrado? Crear nuevo cliente
-				</button>
-			</div>
-			<FormField label="Nombre del cliente" required>
-				<input class="input" placeholder="Nombre para la reserva" bind:value={form.nombreCliente} maxlength="200" />
-			</FormField>
-			<FormField label="Nacionalidad">
-				<input class="input" placeholder="Ej: Colombiana" bind:value={form.nacionalidad} maxlength="80" />
-			</FormField>
+				{#if formError}
+					<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
+				{/if}
 
-			<!-- Vehículo -->
-			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">2</span>
-					Vehículo
-				</h3>
-			</div>
-			<FormField label="Categoría">
-				<select class="input" bind:value={form.categoriaVehiculo}>
-					{#each (lists?.tiposAuto ?? ['Automóvil', 'Camioneta', 'Van', 'Lujo', 'Moto']) as t}
-						<option value={t}>{t}</option>
-					{/each}
-				</select>
-			</FormField>
-			<SearchSelect
-				label="Placa asignada"
-				value={form.placaAsignada ?? ''}
-				opciones={opcionesAutos}
-				onchange={(v) => (form.placaAsignada = v)}
-				placeholder="Buscar placa, marca o modelo…"
-				vacioLabel="— Sin asignar —"
-			/>
-
-			<!-- Itinerario -->
-			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">3</span>
-					Itinerario
-				</h3>
-			</div>
-			<FormField label="Fecha de recogida" required>
-				<input class="input" type="date" bind:value={form.fechaRecogida} onchange={recalcularDias} />
-			</FormField>
-			<FormField label="Hora de recogida">
-				<input class="input" type="time" bind:value={form.horaRecogida} />
-			</FormField>
-			<FormField label="Lugar de recogida">
-				<input class="input" placeholder="Ej: Aeropuerto, oficina..." bind:value={form.ubicacionRecogida} maxlength="200" />
-			</FormField>
-			<FormField label="Fecha de retorno" required>
-				<input class="input" type="date" bind:value={form.fechaRetorno} onchange={recalcularDias} />
-			</FormField>
-			<FormField label="Hora de retorno">
-				<input class="input" type="time" bind:value={form.horaRetorno} />
-			</FormField>
-			<FormField label="Lugar de retorno">
-				<input class="input" placeholder="Ej: Aeropuerto, oficina..." bind:value={form.ubicacionRetorno} maxlength="200" />
-			</FormField>
-
-			<!-- Tarifas -->
-			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">4</span>
-					Tarifas y totales
-				</h3>
-			</div>
-			<FormField label="Valor por día (COP)">
-				<input class="input" inputmode="decimal" placeholder="0" bind:value={form.valorDia} />
-			</FormField>
-			<FormField label="Valor hora adicional (COP)">
-				<input class="input" inputmode="decimal" placeholder="0" bind:value={form.valorHoraAdic} />
-			</FormField>
-			<FormField label="Días calculados" hint="Se calcula de las fechas; ajustable.">
-				<input class="input" type="number" min="0" step="1" bind:value={form.diasCalculados} />
-			</FormField>
-			<FormField label="Horas extras">
-				<input class="input" type="number" min="0" step="1" bind:value={form.horasExtras} />
-			</FormField>
-			<FormField label="Abono (COP)">
-				<input class="input" inputmode="decimal" placeholder="0" bind:value={form.abono} />
-			</FormField>
-			<FormField label="Estado">
-				<select class="input" bind:value={form.estado}>
-					{#each (lists?.estadosReserva ?? ['Pendiente', 'Confirmada', 'Cancelada', 'Completada']) as e}
-						<option value={e}>{e}</option>
-					{/each}
-				</select>
-			</FormField>
-
-			<!-- Resumen en vivo -->
-			<div class="col-span-full rounded-xl border border-border bg-alt-row/60 px-4 py-3 mt-1">
-				<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Total estimado</p>
-						<p class="font-black text-primary tabular-nums text-base">{formatCOP(totalCalc)}</p>
+				<!-- ── 1. Cliente ── -->
+				<div class="flex items-center gap-2 mb-2.5">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">1</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Cliente</h3>
+				</div>
+				<div class="grid grid-cols-2 gap-x-3 mb-3">
+					<div class="col-span-2">
+						<div class="flex items-end gap-2">
+							<SearchSelect
+								class="grow"
+								label="Cliente registrado"
+								hint="Opcional: busca por nombre o número de documento; se autocompleta el resto."
+								dense
+								value={form.idCliente === null ? '' : String(form.idCliente)}
+								opciones={opcionesClientes}
+								onchange={onClienteChange}
+								placeholder="Buscar por nombre o documento…"
+								vacioLabel="— Sin cliente registrado —"
+							/>
+							<button
+								type="button"
+								class="mb-3 shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
+								onclick={() => (clienteModalOpen = true)}
+								title="Crear nuevo cliente"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+								<span class="hidden xl:inline">Nuevo</span>
+							</button>
+						</div>
 					</div>
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Abono</p>
-						<p class="font-semibold text-text-primary tabular-nums">{formatCOP(form.abono)}</p>
-					</div>
-					<div>
-						<p class="text-[11px] uppercase tracking-wide text-text-secondary font-semibold">Saldo pendiente</p>
-						<p class="font-bold text-exito tabular-nums">{formatCOP(saldoCalc)}</p>
-					</div>
+					<FormField label="Nombre del cliente" required dense>
+						<input class="input" placeholder="Nombre para la reserva" bind:value={form.nombreCliente} maxlength="200" />
+					</FormField>
+					<FormField label="Nacionalidad" dense>
+						<input class="input" placeholder="Ej: Colombiana" bind:value={form.nacionalidad} maxlength="80" />
+					</FormField>
+				</div>
+
+				<!-- ── 2. Vehículo ── -->
+				<div class="flex items-center gap-2 mb-2.5 mt-2">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">2</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Vehículo</h3>
+				</div>
+				<div class="grid grid-cols-2 gap-x-3 mb-3">
+					<FormField label="Categoría" dense>
+						<select class="input" bind:value={form.categoriaVehiculo}>
+							{#each (lists?.tiposAuto ?? ['Automóvil', 'Camioneta', 'Van', 'Lujo', 'Moto']) as t}
+								<option value={t}>{t}</option>
+							{/each}
+						</select>
+					</FormField>
+					<SearchSelect
+						label="Placa asignada"
+						dense
+						value={form.placaAsignada ?? ''}
+						opciones={opcionesAutos}
+						onchange={(v) => (form.placaAsignada = v)}
+						placeholder="Buscar placa, marca o modelo…"
+						vacioLabel="— Sin asignar —"
+					/>
+				</div>
+
+				<!-- ── 3. Itinerario ── -->
+				<div class="flex items-center gap-2 mb-2.5 mt-2">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">3</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Itinerario</h3>
+				</div>
+				<div class="grid grid-cols-2 gap-x-3 mb-3">
+					<FormField label="Fecha de recogida" required dense>
+						<input class="input" type="date" bind:value={form.fechaRecogida} onchange={recalcularDias} />
+					</FormField>
+					<FormField label="Hora de recogida" dense>
+						<input class="input" type="time" bind:value={form.horaRecogida} onchange={recalcularDias} />
+					</FormField>
+					<FormField label="Lugar de recogida" dense>
+						<input class="input" placeholder="Ej: Aeropuerto, oficina..." bind:value={form.ubicacionRecogida} maxlength="200" />
+					</FormField>
+					<FormField label="Lugar de retorno" dense>
+						<input class="input" placeholder="Ej: Aeropuerto, oficina..." bind:value={form.ubicacionRetorno} maxlength="200" />
+					</FormField>
+					<FormField label="Fecha de retorno" required dense>
+						<input class="input" type="date" bind:value={form.fechaRetorno} onchange={recalcularDias} />
+					</FormField>
+					<FormField label="Hora de retorno" dense>
+						<input class="input" type="time" bind:value={form.horaRetorno} onchange={recalcularDias} />
+					</FormField>
+				</div>
+
+				<!-- ── 4. Tarifas y totales ── -->
+				<div class="flex items-center gap-2 mb-2.5 mt-2">
+					<span class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold">4</span>
+					<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>
+					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Tarifas y totales</h3>
+				</div>
+				<div class="grid grid-cols-2 gap-x-3 mb-3">
+					<FormField label="Valor por día" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="150000" bind:value={form.valorDia} />
+					</FormField>
+					<FormField label="Valor hora adicional" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="10000" bind:value={form.valorHoraAdic} />
+					</FormField>
+					<FormField label="Días calculados" hint="Auto desde fechas" dense>
+						<input class="input" type="number" min="0" step="1" bind:value={form.diasCalculados} />
+					</FormField>
+					<FormField label="Horas extras" dense>
+						<input class="input" type="number" min="0" step="1" bind:value={form.horasExtras} />
+					</FormField>
+					<FormField label="Abono" hint="COP" dense>
+						<input class="input" inputmode="decimal" placeholder="100000" bind:value={form.abono} />
+					</FormField>
+					<FormField label="Estado" dense>
+						<select class="input" bind:value={form.estado}>
+							{#each (lists?.estadosReserva ?? ['Pendiente', 'Confirmada', 'Cancelada', 'Completada']) as e}
+								<option value={e}>{e}</option>
+							{/each}
+						</select>
+					</FormField>
 				</div>
 			</div>
 
-			<FormField label="Observaciones" hint="Aparecen en la orden imprimible.">
-				<textarea class="input min-h-[70px] resize-y" bind:value={form.observaciones} maxlength="2000"></textarea>
-			</FormField>
-		</div>
-	{/snippet}
+			<!-- ── Panel derecho: resumen + observaciones + acciones (sticky) ── -->
+			<div class="w-72 xl:w-80 shrink-0 border-l border-border bg-alt-row/40 flex flex-col">
+				<!-- Resumen en vivo (siempre visible) -->
+				<div class="px-4 py-3 border-b border-border">
+					<div class="flex items-center gap-2 mb-2.5">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
+						<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Resumen en vivo</h3>
+					</div>
+					<!-- Total destacado -->
+					<div class="rounded-lg bg-gradient-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2">
+						<p class="text-[10px] uppercase tracking-wide opacity-80 font-semibold">Total estimado</p>
+						<p class="text-xl font-black tabular-nums leading-tight">{formatCOP(totalCalc)}</p>
+						<p class="text-[10px] opacity-80 mt-0.5">
+							{form.diasCalculados} día{form.diasCalculados === 1 ? '' : 's'}{form.horasExtras > 0 ? ` + ${form.horasExtras}h` : ''}
+						</p>
+					</div>
+					<!-- Desglose compacto -->
+					<div class="space-y-1 text-xs">
+						<div class="flex justify-between">
+							<span class="text-text-secondary">Abono</span>
+							<span class="font-semibold text-text-primary tabular-nums">{formatCOP(form.abono)}</span>
+						</div>
+						<div class="flex justify-between pt-1 border-t border-border">
+							<span class="text-text-secondary font-semibold">Saldo</span>
+							<span class="font-bold text-exito tabular-nums text-sm">{formatCOP(saldoCalc)}</span>
+						</div>
+					</div>
+				</div>
 
-	{#snippet footer()}
-		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
-		<button class="btn-primary" onclick={guardar} disabled={guardando}>
-			{#if guardando}
-				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-				Guardando...
-			{:else}
-				{editando ? 'Guardar cambios' : 'Crear reserva'}
-			{/if}
-		</button>
+				<!-- Observaciones -->
+				<div class="px-4 py-3 grow flex flex-col min-h-0">
+					<span class="label flex items-center gap-1.5">
+						<svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+						Observaciones
+					</span>
+					<textarea
+						class="input flex-1 min-h-[60px] resize-none text-xs"
+						placeholder="Aparecen en la orden imprimible…"
+						bind:value={form.observaciones}
+						maxlength="2000"
+					></textarea>
+					<p class="text-[10px] text-text-secondary/70 mt-1">{(form.observaciones ?? '').length}/2000</p>
+				</div>
+
+				<!-- Acciones -->
+				<div class="px-4 py-3 border-t border-border bg-surface/50 flex flex-col gap-2">
+					<button class="btn-primary w-full" onclick={guardar} disabled={guardando}>
+						{#if guardando}
+							<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+							Guardando...
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+							{editando ? 'Guardar cambios' : 'Crear reserva'}
+						{/if}
+					</button>
+					<button class="btn-ghost w-full" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
+				</div>
+			</div>
+		</div>
 	{/snippet}
 </Modal>
 
