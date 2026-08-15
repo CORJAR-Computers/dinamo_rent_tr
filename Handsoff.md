@@ -946,3 +946,48 @@ baja el MAX).
 
 Validación: vitest 239/239, svelte-check 0/0, lint ✅, build ✅, cargo test
 --tests ✅ contra BD fresca (seed_ci) y contra la BD dev.
+### 7.5 — Crear renta desde una reserva (precarga del formulario)
+
+Nueva acción «Crear renta» en las filas de reservas **Confirmada** o **Pendiente**
+(no en Cancelada/Completada): navega a `/rentas?desdeReserva=<id>`. La página de
+rentas lee el query param en `onMount`, carga la reserva con `obtener_reserva` y
+abre el modal de **nueva** renta precargado con:
+
+- **Cliente**: `idCliente` + nombre + nacionalidad.
+- **Vehículo**: placa asignada (el km de salida se autocompleta del auto).
+- **Itinerario**: fechas, horas y lugares de recogida/retorno.
+- **Tarifas**: valor día, valor hora adicional, días calculados, horas extras y
+  abono de la reserva.
+- **Trazabilidad**: `idReserva` enlazado (el backend ya lo valida: solo rechaza 0).
+
+El query param se limpia con `goto('/rentas', { replaceState: true })` para que
+un refresh no re-dispare la precarga. Si la reserva no se puede cargar, muestra
+un toast de error.
+
+Infra de tests: nuevo stub `src/test/stubs/state.ts` (`$app/state` → `page.url`
+lee `window.location` de jsdom) con su alias en `vitest.config.ts`.
+
+Tests: reservas — «Crear renta» navega a `/rentas?desdeReserva=<id>` y no aparece
+para reservas canceladas/completadas; rentas — con `?desdeReserva=7` el modal se
+abre solo y la renta guardada lleva idReserva, placa, fechas, tarifas, abono y
+km autocompletado.
+
+Validación: vitest 242/242, svelte-check 0/0, lint ✅, build ✅.
+#### Completar la reserva automáticamente
+
+Al crear la renta con `idReserva`, el backend **completa la reserva en la misma
+transacción** del INSERT: `RentaService::crear` valida que la reserva exista y
+esté **Confirmada** (rechaza Cancelada y la ya Completada), inserta la renta y
+marca la reserva como «Completada» — todo o nada. Si el INSERT falla, la reserva
+no cambia de estado.
+
+Para lograrlo, `RentaRepository::insertar` y `ReservaRepository::cambiar_estado`
+se hicieron **genéricos sobre `Execute`** (aceptan `PooledConnection` o
+`Transaction`), con `&mut **conn` en los call-sites pooled. La UI ya oculta el
+botón «Crear renta» para Completada/Cancelada, así que al volver a la lista la
+reserva muestra el badge «Completada» y la acción desaparece.
+
+Tests de integración nuevos (BD dev y BD fresca de CI):
+`renta_creada_desde_reserva_completa_la_reserva` (completa + rechaza reuso) y
+`renta_desde_reserva_cancelada_rechazada` (reserva cancelada no genera renta).
+Validación: cargo test --tests ✅, vitest 242/242 ✅, svelte-check 0/0 ✅, lint ✅.
