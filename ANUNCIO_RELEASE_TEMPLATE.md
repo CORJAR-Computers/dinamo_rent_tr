@@ -12,28 +12,35 @@ y reemplazarlos en el texto de las dos secciones.
 ## Versión larga (una pantalla)
 
 ```text
-🚀 Dinamo Rent ERP — listo para producción (v1.0.3)
+🚀 Dinamo Rent ERP — lista para producción (v1.0.13)
 
-La versión estable v1.0.3 ya está publicada en GitHub, construida por CI y
-validada en Windows limpio (instalación sin colgarse en equipos nuevos).
+La versión estable v1.0.13 ya está publicada en GitHub, construida y firmada
+por CI, con auto-actualización verificada (firma minisign contra la clave
+embebida).
 
-📦 Descarga: release v1.0.3 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64-setup.exe
-(~21 MB, NSIS) o el .msi (~32 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64_en-US.msi
+📦 Descarga: release v1.0.13 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.13/DinamoRent_1.0.13_x64-setup.exe
+(~21 MB, NSIS) o el .msi (~33 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.13/DinamoRent_1.0.13_x64_en-US.msi
+sha256 NSIS: 26e6ce8503fa3f2a8286ab66c9cea91ee6600905c415c20ed72da50dc40a008a
+sha256 MSI:  71c79a598ee3c60b5f25674192567748f231f6132c7d468e847cff8e56cc45d7
 Credenciales iniciales: admin / admin123 (cambio forzado al primer ingreso).
 ⚠️ No instalar versiones anteriores descontinuadas.
 
 🔧 Qué incluye esta versión:
   🔄 Auto-actualización: la app detecta al arrancar si hay una release nueva
      y pide instalarla (firma minisign verificada contra la clave embebida)
-  🧾 IVA por renta y auto-cálculo de días/horas al cerrar
-  🔁 Cambio de vehículo sin cerrar la renta (transaccional, con auditoría)
+  ➕ Crear renta desde una reserva: precarga el formulario (cliente, vehículo,
+     fechas, tarifas) y completa la reserva automáticamente al guardar
+  🧮 Cálculo unificado de días/horas (24h = 1 día; excedente ≤3h = horas extra,
+     >3h = día completo) en renta y reserva, también al cambiar la hora
+  🧾 IVA por renta (checkbox), cambio de vehículo sin cerrar la renta
   🔍 Combos con búsqueda en rentas, reservas, comparendos, mantenimiento y gastos
 
 🔄 Para las instalaciones v1.0.2: actualízalas a esta versión UNA sola vez a
 mano — desde aquí reciben las siguientes actualizaciones automáticamente.
 
-🟢 CI verde en main: lint · 233 tests frontend (vitest) · svelte-check 0/0 ·
-cargo (48 lib + 8 rentas + 11 migraciones) · test del importador de datos (16 casos).
+🟢 CI verde en main: lint · 242 tests frontend (vitest) · svelte-check 0/0 ·
+cargo (48 lib + integración completa con BD sembrada por seed_ci) ·
+test del importador de datos (16 casos).
 
 🛠️ Kit de operaciones (repo, scripts/):
   • verificar-despliegue.ps1 — verificación post-instalación por equipo
@@ -53,12 +60,12 @@ https://github.com/CORJAR-Computers/dinamo_rent_tr/blob/main/RESUMEN_EJECUTIVO.m
 ## Versión corta (anuncio rápido, 2-3 líneas)
 
 ```text
-🚀 Dinamo Rent ERP v1.0.3 publicada y validada en Windows limpio — instalación
-sin colgarse en equipos nuevos (crea BD, migraciones embebidas, sin runtime
-extra). Desde esta versión la app se actualiza sola; las instalaciones v1.0.2
-se actualizan una vez a mano. Descarga solo desde la release v1.0.3 (versiones
-anteriores descontinuadas):
-https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.3
+🚀 Dinamo Rent ERP v1.0.13 publicada y firmada por CI. Novedades: crear renta
+desde una reserva (precarga el formulario y la completa automáticamente) y
+cálculo unificado de días/horas en renta y reserva. La app instalada (v1.0.3+)
+se actualiza sola al arrancar; las v1.0.2 se actualizan una vez a mano.
+Descarga solo desde la release v1.0.13:
+https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.13
 Guías y kit de operaciones en el repo:
 RESUMEN_EJECUTIVO.md · INSTALACION_OPERACIONES.md · DEPLOYMENT_CLIENTES.md
 ```
@@ -67,7 +74,7 @@ RESUMEN_EJECUTIVO.md · INSTALACION_OPERACIONES.md · DEPLOYMENT_CLIENTES.md
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.0.13:** `DinamoRent_1.0.13_x64-setup.exe` (NSIS, ~21 MB, sha256 por calcular al publicar) y `DinamoRent_1.0.13_x64_en-US.msi` (~33 MB, sha256 por calcular al publicar)
+- **Assets de la v1.0.13:** `DinamoRent_1.0.13_x64-setup.exe` (NSIS, ~21 MB, sha256 `26e6ce8503fa3f2a8286ab66c9cea91ee6600905c415c20ed72da50dc40a008a`) y `DinamoRent_1.0.13_x64_en-US.msi` (~33 MB, sha256 `71c79a598ee3c60b5f25674192567748f231f6132c7d468e847cff8e56cc45d7`)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
 - **URLs directas de assets v1.0.13:**
   - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.13/DinamoRent_1.0.13_x64-setup.exe
