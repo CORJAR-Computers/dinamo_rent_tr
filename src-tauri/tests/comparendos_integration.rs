@@ -316,6 +316,7 @@ fn datos_renta_cruce(placa: &str, recogida: &str, retorno: &str) -> RentaDatos {
         costo_domicilio: "0".into(),
         costo_cables: "0".into(),
         costo_inversor: "0".into(),
+        valor_gasolina: "0".into(),
         descuento: "0".into(),
         subtotal: String::new(),
         impuestos: String::new(),
