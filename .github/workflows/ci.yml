@@ -64,14 +64,27 @@ jobs:
       - name: Build producción del frontend (vite build)
         run: bun run build
 
-      # Unit tests de la lib Rust (no requieren BD). Los tests de integración
-      # (src-tauri/tests/*.rs) dependen de la BD dev local (gitignored) y se
-      # ejecutan solo en desarrollo — ver SECURITY.md y rotacion_integration.rs.
+      # Unit tests de la lib Rust (no requieren BD).
       - name: Rust unit tests + check
         working-directory: src-tauri
         run: |
           cargo test --lib
           cargo check --all-targets
+
+      # Tests de integración (src-tauri/tests/*.rs): dependen de la BD dev
+      # local (data/dinamo_rent_v3.fdb, gitignored), ausente en CI. Se
+      # COMPILAN con --no-run para que un bug de compilación (p. ej. E0063
+      # por un campo nuevo en un struct) falle el CI en vez de colarse; si
+      # la BD dev existe (desarrollo local), se ejecutan completos.
+      - name: Rust tests de integración (compilar; ejecutar si hay BD dev)
+        working-directory: src-tauri
+        run: |
+          if (Test-Path ../data/dinamo_rent_v3.fdb) {
+            cargo test --tests
+          } else {
+            Write-Host "Sin BD dev: compilando los tests de integración (--no-run)."
+            cargo test --tests --no-run
+          }
 
       # Los bins de mantenimiento (rotate_pii_key, sync_dev, dev_reset_admin)
       # usan required-features=["dev"] y quedan omitidos sin la feature:
