@@ -21,6 +21,7 @@ use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::renta::{
     Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaDatos, RentaRepository,
 };
+use crate::repositories::reserva::ReservaRepository;
 
 /// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
 /// limitadas a 15 elementos en rsfbclient).
@@ -81,8 +82,50 @@ impl RentaService {
         datos.saldo_pendiente =
             (dec(&datos.total, "0.00") - dec(&datos.abono, "0.00")).max(Decimal::ZERO).round_dp(2).to_string();
         validar(&datos, cfg)?;
-        let id = RentaRepository::insertar(conn, &datos)?;
+        // Si la renta nace de una reserva, se completa la reserva (estado
+        // «Completada») EN LA MISMA transacción que inserta la renta: atómico,
+        // sin renta huérfana ni reserva que quede «Confirmada» a medias.
+        let id = match datos.id_reserva {
+            Some(id_reserva) if id_reserva > 0 => {
+                Self::completar_reserva_en_creacion(conn, id_reserva, &datos)?
+            }
+            _ => RentaRepository::insertar(&mut **conn, &datos)?,
+        };
         Self::obtener(conn, id)
+    }
+
+    /// Inserta la renta y marca su reserva de origen como «Completada» en una
+    /// sola transacción. Valida que la reserva exista y no esté cancelada o ya
+    /// completada (evita re-crear rentas de una misma reserva).
+    fn completar_reserva_en_creacion(
+        conn: &mut PooledConnection,
+        id_reserva: i64,
+        datos: &RentaDatos,
+    ) -> Result<i64, AppError> {
+        // Estado actual de la reserva (fuera de la transacción: solo lectura)
+        let reserva = ReservaRepository::obtener_por_id(conn, id_reserva)?
+            .ok_or_else(|| AppError::NotFound(format!("La reserva #{id_reserva} no existe.")))?;
+        if reserva.estado == "Cancelada" {
+            return Err(AppError::Business(format!(
+                "La reserva #{id_reserva} está cancelada y no puede generar una renta."
+            )));
+        }
+        if reserva.estado == "Completada" {
+            return Err(AppError::Business(format!(
+                "La reserva #{id_reserva} ya fue completada con otra renta."
+            )));
+        }
+        conn.with_transaction(|tx| -> Result<i64, rsfbclient::FbError> {
+            let id = RentaRepository::insertar(tx, datos)
+                .map_err(|e| rsfbclient::FbError::from(e.to_string()))?;
+            ReservaRepository::cambiar_estado(tx, id_reserva, "Completada")
+                .map_err(|e| rsfbclient::FbError::from(e.to_string()))?;
+            Ok(id)
+        })
+        .map_err(|e| AppError::Database(e.to_string()))
+        .inspect_err(|_| {
+            log::warn!("Rollback: la reserva #{id_reserva} no se completó junto con la renta");
+        })
     }
 
     /// Actualiza los datos de la renta (los totales se conservan y se recalculan

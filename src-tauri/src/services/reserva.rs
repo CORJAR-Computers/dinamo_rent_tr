@@ -100,7 +100,7 @@ impl ReservaService {
                 "No se puede cancelar una reserva ya completada.".into(),
             ));
         }
-        ReservaRepository::cambiar_estado(conn, id, "Cancelada")?;
+        ReservaRepository::cambiar_estado(&mut **conn, id, "Cancelada")?;
         let reserva = Self::obtener(conn, id)?;
         Ok(ReservaCancelada { reserva, cancelada: true })
     }

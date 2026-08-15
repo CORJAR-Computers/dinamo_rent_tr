@@ -300,8 +300,13 @@ impl ReservaRepository {
         Ok(())
     }
 
-    /// Cambia el estado de una reserva (cancelar / completar / confirmar)
-    pub fn cambiar_estado(conn: &mut PooledConnection, id: i64, estado: &str) -> Result<(), AppError> {
+    /// Cambia el estado de una reserva (cancelar / completar / confirmar).
+    /// Genérica sobre la conexión para poder llamarse dentro de una
+    /// transacción (`with_transaction`) además de en operaciones directas.
+    pub fn cambiar_estado<C>(conn: &mut C, id: i64, estado: &str) -> Result<(), AppError>
+    where
+        C: Execute,
+    {
         conn.execute(
             "UPDATE reservas SET estado = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (estado.to_string(), id),

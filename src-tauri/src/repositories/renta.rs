@@ -502,8 +502,13 @@ impl RentaRepository {
             .collect())
     }
 
-    /// Crea una renta y devuelve el id nuevo (RETURNING evita races con MAX(id))
-    pub fn insertar(conn: &mut PooledConnection, d: &RentaDatos) -> Result<i64, AppError> {
+    /// Crea una renta y devuelve el id nuevo (RETURNING evita races con MAX(id)).
+    /// Genérica sobre la conexión (`PooledConnection` o la `Transaction` de
+    /// `with_transaction`) para poder insertar dentro de una transacción.
+    pub fn insertar<C>(conn: &mut C, d: &RentaDatos) -> Result<i64, AppError>
+    where
+        C: rsfbclient::Execute,
+    {
         let (id,): (i64,) = conn
             .execute_returnable(
                 "INSERT INTO rentas (\

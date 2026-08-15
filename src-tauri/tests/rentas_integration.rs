@@ -21,7 +21,9 @@ use dinamo_rent_lib::repositories::cliente::ClienteRepository;
 use dinamo_rent_lib::repositories::renta::{
     InspeccionDatos, PagoDatos, RentaCierreDatos, RentaDatos,
 };
+use dinamo_rent_lib::repositories::reserva::ReservaDatos;
 use dinamo_rent_lib::services::renta::RentaService;
+use dinamo_rent_lib::services::reserva::ReservaService;
 use dinamo_rent_lib::services::AppState;
 
 fn dev_state() -> AppState {
@@ -619,4 +621,110 @@ fn renta_cierre_calcula_dias_horas_automatico() {
     assert_eq!(cerrada2.dias_calculados, 2);
     assert_eq!(cerrada2.horas_extras, 2, "2 h de excedente → horas extras");
     RentaService::eliminar(&mut conn, creada2.id).expect("limpieza2");
+}
+
+/// Una renta creada con `id_reserva` completa automáticamente la reserva
+/// (estado «Completada») EN LA MISMA transacción del INSERT.
+#[test]
+#[serial]
+fn renta_creada_desde_reserva_completa_la_reserva() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!("BD de dev sin autos — se requiere flota real.");
+    };
+
+    // Reserva de origen (Confirmada)
+    let hoy = Local::now().date_naive();
+    let reserva = ReservaService::crear(
+        &mut conn,
+        cfg,
+        ReservaDatos {
+            nombre_cliente: "Cliente Reserva Test".into(),
+            placa_asignada: Some(placa.clone()),
+            fecha_recogida: hoy.format("%Y-%m-%d").to_string(),
+            fecha_retorno: (hoy + Duration::days(2)).format("%Y-%m-%d").to_string(),
+            dias_calculados: 2,
+            horas_extras: 0,
+            valor_dia: "150000".into(),
+            valor_hora_adic: "10000".into(),
+            abono: "0".into(),
+            total: String::new(),
+            estado: "Confirmada".into(),
+            ..Default::default()
+        },
+    )
+    .expect("crear reserva");
+    assert_eq!(reserva.estado, "Confirmada");
+
+    // Renta con id_reserva → la reserva debe quedar Completada
+    let mut datos = datos_renta(&placa, None);
+    datos.id_reserva = Some(reserva.id);
+    let renta = RentaService::crear(&mut conn, cfg, datos).expect("crear renta desde reserva");
+    assert_eq!(renta.id_reserva, Some(reserva.id), "la renta enlaza la reserva");
+
+    // La reserva quedó Completada (misma transacción)
+    let reserva_finalizada = ReservaService::obtener(&mut conn, reserva.id).expect("releer reserva");
+    assert_eq!(
+        reserva_finalizada.estado,
+        "Completada",
+        "la reserva se completa al crear la renta desde ella"
+    );
+
+    // Re-crear una renta de la MISMA reserva → error de negocio (ya completada)
+    let mut datos2 = datos_renta(&placa, None);
+    datos2.id_reserva = Some(reserva.id);
+    let err = RentaService::crear(&mut conn, cfg, datos2).expect_err("reserva ya completada");
+    assert!(err.to_string().contains("ya fue completada"));
+
+    // Limpieza: renta + reserva
+    RentaService::eliminar(&mut conn, renta.id).expect("limpiar renta");
+    ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
+}
+
+/// Una reserva cancelada no puede generar una renta.
+#[test]
+#[serial]
+fn renta_desde_reserva_cancelada_rechazada() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!("BD de dev sin autos — se requiere flota real.");
+    };
+
+    let hoy = Local::now().date_naive();
+    let reserva = ReservaService::crear(
+        &mut conn,
+        cfg,
+        ReservaDatos {
+            nombre_cliente: "Cliente Reserva Cancelada".into(),
+            placa_asignada: Some(placa.clone()),
+            fecha_recogida: hoy.format("%Y-%m-%d").to_string(),
+            fecha_retorno: (hoy + Duration::days(1)).format("%Y-%m-%d").to_string(),
+            dias_calculados: 1,
+            horas_extras: 0,
+            valor_dia: "120000".into(),
+            valor_hora_adic: "10000".into(),
+            abono: "0".into(),
+            total: String::new(),
+            estado: "Confirmada".into(),
+            ..Default::default()
+        },
+    )
+    .expect("crear reserva");
+    ReservaService::cancelar(&mut conn, reserva.id).expect("cancelar reserva");
+
+    let mut datos = datos_renta(&placa, None);
+    datos.id_reserva = Some(reserva.id);
+    let err = RentaService::crear(&mut conn, cfg, datos).expect_err("reserva cancelada");
+    assert!(err.to_string().contains("cancelada"), "error: {err}");
+
+    // La reserva sigue Cancelada y no se creó renta
+    let cancelada = ReservaService::obtener(&mut conn, reserva.id).expect("releer");
+    assert_eq!(cancelada.estado, "Cancelada");
+    ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
 }
