@@ -1,6 +1,6 @@
-# Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.12
+# Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.13
 
-> Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.12** (última
+> Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.13** (última
 > versión estable, con **auto-actualización** activa desde la v1.0.3): instalación
 > silenciosa, verificación post-instalación y rollback. **Este es el último despliegue
 > manual por equipo**: desde la v1.0.3 la app detecta y ofrece las versiones nuevas al
@@ -11,7 +11,7 @@
 
 ## 0. Reglas de oro
 
-1. **Siempre la v1.0.12 (o superior)** — la v1.0.0 está descontinuada (falla en
+1. **Siempre la v1.0.13 (o superior)** — la v1.0.0 está descontinuada (falla en
    instalaciones nuevas) y la v1.0.2 no tiene updater (se actualiza una vez a mano a la
    v1.0.3+ y desde ahí el auto-update).
 2. **Los datos viven en `%APPDATA%\com.corjar.dinamorent\`**, NO en la carpeta de
@@ -37,7 +37,7 @@
 | ¿Backup reciente de la BD? | Crearlo antes de tocar nada (ver §4) |
 
 > Si el equipo **ya tiene una versión anterior con datos**: no hay nada especial —
-> instalar la v1.0.12 encima y verificar (el arranque migra la BD). Solo hay que confirmar
+> instalar la v1.0.13 encima y verificar (el arranque migra la BD). Solo hay que confirmar
 > el backup antes.
 
 ---
@@ -52,14 +52,14 @@
 
 ```powershell
 # NSIS — silenciosa total (sin atajos, sin ejecutar al final)
-& "D:\deploy\DinamoRent_1.0.12_x64-setup.exe" /S
+& "D:\deploy\DinamoRent_1.0.13_x64-setup.exe" /S
 # Esperar a que termine (NSIS /S es síncrono al esperar al proceso)
-# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.0.12_x64-setup.exe" -ArgumentList "/S"
+# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.0.13_x64-setup.exe" -ArgumentList "/S"
 ```
 
 ```powershell
 # MSI — para GPO / Intune / SCCM
-msiexec /i "D:\deploy\DinamoRent_1.0.12_x64_en-US.msi" /qn /norestart
+msiexec /i "D:\deploy\DinamoRent_1.0.13_x64_en-US.msi" /qn /norestart
 ```
 
 > **WebView2**: si el equipo no lo tiene, el instalador lo descarga e instala
@@ -75,7 +75,7 @@ equipos y ejecutar con una herramienta de gestión (Intune, SCCM, GPO `msi` + `c
 
 ```powershell
 # Ejemplo con psexec (máquina de operaciones):
-psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.12_x64-setup.exe" /S
+psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.13_x64-setup.exe" /S
 ```
 
 ---
@@ -94,24 +94,44 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
 
 | # | Comprobación | Esperado |
 |---|---|---|
-| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.12** |
+| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.13** |
 | 2 | Arranque: proceso vivo a los 10 s | **no** se cuelga ni muere (el bug del v1.0.0) |
 | 3 | `%APPDATA%\com.corjar.dinamorent\` | existe (la crea el **primer arranque**; por eso se comprueba después del arranque) |
 | 4 | `config.ini` | existe |
 | 5 | `dinamo_rent_v3.fdb` | existe y pesa > 0 (BD creada o migrada) |
 | 6 | Migraciones: `schema_migrations` tiene 20 versiones | 20 (comprobación opcional con tooling dev) |
 | 7 | Login manual | `admin` + contraseña del cliente (primer ingreso: cambio forzado) |
+| 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.0.13 ya es la vigente) |
 
 > Desde la v1.0.3 la app incluye el updater: al arrancar con internet chequea la release
 > vigente y no muestra nada si ya está al día. Si apareciera el diálogo «Actualización
 > disponible», puede instalarse desde la propia app (la firma se verifica sola).
 
+### 3.1 Confirmación del auto-update (comprobación 8)
+
+La app solo comprueba el updater **al arrancar**. Para confirmar que el equipo quedó
+operativo con el auto-update:
+
+1. Cerrar la app y abrirla de nuevo (el chequeo se hace en cada arranque).
+2. Verificar que **no** aparece el diálogo «Actualización disponible» — si aparece,
+   significa que la release vigente en GitHub es más nueva que la instalada (o que la
+   instalación no quedó en la última versión): instalarlo desde el propio diálogo y
+   repetir.
+3. Comprobación opcional desde la máquina de operaciones: el endpoint del auto-update
+   debe responder con la versión instalada:
+   `curl -s https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/latest/download/latest.json`
+   → `"version": "1.0.13"`.
+
+> Los equipos **sin internet** no pueden auto-actualizarse: el chequeo falla silencioso y
+> la app sigue funcionando. Para esos casos, actualizar a mano con el instalador de la
+> release (ver §2).
+
 ### Si algo falla
 
 | Síntoma | Acción |
 |---|---|
-| Exe no aparece / versión no es 1.0.12 | Reinstalar (¿el instalador correcto? ¿se descargó una versión anterior?) |
-| `config.ini` pero NO la BD | No borrar nada: reinstalar la v1.0.12 (el arranque crea la BD). Si persiste, revisar exclusión de Defender sobre la carpeta |
+| Exe no aparece / versión no es 1.0.13 | Reinstalar (¿el instalador correcto? ¿se descargó una versión anterior?) |
+| `config.ini` pero NO la BD | No borrar nada: reinstalar la v1.0.13 (el arranque crea la BD). Si persiste, revisar exclusión de Defender sobre la carpeta |
 | Proceso muere en <10 s | Capturar Event Log de Aplicación (módulo con errores) y volcar aquí |
 | La BD existente "no abre" | Nunca borrar la carpeta. Restaurar el backup (ver §4) y reinstalar |
 
@@ -156,13 +176,16 @@ Copy-Item "$env:APPDATA\com.corjar.dinamorent\dinamo_rent_v3.fdb" "D:\backups\di
 
 ```
 [ ] Backup de la BD creado (si el equipo tiene datos)
-[ ] Instalador v1.0.12 descargado (verificar hash/tamaño ~21 MB)
+[ ] Instalador v1.0.13 descargado y verificado:
+      sha256 NSIS: 26e6ce8503fa3f2a8286ab66c9cea91ee6600905c415c20ed72da50dc40a008a
+      sha256 MSI:  71c79a598ee3c60b5f25674192567748f231f6132c7d468e847cff8e56cc45d7
 [ ] Instalación silenciosa OK (código 0)
-[ ] scripts\verificar-despliegue.ps1 → VEREDICTO: OK
+[ ] scripts\verificar-despliegue.ps1 → VEREDICTO: OK (incluye comprobación 8: auto-update al día)
 [ ] Login con el usuario del cliente (no admin123 salvo primer ingreso)
 [ ] Flota / clientes / rentas visibles (datos correctos)
 [ ] Agente SIMIT operativo (si aplica)
 [ ] Credenciales iniciales registradas y contraseña rotada si era admin123
-[ ] (v1.0.3+) la app quedó con auto-update: las próximas versiones no requieren despliegue manual
-    - la v1.0.12 es la última estable al momento de escribir esto (14-08)
+[ ] Auto-update confirmado: la app arrancó sin diálogo «Actualización disponible» y
+      latest.json responde version 1.0.13 (ver §3.1)
+    - la v1.0.13 es la última estable al momento de escribir esto (15-08)
 ```
