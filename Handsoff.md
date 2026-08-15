@@ -908,3 +908,41 @@ coincidencias). Los tests de página que tocaban los `<select>` viejos ahora
 interactúan con el combobox (rentas, comparendos, mantenimiento).
 
 Validación: vitest 233/233, svelte-check 0/0, lint ✅.
+### 7.4 — Cálculo unificado de días/horas + formulario de reserva estilo renta + seed CI
+
+**Cálculo de días y horas extra unificado** (`src/lib/utils/calcularDiasHoras.ts`):
+antes, el formulario de renta y reserva calculaba días solo por fecha (ignorando
+las horas), mientras el cierre de renta aplicaba la regla completa (>3 h de
+excedente = día completo). Eso producía totales incoherentes entre lo estimado
+al crear y lo cobrado al cerrar. Ahora:
+
+- **Regla única** (espejo del backend `calcular_dias_horas` de renta.rs):
+  cada 24 h = 1 día; excedente ≤ 3 h → horas extras (redondeadas hacia arriba);
+  excedente > 3 h → día completo. Sin horas → diferencia de días calendario
+  (comportamiento histórico de los formularios).
+- Aplicado en: formulario de renta, cierre de renta (refactorizado a usar el
+  helper) y formulario de reserva. Las horas de recogida/retorno ahora disparan
+  `recalcularDias` (`onchange`), no solo las fechas.
+- Tests: `calcularDiasHoras.test.ts` (6 casos: sin horas, 24 h exactas, excedente
+  ≤ 3 h, excedente > 3 h, retorno anterior, fechas faltantes).
+
+**Formulario de reserva rediseñado estilo renta**: el modal pasó de una cuadrícula
+de 2 columnas a un layout de 2 paneles igual al de renta — izquierda con secciones
+numeradas e iconos (1 Cliente, 2 Vehículo, 3 Itinerario, 4 Tarifas y totales) y
+derecha con resumen en vivo sticky (total, abono, saldo) + observaciones +
+acciones. El botón «Nuevo» de cliente y el `ClienteFormModal` embebido ya
+existían y se conservan.
+
+**Seed de BD mínima para CI** (`src-tauri/src/bin/seed_ci.rs`): siembra
+`data/dinamo_rent_v3.fdb` determinista (config → pool → migraciones → admin
+`Admin123!` → 2 autos → 2 clientes) para que `cargo test --tests` se EJECUTE
+completo en CI (antes solo se compilaba con `--no-run`). Idempotente (upsert por
+placa/no_doc); persiste una clave PII de desarrollo si config.ini viene vacía
+(los tests de rotación la exigen). `ci.yml` ahora corre `seed_ci` + `cargo test
+--tests` siempre. Ajustes necesarios para BD fresca: el test de auditoría inserta
+su propio «LOGIN FALLIDO» (no asume historia) y el test de secuencia de contrato
+prueba la independencia del id borrando físicamente las rentas (el soft-delete no
+baja el MAX).
+
+Validación: vitest 239/239, svelte-check 0/0, lint ✅, build ✅, cargo test
+--tests ✅ contra BD fresca (seed_ci) y contra la BD dev.
