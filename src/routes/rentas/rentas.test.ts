@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { tauri } from '../../test/tauri';
 import { session } from '$lib/stores/session.svelte';
-import type { Renta, RentaDatos, RentaCierreDatos, PagoDatos, InspeccionDatos, Auto, BusinessLists } from '$lib/api';
+import type { Renta, RentaDatos, RentaCierreDatos, PagoDatos, InspeccionDatos, Auto, BusinessLists, Reserva } from '$lib/api';
 import RentasPage from './+page.svelte';
 
 function renta(overrides: Partial<Renta> = {}): Renta {
@@ -53,6 +53,34 @@ function renta(overrides: Partial<Renta> = {}): Renta {
 		vehiculo: 'Toyota Corolla',
 		pagos: [],
 		inspecciones: [],
+		...overrides
+	};
+}
+
+function reserva(overrides: Partial<Reserva> = {}): Reserva {
+	return {
+		id: 7,
+		idCliente: 1,
+		nombreCliente: 'Cliente Reserva',
+		nacionalidad: 'Colombiana',
+		categoriaVehiculo: 'Automóvil',
+		placaAsignada: 'ABC123',
+		fechaRecogida: '2026-08-20',
+		horaRecogida: '10:00',
+		ubicacionRecogida: 'Aeropuerto',
+		fechaRetorno: '2026-08-22',
+		horaRetorno: '10:00',
+		ubicacionRetorno: 'Oficina',
+		diasCalculados: 2,
+		horasExtras: 0,
+		valorDia: '150000.00',
+		valorHoraAdic: '10000.00',
+		abono: '50000.00',
+		total: '300000.00',
+		observaciones: 'Desde la reserva',
+		estado: 'Confirmada',
+		createdAt: null,
+		updatedAt: null,
 		...overrides
 	};
 }
@@ -125,6 +153,8 @@ beforeEach(() => {
 	tauri.register('get_business_lists', () => LISTS);
 	tauri.register('listar_clientes', () => []);
 	tauri.register('listar_autos', () => [auto('ABC123'), auto('XYZ987', 'Mazda', 'CX-5')]);
+	// Restablece la URL (el stub de $app/state lee window.location)
+	window.history.replaceState({}, '', '/rentas');
 });
 
 describe('página de Rentas', () => {
@@ -197,6 +227,40 @@ describe('página de Rentas', () => {
 		expect(args.datos.placa).toBe('ABC123');
 		expect(args.datos.kmSalida).toBe('42100');
 		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+	});
+
+	it('precarga el formulario desde una reserva (?desdeReserva=)', async () => {
+		tauri.register('listar_rentas', () => []);
+		tauri.register('obtener_reserva', () => reserva());
+		const crear = vi.fn((_args: { sessionId: string; datos: RentaDatos }) => renta({ id: 9 }));
+		tauri.register('crear_renta', crear);
+
+		// Navegación simulada desde Reservas: /rentas?desdeReserva=7
+		window.history.replaceState({}, '', '/rentas?desdeReserva=7');
+		render(RentasPage);
+
+		// El modal de nueva renta se abre solo, con los datos de la reserva
+		const dialogo = await screen.findByRole('dialog');
+		await waitFor(() => expect(dialogo).toHaveTextContent('Nueva renta'));
+		await waitFor(() => {
+			expect(screen.getByDisplayValue('Cliente Reserva')).toBeInTheDocument();
+		});
+
+		// Guarda → la renta lleva cliente, vehículo, fechas, tarifas e idReserva
+		await fireEvent.click(screen.getByRole('button', { name: 'Crear renta' }));
+		await waitFor(() => expect(crear).toHaveBeenCalledTimes(1));
+		const args = crear.mock.calls[0][0] as { sessionId: string; datos: RentaDatos };
+		expect(args.datos.idReserva).toBe(7);
+		expect(args.datos.placa).toBe('ABC123');
+		expect(args.datos.nombreCliente).toBe('Cliente Reserva');
+		expect(args.datos.fechaRecogida).toBe('2026-08-20');
+		expect(args.datos.fechaRetorno).toBe('2026-08-22');
+		expect(args.datos.diasCalculados).toBe(2);
+		expect(args.datos.horasExtras).toBe(0);
+		expect(args.datos.valorDia).toBe('150000.00');
+		expect(args.datos.valorHoraExtra).toBe('10000.00');
+		expect(args.datos.abono).toBe('50000.00');
+		expect(args.datos.kmSalida).toBe('42000'); // autocompletado del auto ABC123
 	});
 
 	it('valida los campos obligatorios antes de guardar', async () => {

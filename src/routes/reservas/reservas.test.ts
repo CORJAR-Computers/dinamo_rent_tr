@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { tauri } from '../../test/tauri';
 import { session } from '$lib/stores/session.svelte';
+import { goto } from '$app/navigation';
 import type { Reserva, Auto, Cliente, BusinessLists } from '$lib/api';
 import ReservasPage from './+page.svelte';
 
@@ -115,5 +116,28 @@ describe('página de Reservas', () => {
 		await screen.findByText('Juan Perez');
 
 		expect(screen.getByTitle('Eliminar')).toBeInTheDocument();
+	});
+
+	it('«Crear renta» navega a /rentas con el id de la reserva', async () => {
+		tauri.register('listar_reservas', () => [reserva()]);
+
+		render(ReservasPage);
+		await screen.findByText('Juan Perez');
+
+		await fireEvent.click(screen.getByTitle(/Crear renta desde esta reserva/));
+
+		await waitFor(() => expect(goto).toHaveBeenCalledWith('/rentas?desdeReserva=1'));
+	});
+
+	it('no muestra «Crear renta» para reservas canceladas o completadas', async () => {
+		tauri.register('listar_reservas', () => [
+			reserva({ id: 2, nombreCliente: 'Maria Perez', estado: 'Cancelada' }),
+			reserva({ id: 3, nombreCliente: 'Luis Diaz', estado: 'Completada' })
+		]);
+
+		render(ReservasPage);
+		await screen.findByText('Maria Perez');
+
+		expect(screen.queryByTitle(/Crear renta desde esta reserva/)).not.toBeInTheDocument();
 	});
 });

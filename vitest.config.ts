@@ -19,6 +19,11 @@ export default defineConfig({
 			// resuelven contra este stub.
 			'@sveltejs/kit': fileURLToPath(
 				new URL('./src/test/stubs/sveltekit.ts', import.meta.url)
+			),
+			// `page` de $app/state (rutas que leen query params, p. ej. rentas
+			// con ?desdeReserva=). Lee window.location de jsdom.
+			'$app/state': fileURLToPath(
+				new URL('./src/test/stubs/state.ts', import.meta.url)
 			)
 		},
 		// Sin esto, Vitest resuelve 'svelte' a index-server.js y `mount()`

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import {
 		rentaApi,
+		reservaApi,
 		clienteApi,
 		autoApi,
 		businessApi,
@@ -13,7 +14,8 @@
 		type InspeccionDatos,
 		type ClienteConPii,
 		type Auto,
-		type BusinessLists
+		type BusinessLists,
+		type Reserva
 	} from '$lib/api';
 	import { sid, session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -31,6 +33,8 @@
 	import AvisoImpresion from '$lib/components/AvisoImpresion.svelte';
 	import { imprimirDocumento } from '$lib/utils/imprimir';
 	import { useDebouncedEffect } from '$lib/utils/debounce.svelte';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 
 	// sid() viene del store (reemplaza el patrón `const sid = () => session.token ?? ''`
 	// repetido en 15 rutas). Ver TAREA E3 del Grupo E.
@@ -309,6 +313,25 @@
 			autos = [];
 		}
 		await cargar();
+
+		// Precarga desde una reserva (?desdeReserva=<id>): abre el formulario
+		// con los datos de la reserva y limpia el query param para que un
+		// refresh no re-dispare la precarga.
+		const idReserva = Number(page.url.searchParams.get('desdeReserva'));
+		if (idReserva > 0) {
+			try {
+				const r = await reservaApi.obtener(sid(), idReserva);
+				precargarDesdeReserva(r);
+			} catch (e) {
+				toast.error(
+					e instanceof ApiError
+						? e.message
+						: 'No se pudo cargar la reserva para crear la renta.'
+				);
+			} finally {
+				goto('/rentas', { replaceState: true });
+			}
+		}
 	});
 
 	// Recarga con debounce al cambiar filtros. `skipFirst: true` porque la
@@ -369,6 +392,39 @@
 		};
 		editando = true;
 		editandoId = r.id;
+		formError = '';
+		modalOpen = true;
+	}
+
+	/// Abre el formulario de NUEVA renta con los datos de una reserva
+	/// (cliente, vehículo, fechas, tarifas y abono) y enlaza idReserva para
+	/// conservar la trazabilidad. El km de salida se autocompleta del auto.
+	function precargarDesdeReserva(r: Reserva) {
+		const auto = autos.find((a) => a.placa === r.placaAsignada);
+		form = {
+			...defaultForm(),
+			placa: r.placaAsignada,
+			idCliente: r.idCliente,
+			nombreCliente: r.nombreCliente,
+			nacionalidad: r.nacionalidad ?? '',
+			fechaRecogida: r.fechaRecogida,
+			horaRecogida: r.horaRecogida ?? '',
+			ubicacionRecogida: r.ubicacionRecogida ?? '',
+			fechaRetorno: r.fechaRetorno,
+			horaRetorno: r.horaRetorno ?? '',
+			ubicacionRetorno: r.ubicacionRetorno ?? '',
+			diasCalculados: r.diasCalculados,
+			horasExtras: r.horasExtras,
+			valorDia: r.valorDia,
+			valorHoraExtra: r.valorHoraAdic,
+			abono: r.abono,
+			observaciones: r.observaciones ?? '',
+			kmSalida: auto ? String(auto.kilometraje ?? '') : '',
+			tanqueSalida: 'Lleno',
+			idReserva: r.id
+		};
+		editando = false;
+		editandoId = null;
 		formError = '';
 		modalOpen = true;
 	}
