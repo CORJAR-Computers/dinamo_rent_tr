@@ -1,7 +1,7 @@
 {
 	"name": "dinamo-rent-tauri",
 	"private": true,
-	"version": "1.0.12",
+	"version": "1.0.13",
 	"type": "module",
 	"engines": {
 		"node": ">=22.4"

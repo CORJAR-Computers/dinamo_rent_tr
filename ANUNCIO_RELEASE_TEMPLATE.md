@@ -2,7 +2,7 @@
 
 Mensaje listo para pegar en un canal del equipo al publicar una versión nueva.
 Las secciones «Versión larga» y «Versión corta» están **completadas con los
-datos reales de la v1.0.3** (enlaces, sha256, conteos de tests) — copiar el
+datos reales de la v1.0.13** (enlaces, sha256, conteos de tests) — copiar el
 bloque elegido tal cual. Para una versión futura, actualizar los valores de
 la «Referencia rápida» (versión, URLs de assets, sha256 y conteos de tests)
 y reemplazarlos en el texto de las dos secciones.
@@ -67,16 +67,16 @@ RESUMEN_EJECUTIVO.md · INSTALACION_OPERACIONES.md · DEPLOYMENT_CLIENTES.md
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.0.3:** `DinamoRent_1.0.3_x64-setup.exe` (NSIS, ~21 MB, sha256 `d0b8c07f8f49b38c85690fb2133b805ce1c4374e762fa7e897a321cb07709eca`) y `DinamoRent_1.0.3_x64_en-US.msi` (~32 MB, sha256 `bcfa5ac12e672857cac2f62e7cd676d081a5a4819e01deadd6b46e76334978e2`)
+- **Assets de la v1.0.13:** `DinamoRent_1.0.13_x64-setup.exe` (NSIS, ~21 MB, sha256 por calcular al publicar) y `DinamoRent_1.0.13_x64_en-US.msi` (~33 MB, sha256 por calcular al publicar)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
-- **URLs directas de assets v1.0.3:**
-  - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64-setup.exe
-  - MSI: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.3/DinamoRent_1.0.3_x64_en-US.msi
-  - Release (con changelog automático de commits): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.3
-  - Firmas del updater: `DinamoRent_1.0.3_x64-setup.exe.sig` / `DinamoRent_1.0.3_x64_en-US.msi.sig`
+- **URLs directas de assets v1.0.13:**
+  - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.13/DinamoRent_1.0.13_x64-setup.exe
+  - MSI: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.13/DinamoRent_1.0.13_x64_en-US.msi
+  - Release (con changelog automático de commits): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.13
+  - Firmas del updater: `DinamoRent_1.0.13_x64-setup.exe.sig` / `DinamoRent_1.0.13_x64_en-US.msi.sig`
   - Endpoint del auto-update (latest.json): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/latest/download/latest.json
-- **Conteos de tests** (actualizarlos si cambian): vitest 233 · svelte-check 0/0 · cargo 48 lib + 8 rentas + 11 migraciones · importador 16
+- **Conteos de tests** (actualizarlos si cambian): vitest 242 · svelte-check 0/0 · cargo 48 lib + integración completa (seed_ci) · importador 16
 - **Pasos al publicar:** crear tag `vX.Y.Z` → `release.yml` (CI) construye y publica → marcar versiones anteriores como pre-release/descontinuadas si aplica → pegar el anuncio.
 - **Changelog automático:** `release.yml` genera el body de la release con los commits entre el tag anterior y el nuevo (`git log prev..tag`); el anuncio puede enlazar a la página de la release en lugar de repetir la lista de cambios.
 - **Auto-actualización (v1.0.3+):** la app chequea GitHub Releases al arrancar (`latest.json`), muestra «Actualización disponible» y verifica la firma minisign contra la pubkey embebida antes de instalar. Las instalaciones **v1.0.2 no tienen updater**: se actualizan UNA vez a mano instalando la v1.0.3 encima; desde ahí reciben las siguientes automáticamente. El CI sube `latest.json` + los `.sig` con cada release (prerrequisito: secret `TAURI_SIGNING_PRIVATE_KEY`; ver RELEASE_CHECKLIST.md).
-- **Assets de la v1.0.3 (al publicar):** los 2 instaladores (`DinamoRent_1.0.3_x64-setup.exe` NSIS ~21 MB y `DinamoRent_1.0.3_x64_en-US.msi` ~32 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`) y `latest.json`. El sha256 de los instaladores se calcula al publicar y se pega en esta sección.
+- **Assets de la v1.0.13 (al publicar):** los 2 instaladores (`DinamoRent_1.0.13_x64-setup.exe` NSIS ~21 MB y `DinamoRent_1.0.13_x64_en-US.msi` ~33 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`) y `latest.json`. El sha256 de los instaladores se calcula al publicar y se pega en esta sección.
