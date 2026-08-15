@@ -1851,7 +1851,12 @@ mod tests {
             (200, vec![("Set-Cookie", "adc_test=xyz123; Path=/")], String::new()),
             (200, vec![], "ok".into()),
         ]);
+        // Agente propio con timeout amplio: no depende del agente global de
+        // producción ni de su timeout de 30 s (causa del flake bajo carga
+        // paralela en CI — un timeout de transporte reseteaba la conexión
+        // loopback y el test paniqueaba; mismo patrón que consulta_401).
         let agente = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(60))
             .cookie_store(CookieStore::default())
             .build();
         agente
