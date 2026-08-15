@@ -294,18 +294,29 @@ fn renta_no_contrato_secuencial_independiente_del_id() {
     assert_eq!(r1.anio_contrato, anio_actual, "año del contrato = año de creación");
     assert_eq!(r2.anio_contrato, anio_actual, "ambas rentas en el mismo año");
     assert_eq!(r2.no_contrato, r1.no_contrato + 1, "secuencia +1 dentro del año");
-    assert_ne!(
-        r1.no_contrato, r1.id,
-        "no_contrato independiente del id (secuencia propia)"
-    );
 
     // La persistencia también lo conserva (vuelve a leer desde la BD)
     let re_leida = RentaService::obtener(&mut conn, r1.id).expect("releer r1");
     assert_eq!(re_leida.no_contrato, r1.no_contrato);
     assert_eq!(re_leida.anio_contrato, anio_actual);
 
-    RentaService::eliminar(&mut conn, r1.id).expect("limpieza r1");
-    RentaService::eliminar(&mut conn, r2.id).expect("limpieza r2");
+    // Independencia del id (secuencia propia por año, no el id de la fila):
+    // se borran FÍSICAMENTE las rentas (el soft-delete no baja el MAX) y se
+    // crea una nueva: el no_contrato RECICLA (MAX+1 vuelve a 1) pero el id
+    // del GENERATOR nunca se reutiliza. Así la propiedad se cumple también
+    // en una BD recién sembrada por seed_ci, donde la primera renta del año
+    // tiene no_contrato = 1 e id = 1 (coinciden por ser la primera).
+    conn.execute("DELETE FROM rentas WHERE id = ?", (r1.id,))
+        .expect("borrado físico r1");
+    conn.execute("DELETE FROM rentas WHERE id = ?", (r2.id,))
+        .expect("borrado físico r2");
+    let r3 = RentaService::crear(&mut conn, cfg, datos_renta(&placa, None)).expect("crear r3");
+    assert_ne!(
+        r3.no_contrato, r3.id,
+        "no_contrato independiente del id (secuencia propia)"
+    );
+
+    RentaService::eliminar(&mut conn, r3.id).expect("limpieza r3");
 }
 
 #[test]

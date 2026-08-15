@@ -165,6 +165,10 @@ fn auditoria_acciones_y_usuarios() {
 
     let id1 = insertar_evento(&state, "testacciones", "LOGIN OK", "x");
     let id2 = insertar_evento(&state, "testacciones2", "LOGIN OK", "x");
+    // LOGIN FALLIDO se inserta aquí (no se asume historia previa en la BD):
+    // así el test es autosuficiente y pasa también contra una BD fresca
+    // sembrada por seed_ci en CI.
+    let id3 = insertar_evento(&state, "testacciones", "LOGIN FALLIDO", "x");
 
     let acciones = AuditoriaService::acciones(&mut conn).expect("acciones");
     assert!(acciones.contains(&"LOGIN OK".to_string()));
@@ -174,5 +178,5 @@ fn auditoria_acciones_y_usuarios() {
     assert!(usuarios.contains(&"testacciones".to_string()));
     assert!(usuarios.contains(&"testacciones2".to_string()));
 
-    eliminar_eventos(&state, &[id1, id2]);
+    eliminar_eventos(&state, &[id1, id2, id3]);
 }

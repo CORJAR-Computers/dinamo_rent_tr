@@ -44,6 +44,14 @@ path = "src/bin/verificar_instalacion_limpia.rs"
 required-features = ["dev"]
 
 [[bin]]
+name = "seed_ci"
+path = "src/bin/seed_ci.rs"
+# Siembra una BD mínima (config → pool → migraciones → admin → autos →
+# clientes) para que los tests de integración se ejecuten completos en CI.
+# Solo se construye con `--features dev` para no llegar al bundle de release.
+required-features = ["dev"]
+
+[[bin]]
 name = "updater_e2e"
 path = "src/bin/updater_e2e.rs"
 # Verificación E2E del flujo de auto-actualización (updater) contra un endpoint
