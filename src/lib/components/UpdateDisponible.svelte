@@ -2,39 +2,59 @@
 	import { onMount } from 'svelte';
 	import { check, type Update } from '@tauri-apps/plugin-updater';
 	import { relaunch } from '@tauri-apps/plugin-process';
+	import { toast } from '$lib/stores/toast.svelte';
 	import Modal from './Modal.svelte';
 
-	// Diálogo de actualización: al arrancar la app comprueba en GitHub Releases
-	// (endpoints de tauri.conf.json → plugins.updater) si hay una versión más
-	// nueva y, si existe, pide permiso para descargarla e instalarla.
+	// Diálogo de actualización: comprueba en GitHub Releases (endpoints de
+	// tauri.conf.json → plugins.updater) si hay una versión más nueva y, si
+	// existe, pide permiso para descargarla e instalarla.
 	//
-	// Best-effort: sin red o sin runtime Tauri (tests / vite standalone), el
-	// chequeo se omite en silencio — la app sigue funcionando igual.
+	// Dos disparadores:
+	//   1. Automático al arrancar la app (best-effort: sin red o sin runtime
+	//      Tauri el chequeo se omite en silencio — la app sigue funcionando).
+	//   2. Manual con el botón «Buscar actualización» de la barra superior:
+	//      el layout pasa la prop onReady y el componente le entrega la función
+	//      buscar() en el mount (alternativa tipada a $expose, que no está
+	//      declarado en los tipos de este Svelte).
+	//
 	// Se monta en +layout.svelte a nivel raíz para cubrir también login.
+
+	let { onReady }: { onReady?: (buscar: () => Promise<void>) => void } = $props();
 
 	let update = $state<Update | null>(null);
 	let descargando = $state(false);
 	let progreso = $state<number | null>(null);
 	let error = $state<string | null>(null);
+	let comprobando = $state(false);
 
 	const abrir = $derived(update !== null);
 
-	onMount(() => {
-		let activo = true;
-		// Pequeño retraso: no competir con la validación de sesión del arranque.
-		const timer = setTimeout(async () => {
-			try {
-				const disponible = await check();
-				if (activo && disponible) update = disponible;
-			} catch (e) {
-				// Sin runtime Tauri (tests / vite standalone) o sin conexión.
-				console.warn('No se pudo comprobar actualizaciones:', e);
+	async function ejecutarCheck(conFeedback: boolean): Promise<void> {
+		if (comprobando) return;
+		comprobando = true;
+		try {
+			const disponible = await check();
+			if (disponible) {
+				update = disponible;
+			} else if (conFeedback) {
+				toast.success('Ya tienes la versión más reciente.');
 			}
-		}, 3000);
-		return () => {
-			activo = false;
-			clearTimeout(timer);
-		};
+		} catch (e) {
+			console.warn('No se pudo comprobar actualizaciones:', e);
+			if (conFeedback) {
+				toast.error('No se pudo comprobar actualizaciones: ' + String(e));
+			}
+		} finally {
+			comprobando = false;
+		}
+	}
+
+	onMount(() => {
+		// Entrega la búsqueda manual al layout (botón «Buscar actualización»).
+		onReady?.(() => ejecutarCheck(true));
+		// Pequeño retraso: no competir con la validación de sesión del arranque.
+		const timer = setTimeout(() => void ejecutarCheck(false), 3000);
+		return () => clearTimeout(timer);
 	});
 
 	function masTarde() {

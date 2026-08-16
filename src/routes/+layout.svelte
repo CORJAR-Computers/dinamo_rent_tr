@@ -24,6 +24,9 @@
 	let sidebarOpen = $state(true);
 	let ayudaOpen = $state(false);
 	let paletaOpen = $state(false);
+	// Función «Buscar actualización» entregada por el componente de
+	// actualizaciones (via prop onReady) para el botón de la barra superior.
+	let updateRef: (() => Promise<void>) | null = null;
 
 	// Tema persistido (claro | oscuro | auto). Se lee en la inicialización del
 	// estado (no en onMount) para que el primer $effect aplique el tema correcto
@@ -248,7 +251,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 <ConfirmarCierre />
 <!-- Chequeo de actualizaciones al arrancar (nueva release → pedir instalación).
      A nivel raíz para cubrir también login / cambiar-password. -->
-<UpdateDisponible />
+<UpdateDisponible onReady={(fn) => (updateRef = fn)} />
 <svelte:window onkeydown={onGlobalKeydown} />
 
 <svelte:head>
@@ -384,6 +387,14 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 					<Icon name="search" class="w-4 h-4" />
 					<span class="hidden md:inline text-xs">Buscar</span>
 					<kbd class="hidden md:inline-flex items-center rounded border border-border bg-alt-row/60 px-1.5 py-0.5 text-[10px] font-mono leading-none">Ctrl K</kbd>
+				</button>
+				<button
+					onclick={() => updateRef?.()}
+					class="p-2 rounded-lg text-text-secondary hover:bg-alt-row hover:text-text-primary transition-colors"
+					title="Buscar actualización"
+					aria-label="Buscar actualización"
+				>
+					<Icon name="actualizar" class="w-5 h-5" />
 				</button>
 				<button
 					onclick={abrirAyuda}
