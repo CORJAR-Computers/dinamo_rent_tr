@@ -991,3 +991,33 @@ Tests de integración nuevos (BD dev y BD fresca de CI):
 `renta_creada_desde_reserva_completa_la_reserva` (completa + rechaza reuso) y
 `renta_desde_reserva_cancelada_rechazada` (reserva cancelada no genera renta).
 Validación: cargo test --tests ✅, vitest 242/242 ✅, svelte-check 0/0 ✅, lint ✅.
+### 7.6 — CI en Node 24 y fin de los flakes de los tests SIMIT (2026-08-17)
+
+**CI: actions a runtime Node 24.** GitHub deprecó Node.js 20 en los runners
+(changelog 2025-09-19) y las actions `checkout@v4`, `setup-node@v4` y
+`setup-python@v5` corrían forzadas en Node 24 con una anotación de advertencia
+en cada corrida. Se bumparon en `ci.yml` y `release.yml`:
+
+- `actions/checkout@v4` → `@v5` (runtime node24).
+- `actions/setup-node@v4` → `@v5` (runtime node24); el `node-version: '24'` instalado no cambia.
+- `actions/setup-python@v5` → `@v6` (runtime node24, solo ci.yml); el `python-version: '3.12'` no cambia.
+- `tauri-apps/tauri-action@v0` **se mantiene**: es el uso documentado oficial (sin v1) y solo
+  corre en release.yml por tag.
+
+Verificado en GitHub: el CI del HEAD tras el bump pasó verde (7m8s) y `gh run view` ya no
+muestra el bloque ANNOTATIONS de deprecación.
+
+**Flake de los tests SIMIT con servidor TCP local eliminado.** Los unit tests
+`cookie_jar_compartido_entre_peticiones`, `sembrar_cookies_sitio_siembra_el_jar` (y la race
+latente de `consulta_401_clasifica_como_unauthorized`) fallaban intermitentemente en CI:
+el socket **aceptado** hereda el modo no bloqueante del listener en Windows, así que el
+primer `read()` devolvía `WouldBlock` (os error 10035), el hilo del servidor de test
+paniqueaba con "timeout leyendo el request" y el cliente ureq recibía una conexión
+abortada (os error 10053). Fix en el helper compartido `servidor_http` de `simit.rs`:
+
+- `stream.set_nonblocking(false)` tras el accept → el read bloquea y `SO_RCVTIMEO` (10 s)
+  hace de deadline real.
+- `WouldBlock`/`Interrupted` se **reintentan** (5 ms) hasta el deadline en vez de paniquear;
+  `TimedOut` sigue siendo el único panic legítimo.
+
+Validación: simit 14/14, 5 corridas consecutivas verdes, lib 48/48, y el CI del push en verde.
