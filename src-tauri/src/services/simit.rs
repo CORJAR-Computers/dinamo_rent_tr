@@ -1885,9 +1885,19 @@ mod tests {
                         Err(e) => panic!("servidor de test: accept falló: {e}"),
                     }
                 };
+                // El socket aceptado hereda el modo no bloqueante del listener
+                // en Windows: el primer read() devolvía WouldBlock (os error
+                // 10035) antes de llegar los bytes del request, el hilo del
+                // servidor paniqueaba y el cliente recibía una conexión
+                // abortada (os error 10053) — el flake de CI. Forzamos modo
+                // bloqueante y dejamos que SO_RCVTIMEO haga el deadline.
+                stream
+                    .set_nonblocking(false)
+                    .expect("socket de test en modo bloqueante");
                 stream
                     .set_read_timeout(Some(TIMEOUT_MOCK))
                     .expect("read timeout del socket de test");
+                let inicio_read = std::time::Instant::now();
                 let mut buf = Vec::new();
                 let mut tmp = [0u8; 2048];
                 loop {
@@ -1899,10 +1909,19 @@ mod tests {
                                 break;
                             }
                         }
+                        // Defensivo: en modo bloqueante no debería ocurrir, pero
+                        // si alguna plataforma devuelve WouldBlock/Interrupted se
+                        // reintenta hasta el deadline en vez de paniquear.
                         Err(e)
                             if e.kind() == std::io::ErrorKind::WouldBlock
-                                || e.kind() == std::io::ErrorKind::TimedOut =>
+                                || e.kind() == std::io::ErrorKind::Interrupted =>
                         {
+                            if inicio_read.elapsed() > TIMEOUT_MOCK {
+                                panic!("servidor de test: timeout leyendo el request ({e})");
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
                             panic!("servidor de test: timeout leyendo el request ({e})");
                         }
                         Err(e) => panic!("servidor de test: error leyendo el request: {e}"),
