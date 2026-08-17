@@ -26,11 +26,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # jsdom 30 requiere Node >= 22.4; usamos Node 24 (LTS activo).
       - name: Setup Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
 
@@ -94,7 +94,7 @@ jobs:
       # 3.11+ date.fromisoformat acepta formatos compactos (YYYYMMDD) — el
       # entorno donde aparece el bug del no_doc numérico que cubre el test.
       - name: Setup Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
