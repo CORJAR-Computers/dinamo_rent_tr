@@ -824,6 +824,10 @@ export interface Comparendo {
 	observaciones: string | null;
 	createdAt: string | null;
 	updatedAt: string | null;
+	/** Procedencia: 'SIMIT' (Agente automático) o 'Manual' */
+	origen: string;
+	/** Última vez que el Agente SIMIT confirmó que existe en el portal */
+	ultimoVistoSimit: string | null;
 	responsable: ResponsableComparendo | null;
 }
 
@@ -892,6 +896,8 @@ export interface RegistroSimit {
 	esComparendo: boolean;
 	/** true = se insertó en esta sincronización; false = ya estaba en la BD */
 	nuevo: boolean;
+	/** id en la tabla comparendos (para marcar en la lista cuál es nuevo) */
+	id: number | null;
 }
 
 /** Error de una placa durante la sincronización */

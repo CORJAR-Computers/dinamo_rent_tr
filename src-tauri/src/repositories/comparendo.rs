@@ -49,6 +49,10 @@ pub struct Comparendo {
     pub observaciones: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    /// Procedencia: "SIMIT" (importado/confirmado por el Agente) o "Manual"
+    pub origen: String,
+    /// Última vez que el Agente SIMIT confirmó que existe en el portal
+    pub ultimo_visto_simit: Option<String>,
     /// Quién tenía el vehículo el día de la infracción (cruce con rentas)
     pub responsable: Option<ResponsableComparendo>,
 }
@@ -67,6 +71,9 @@ pub struct ComparendoDatos {
     pub id_cliente: Option<i64>,
     pub estado: String,
     pub observaciones: Option<String>,
+    /// Procedencia: "SIMIT" (Agente automático) o "Manual" (default). El
+    /// Agente la fija al insertar; el frontend nunca la envía (queda default).
+    pub origen: Option<String>,
 }
 
 /// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
@@ -86,13 +93,15 @@ pub const SELECT_COLS_CRUCE: &str = "\
     CAST(c.hora_infraccion AS VARCHAR(13)) AS hora_infraccion, \
     CAST(c.monto AS VARCHAR(12)) AS monto, c.numero_comparendo, c.id_renta, c.id_cliente, c.estado, \
     CAST(c.observaciones AS VARCHAR(2000)) AS observaciones, \
-    CAST(c.created_at AS VARCHAR(30)) AS created_at, CAST(c.updated_at AS VARCHAR(30)) AS updated_at";
+    CAST(c.created_at AS VARCHAR(30)) AS created_at, CAST(c.updated_at AS VARCHAR(30)) AS updated_at, \
+    c.origen, CAST(c.ultimo_visto_simit AS VARCHAR(30)) AS ultimo_visto_simit";
 
 /// SELECT externo del cruce (columnas sin prefijos + campos `resp_*` del
 /// responsable). Mantener alineado con `SELECT_COLS_CRUCE` y `ComparendoRow`.
 pub const SELECT_COLS_CRUCE_OUTER: &str = "\
     id, placa, vehiculo, fecha_infraccion, hora_infraccion, monto, numero_comparendo, \
     id_renta, id_cliente, estado, observaciones, created_at, updated_at, \
+    origen, ultimo_visto_simit, \
     resp_id, resp_nombre, resp_contrato, resp_anio, resp_recogida, resp_retorno, resp_estado";
 
 /// Construye el SELECT de comparendos con el cruce de responsabilidad: para
@@ -139,6 +148,9 @@ pub type ComparendoRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    // ── procedencia (origen / ultimo_visto_simit) ──
+    String,
+    Option<String>,
     // ── cruce de responsabilidad (resp_*) ──
     Option<i64>,
     Option<String>,
@@ -164,14 +176,16 @@ fn from_row(r: ComparendoRow) -> Comparendo {
         observaciones: r.10,
         created_at: r.11,
         updated_at: r.12,
-        responsable: r.13.map(|id_renta| ResponsableComparendo {
+        origen: r.13,
+        ultimo_visto_simit: r.14,
+        responsable: r.15.map(|id_renta| ResponsableComparendo {
             id_renta,
-            nombre_cliente: r.14.unwrap_or_default(),
-            no_contrato: r.15.unwrap_or(0),
-            anio_contrato: r.16.unwrap_or(0),
-            fecha_recogida: r.17.unwrap_or_default(),
-            fecha_retorno: r.18.unwrap_or_default(),
-            estado_renta: r.19.unwrap_or_default(),
+            nombre_cliente: r.16.unwrap_or_default(),
+            no_contrato: r.17.unwrap_or(0),
+            anio_contrato: r.18.unwrap_or(0),
+            fecha_recogida: r.19.unwrap_or_default(),
+            fecha_retorno: r.20.unwrap_or_default(),
+            estado_renta: r.21.unwrap_or_default(),
         }),
     }
 }
@@ -243,14 +257,19 @@ impl ComparendoRepository {
         Ok(row.map(from_row))
     }
 
-    /// Crea un comparendo y devuelve el id nuevo (RETURNING evita races con MAX(id))
+    /// Crea un comparendo y devuelve el id nuevo (RETURNING evita races con MAX(id)).
+    /// `origen` queda como viene ("SIMIT" o "Manual") y `ultimo_visto_simit`
+    /// NULL; el Agente SIMIT lo toca después con `marcar_visto_simit_por_id`.
+    /// (No se usa `CASE WHEN ? = 'SIMIT'` en el INSERT: Firebird infiere el
+    /// parámetro como VARCHAR(5) por la longitud de 'SIMIT' y trunca 'Manual'.)
     pub fn insertar(conn: &mut PooledConnection, d: &ComparendoDatos) -> Result<i64, AppError> {
+        let origen = d.origen.as_deref().unwrap_or("Manual").trim().to_string();
         let (id,): (i64,) = conn
             .execute_returnable(
                 "INSERT INTO comparendos \
                     (placa, fecha_infraccion, hora_infraccion, monto, numero_comparendo, \
-                     id_renta, id_cliente, estado, observaciones) \
-                 VALUES (?, ?, ?, CAST(? AS DECIMAL(12,2)), ?, ?, ?, ?, ?) RETURNING id",
+                     id_renta, id_cliente, estado, observaciones, origen) \
+                 VALUES (?, ?, ?, CAST(? AS DECIMAL(12,2)), ?, ?, ?, ?, ?, ?) RETURNING id",
                 params![
                     d.placa.to_string(),
                     parse_fecha(&d.fecha_infraccion)?,
@@ -261,10 +280,60 @@ impl ComparendoRepository {
                     d.id_cliente,
                     d.estado.to_string(),
                     opt_str(&d.observaciones),
+                    origen,
                 ],
             )
             .map_err(map_fb_error)?;
         Ok(id)
+    }
+
+    /// ¿Existe un comparendo activo que ya represente este registro del SIMIT?
+    /// Deduplica por número oficial y, como respaldo, por placa + fecha + monto.
+    /// Devuelve el id del registro existente (para tocarlo / marcarlo en la UI)
+    /// o `None` si es nuevo.
+    pub fn id_existente(
+        conn: &mut PooledConnection,
+        numero: Option<&str>,
+        placa: &str,
+        fecha: &str,
+        monto: &str,
+    ) -> Result<Option<i64>, AppError> {
+        if let Some(num) = numero.map(str::trim).filter(|n| !n.is_empty()) {
+            let row: Option<(i64,)> = conn.query_first(
+                "SELECT FIRST 1 id FROM comparendos \
+                 WHERE numero_comparendo = ? AND deleted_at IS NULL",
+                (num.to_string(),),
+            )?;
+            if let Some((id,)) = row {
+                return Ok(Some(id));
+            }
+        }
+        if !fecha.is_empty() {
+            let row: Option<(i64,)> = conn.query_first(
+                "SELECT FIRST 1 id FROM comparendos \
+                 WHERE placa = ? AND fecha_infraccion = ? \
+                   AND monto = CAST(? AS DECIMAL(12,2)) AND deleted_at IS NULL",
+                (placa.to_string(), parse_fecha(fecha)?, monto.to_string()),
+            )?;
+            if let Some((id,)) = row {
+                return Ok(Some(id));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Toca el registro existente tras una corrida del Agente SIMIT: confirma
+    /// que sigue en el portal (ultimo_visto_simit) y lo marca como origen SIMIT
+    /// (si era Manual pero el SIMIT lo reporta, converge a SIMIT).
+    pub fn marcar_visto_simit_por_id(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
+        conn.execute(
+            "UPDATE comparendos SET origen = 'SIMIT', \
+             ultimo_visto_simit = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP \
+             WHERE id = ? AND deleted_at IS NULL",
+            (id,),
+        )
+        .map_err(map_fb_error)?;
+        Ok(())
     }
 
     /// Actualiza un comparendo por id

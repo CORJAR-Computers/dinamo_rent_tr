@@ -21,6 +21,8 @@ function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
 		observaciones: 'Exceso de velocidad',
 		createdAt: null,
 		updatedAt: null,
+		origen: 'Manual',
+		ultimoVistoSimit: null,
 		responsable: null,
 		...overrides
 	};
@@ -148,6 +150,66 @@ describe('página de Comparendos', () => {
 		expect(await screen.findByText('Ana Martínez')).toBeInTheDocument();
 		expect(screen.getByText(/2026-042 ·/)).toBeInTheDocument();
 		expect(screen.getByText('Quién lo tenía')).toBeInTheDocument();
+	});
+
+	it('marca el origen SIMIT/Manual y resalta los nuevos de la última sincronización', async () => {
+		tauri.register('listar_comparendos', () => [
+			comparendo({ id: 1, origen: 'SIMIT', ultimoVistoSimit: '2026-08-17 10:30:00' }),
+			comparendo({ id: 2, placa: 'XYZ987', origen: 'Manual', ultimoVistoSimit: null })
+		]);
+		tauri.register('simit_sync_status', () =>
+			infoAgente({
+				ultimoResultado: {
+					sincronizadoEn: '2026-08-17T10:30:00-05:00',
+					placasConsultadas: 2,
+					placasConError: 0,
+					encontrados: 2,
+					insertados: 1,
+					duplicados: 1,
+					totalPendiente: '900000.00',
+					registros: [
+						{
+							numero: 'TEST-250010000000999',
+							placa: 'ABC123',
+							fechaInfraccion: '2026-08-01',
+							horaInfraccion: '14:30',
+							monto: '580000.00',
+							estado: 'Pendiente',
+							organismo: 'Policía de Tránsito',
+							codigoInfraccion: 'C24',
+							descripcion: 'Exceso de velocidad',
+							esComparendo: true,
+							nuevo: true,
+							id: 1
+						}
+					],
+					errores: [],
+					reporteHtml: null,
+					metricas: {
+						tiempoTotalMs: 1200,
+						tiempoPromedioPlacaMs: 600,
+						tiempoCaptchaMs: 400,
+						tiempoConsultaMs: 700,
+						totalReintentos: 0,
+						circuitBreakerState: 'Closed',
+						placasExitosas: 2,
+						placasTimeout: 0,
+						placasErrorRed: 0
+					}
+				}
+			})
+		);
+
+		render(ComparendosPage);
+
+		// Badges de origen: el importado por SIMIT y el manual
+		expect(await screen.findByText('SIMIT')).toBeInTheDocument();
+		expect(screen.getByText('Manual')).toBeInTheDocument();
+		// El comparendo insertado en la última sincronización se resalta en la tabla
+		// (el estado del agente llega async → esperar al badge)
+		expect(await screen.findByText('🆕 Nuevo')).toBeInTheDocument();
+		// El manual (id 2) no lleva el badge de nuevo
+		expect(screen.getAllByText('🆕 Nuevo')).toHaveLength(1);
 	});
 
 	it('muestra en la notificación imprimible quién tenía el vehículo el día de la multa', async () => {

@@ -111,6 +111,8 @@ function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
 		observaciones: 'Exceso de velocidad',
 		createdAt: null,
 		updatedAt: null,
+		origen: 'Manual',
+		ultimoVistoSimit: null,
 		responsable: null,
 		...overrides
 	};

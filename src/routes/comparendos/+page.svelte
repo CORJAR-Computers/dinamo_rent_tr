@@ -431,11 +431,22 @@
 
 	const tablaComparendos = $derived(comparendos as unknown as Record<string, unknown>[]);
 
+	// ids de comparendos insertados en la ÚLTIMA sincronización del Agente SIMIT
+	// (persistidos en el resultado en memoria) → badge 🆕 sobre la fila en la tabla.
+	const idsNuevosUltimaSync = $derived(
+		new Set(
+			(agente?.ultimoResultado?.registros ?? [])
+				.filter((r) => r.nuevo && r.id != null)
+				.map((r) => r.id as number)
+		)
+	);
+
 	const columnas = [
 		{ key: 'id', header: 'No.' },
 		{ key: 'vehiculo', header: 'Vehículo' },
 		{ key: 'fecha', header: 'Infracción' },
 		{ key: 'responsable', header: 'Quién lo tenía' },
+		{ key: 'origen', header: 'Origen' },
 		{ key: 'monto', header: 'Monto' },
 		{ key: 'estado', header: 'Estado' },
 		{ key: 'observaciones', header: 'Observaciones' },
@@ -720,6 +731,23 @@
 					{:else}
 						<p class="text-sm text-text-secondary">—</p>
 					{/if}
+				{:else if col.key === 'origen'}
+					<div class="flex items-center gap-1.5">
+						<span
+							class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap {c.origen === 'SIMIT' ? 'bg-primary/10 text-primary border-primary/25' : 'bg-black/5 text-text-secondary border-border'}"
+							title={c.origen === 'SIMIT' && c.ultimoVistoSimit ? `Confirmado por SIMIT el ${formatDate(c.ultimoVistoSimit.slice(0, 10))}` : c.origen === 'SIMIT' ? 'Importado por el Agente SIMIT' : 'Registrado manualmente'}
+						>
+							{c.origen === 'SIMIT' ? 'SIMIT' : 'Manual'}
+						</span>
+						{#if idsNuevosUltimaSync.has(c.id)}
+							<span
+								class="inline-flex items-center rounded-full border border-exito/25 bg-exito/10 px-1.5 py-0.5 text-[11px] font-bold text-exito whitespace-nowrap"
+								title="Nuevo en la última sincronización con el SIMIT"
+							>
+								🆕 Nuevo
+							</span>
+						{/if}
+					</div>
 				{:else if col.key === 'monto'}
 					<p class="font-bold text-text-primary tabular-nums text-right whitespace-nowrap">{formatCOP(c.monto)}</p>
 				{:else if col.key === 'estado'}

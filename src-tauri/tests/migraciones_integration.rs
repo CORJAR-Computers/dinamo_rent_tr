@@ -1158,6 +1158,7 @@ fn migracion_0016_backfill_atribuye_comparendos() {
             id_cliente: None,
             estado: "Pendiente".into(),
             observaciones: None,
+            origen: None,
         },
     )
     .expect("insertar comparendo sin atribución");

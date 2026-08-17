@@ -54,6 +54,7 @@ fn datos_comparendo(placa: &str, monto: &str) -> ComparendoDatos {
         id_cliente: None,
         estado: "Pendiente".into(),
         observaciones: Some("Exceso de velocidad".into()),
+        origen: None,
     }
 }
 
@@ -289,6 +290,75 @@ fn comparendo_numero_oficial_y_dedup() {
             .expect("num after delete"),
         "soft-delete excluye el número (dedup solo sobre activos)"
     );
+}
+
+#[test]
+#[serial]
+fn comparendo_origen_simit_y_ultimo_visto() {
+    // Procedencia persistente («nuevos vs ya registrados»): el Agente inserta
+    // con origen SIMIT (deja ultimo_visto_simit = ahora); un registro manual
+    // queda 'Manual' con ultimo_visto NULL; marcar_visto_simit_por_id converge
+    // un Manual a SIMIT y toca la confirmación; id_existente deduplica y
+    // devuelve el id del registro existente.
+    use dinamo_rent_lib::repositories::comparendo::ComparendoRepository;
+
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
+    };
+
+    // 1) Manual (default) → origen 'Manual', ultimo_visto_simit NULL
+    let manual = ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "111000"))
+        .expect("crear manual");
+    assert_eq!(manual.origen, "Manual", "registro manual sin origen SIMIT");
+    assert!(
+        manual.ultimo_visto_simit.is_none(),
+        "manual sin confirmación SIMIT"
+    );
+
+    // 2) El Agente inserta con origen SIMIT y luego toca la confirmación
+    //    (misma secuencia que sincronizar: insertar + marcar_visto_simit_por_id)
+    let mut datos = datos_comparendo(&placa, "222000");
+    datos.numero_comparendo = Some("TEST-ORIGEN-SIMIT-001".into());
+    datos.origen = Some("SIMIT".into());
+    let id_simit = ComparendoRepository::insertar(&mut conn, &datos).expect("insertar SIMIT");
+    ComparendoRepository::marcar_visto_simit_por_id(&mut conn, id_simit).expect("marcar visto");
+    let simit = ComparendoService::obtener(&mut conn, id_simit).expect("obtener SIMIT");
+    assert_eq!(simit.origen, "SIMIT", "el Agente marca la procedencia");
+    assert!(
+        simit.ultimo_visto_simit.is_some(),
+        "la confirmación queda registrada"
+    );
+
+    // 3) Dedup por número → devuelve el id del registro existente
+    let id_dup = ComparendoRepository::id_existente(
+        &mut conn,
+        Some("TEST-ORIGEN-SIMIT-001"),
+        &placa,
+        &datos.fecha_infraccion,
+        "222000.00",
+    )
+    .expect("id_existente");
+    assert_eq!(id_dup, Some(id_simit), "mismo número → mismo id");
+
+    // 4) Un comparendo manual que el SIMIT reporta converge a SIMIT al tocarlo
+    ComparendoRepository::marcar_visto_simit_por_id(&mut conn, manual.id).expect("marcar visto");
+    let convergido = ComparendoService::obtener(&mut conn, manual.id).expect("obtener convergido");
+    assert_eq!(convergido.origen, "SIMIT", "confirmado por SIMIT ya no es manual");
+    assert!(
+        convergido.ultimo_visto_simit.is_some(),
+        "toca la confirmación al re-verlo"
+    );
+
+    // Limpieza
+    ComparendoService::eliminar(&mut conn, id_simit).expect("eliminar simit");
+    ComparendoService::eliminar(&mut conn, manual.id).expect("eliminar manual");
 }
 
 /// Renta temporal con rango de fechas dado (para el cruce con comparendos)

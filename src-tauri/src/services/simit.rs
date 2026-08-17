@@ -200,6 +200,9 @@ pub struct RegistroSimit {
     pub es_comparendo: bool,
     /// true = se insertó en esta sincronización; false = ya estaba en la BD
     pub nuevo: bool,
+    /// id en la tabla `comparendos` (Some si existe/insertó en esta corrida);
+    /// permite al frontend marcar en la tabla cuáles son nuevos vs existentes
+    pub id: Option<i64>,
 }
 
 /// Error de una placa individual (no aborta la sincronización)
@@ -802,7 +805,7 @@ pub fn sincronizar<R: tauri::Runtime>(
                 for mut reg in registros {
                     resultado.encontrados += 1;
                     // Fecha inválida → se omite el registro (no aborta la placa).
-                    // Va ANTES de ya_existe: existe_duplicado llama parse_fecha
+                    // Va ANTES del dedup: id_existente llama parse_fecha
                     // y una fecha malformada (p.ej. sin número oficial) abortaría
                     // toda la sincronización en vez de omitir el registro.
                     if NaiveDate::parse_from_str(&reg.fecha_infraccion, "%Y-%m-%d").is_err() {
@@ -816,10 +819,22 @@ pub fn sincronizar<R: tauri::Runtime>(
                     }
                     // ¿Ya existe? (número oficial o placa+fecha+monto). Si el
                     // SIMIT reporta pagado un comparendo ya registrado, se
-                    // sincroniza el estado (la BD converge con el SIMIT).
-                    if ya_existe(conn, &reg)? {
+                    // sincroniza el estado (la BD converge con el SIMIT). En
+                    // ambos casos se toca `ultimo_visto_simit` (confirmación)
+                    // y se conserva el id para marcar el registro en la UI.
+                    let numero =
+                        reg.numero.as_deref().map(str::trim).filter(|n| !n.is_empty());
+                    if let Some(id) = ComparendoRepository::id_existente(
+                        conn,
+                        numero,
+                        &reg.placa,
+                        &reg.fecha_infraccion,
+                        &reg.monto,
+                    )? {
+                        reg.id = Some(id);
+                        ComparendoRepository::marcar_visto_simit_por_id(conn, id)?;
                         if reg.estado == "Pagado" {
-                            if let Some(num) = reg.numero.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+                            if let Some(num) = numero {
                                 ComparendoRepository::marcar_pagado_por_numero(conn, num)?;
                             }
                         }
@@ -837,6 +852,8 @@ pub fn sincronizar<R: tauri::Runtime>(
                         id_cliente: None,
                         estado: reg.estado.clone(),
                         observaciones: Some(observaciones_para(&reg)),
+                        // Procedencia persistente: este comparendo vino del SIMIT.
+                        origen: Some("SIMIT".into()),
                     };
                     // Atribución persistente: se resuelve qué renta cubría el
                     // vehículo el día de la infracción y se guarda el vínculo
@@ -848,7 +865,11 @@ pub fn sincronizar<R: tauri::Runtime>(
                         datos.id_renta = Some(id_renta);
                         datos.id_cliente = id_cliente;
                     }
-                    ComparendoRepository::insertar(conn, &datos)?;
+                    let id = ComparendoRepository::insertar(conn, &datos)?;
+                    // El Agente acaba de confirmar este comparendo en el portal:
+                    // se toca ultimo_visto_simit (y origen converge a SIMIT).
+                    ComparendoRepository::marcar_visto_simit_por_id(conn, id)?;
+                    reg.id = Some(id);
                     resultado.insertados += 1;
                     reg.nuevo = true;
                     resultado.registros.push(reg);
@@ -947,22 +968,6 @@ pub fn sincronizar<R: tauri::Runtime>(
     }
 
     Ok(resultado)
-}
-
-/// ¿El registro ya existe en la BD? Deduplica por número oficial y, como
-/// respaldo, por placa + fecha + monto.
-fn ya_existe(conn: &mut PooledConnection, reg: &RegistroSimit) -> Result<bool, AppError> {
-    if let Some(num) = reg.numero.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
-        if ComparendoRepository::existe_por_numero(conn, num)? {
-            return Ok(true);
-        }
-    }
-    if !reg.fecha_infraccion.is_empty()
-        && ComparendoRepository::existe_duplicado(conn, &reg.placa, &reg.fecha_infraccion, &reg.monto)?
-    {
-        return Ok(true);
-    }
-    Ok(false)
 }
 
 /// Observaciones legibles para el registro insertado (trazabilidad SIMIT)
@@ -1453,6 +1458,7 @@ fn mapear_registros(dto: &RespuestaConsulta, placa: &str) -> Vec<RegistroSimit> 
                     .unwrap_or_default(),
                 es_comparendo: m.comparendo.unwrap_or(false),
                 nuevo: false,
+                id: None,
             })
         })
         .collect()
@@ -1724,6 +1730,7 @@ mod tests {
             descripcion: "Exceso de velocidad".into(),
             es_comparendo: true,
             nuevo: false,
+            id: None,
         };
         let obs = observaciones_para(&reg);
         assert!(obs.contains("Comparendo"));
