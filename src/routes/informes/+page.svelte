@@ -180,6 +180,11 @@
 				<p class="text-xs text-text-secondary mt-1 tabular-nums">
 					Pagos de rentas {formatCOP(informe.ingresosPagos)} · Abonos {formatCOP(informe.ingresosReservas)}
 				</p>
+				{#if parseFloat(informe.totalComisiones) > 0}
+					<p class="text-xs text-text-secondary mt-1 tabular-nums">
+						Comisiones −{formatCOP(informe.totalComisiones)} · Ingresos netos {formatCOP(informe.ingresosNetos)}
+					</p>
+				{/if}
 			</div>
 			<div class="card p-5 border-l-4 border-l-peligro">
 				<p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Egresos del mes</p>
@@ -192,6 +197,11 @@
 				<p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Balance</p>
 				<p class="text-3xl font-black {balancePositivo ? 'text-primary' : 'text-peligro'} tabular-nums mt-1">{formatCOP(informe.balance)}</p>
 				<p class="text-xs text-text-secondary mt-1">{rangoTexto}</p>
+				{#if parseFloat(informe.totalComisiones) > 0}
+					<p class="text-xs text-text-secondary mt-1 tabular-nums">
+						Balance neto (tras comisiones): {formatCOP(informe.balanceNeto)}
+					</p>
+				{/if}
 			</div>
 		</div>
 
@@ -234,7 +244,9 @@
 									<th class="py-2 pr-3 font-semibold text-text-secondary">Cliente</th>
 									<th class="py-2 pr-3 font-semibold text-text-secondary">Fecha</th>
 									<th class="py-2 pr-3 font-semibold text-text-secondary">Estado</th>
-									<th class="py-2 font-semibold text-text-secondary text-right">Total</th>
+									<th class="py-2 pr-3 font-semibold text-text-secondary text-right">Total</th>
+									<th class="py-2 pr-3 font-semibold text-text-secondary text-right">Comisión</th>
+									<th class="py-2 font-semibold text-text-secondary text-right">Valor neto</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-border/60">
@@ -252,7 +264,11 @@
 												{r.estado}
 											</span>
 										</td>
-										<td class="py-2 text-right font-bold text-text-primary tabular-nums whitespace-nowrap">{formatCOP(r.total)}</td>
+										<td class="py-2 pr-3 text-right font-bold text-text-primary tabular-nums whitespace-nowrap">{formatCOP(r.total)}</td>
+										<td class="py-2 pr-3 text-right tabular-nums whitespace-nowrap {parseFloat(r.comision) > 0 ? 'text-peligro' : 'text-text-secondary/50'}">
+											{parseFloat(r.comision) > 0 ? `-${formatCOP(r.comision)}` : '—'}
+										</td>
+										<td class="py-2 text-right font-semibold text-text-primary tabular-nums whitespace-nowrap">{formatCOP(r.valorNeto)}</td>
 									</tr>
 								{/each}
 							</tbody>

@@ -1022,6 +1022,10 @@ export interface RentaInforme {
 	placa: string;
 	nombreCliente: string;
 	total: string;
+	/** Comisión de la renta (neto = total − comisión) */
+	comision: string;
+	/** Valor neto = total − comisión */
+	valorNeto: string;
 	estado: string;
 	fechaRecogida: string;
 }
@@ -1047,6 +1051,12 @@ export interface InformeMensual {
 	egresosComparendos: string;
 	totalEgresos: string;
 	balance: string;
+	/** Comisiones de las rentas del rango (costo de intermediarios) */
+	totalComisiones: string;
+	/** Ingresos netos = totalIngresos − totalComisiones */
+	ingresosNetos: string;
+	/** Balance neto = balance − totalComisiones */
+	balanceNeto: string;
 	gastosPorCategoria: [string, string][];
 	rentas: RentaInforme[];
 	utilidadPorVehiculo: UtilidadVehiculo[];

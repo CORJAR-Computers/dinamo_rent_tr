@@ -17,6 +17,9 @@ function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 		egresosComparendos: '100000.00',
 		totalEgresos: '700000.00',
 		balance: '800000.00',
+		totalComisiones: '50000.00',
+		ingresosNetos: '1450000.00',
+		balanceNeto: '750000.00',
 		gastosPorCategoria: [
 			['Combustible', '250000.00'],
 			['Lavado', '150000.00']
@@ -27,6 +30,8 @@ function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 				placa: 'ABC123',
 				nombreCliente: 'Cliente Prueba',
 				total: '535500.00',
+				comision: '50000.00',
+				valorNeto: '485500.00',
 				estado: 'Cerrada',
 				fechaRecogida: '2026-08-01'
 			}
@@ -88,6 +93,19 @@ describe('filasInformeExcel', () => {
 		expect(texto).toContain('ABC123');
 		expect(texto).toContain('Cerrada');
 		expect(texto).toContain('Toyota Corolla');
+	});
+
+	it('incluye comisiones, ingresos netos y balance neto', () => {
+		const filas = filasInformeExcel(informe(), 'periodo');
+		const texto = filas.map((f) => f.map(valor).join('|')).join('\n');
+
+		expect(texto).toContain('Comisiones (intermediarios)');
+		expect(texto).toContain('Ingresos netos (tras comisiones)');
+		expect(texto).toContain('BALANCE NETO (tras comisiones)');
+		expect(texto).toContain('Comisión');
+		expect(texto).toContain('Valor neto');
+		expect(texto).toContain('-50000');
+		expect(texto).toContain('485500');
 	});
 
 	it('no rompe con secciones vacías', () => {

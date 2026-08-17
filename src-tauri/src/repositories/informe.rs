@@ -76,10 +76,11 @@ impl InformeRepository {
     }
 
     /// Rentas con recogida en el rango (detalle de ingresos del período)
-    pub fn rentas_del_mes(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(i64, String, String, String, String, String)>, AppError> {
-        let rows: Vec<(i64, String, String, String, String, String)> = conn.query(
+    pub fn rentas_del_mes(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(i64, String, String, String, String, String, String, String)>, AppError> {
+        let rows: Vec<(i64, String, String, String, String, String, String, String)> = conn.query(
             "SELECT r.id, COALESCE(r.placa, ''), r.nombre_cliente, \
                     CAST(r.total AS VARCHAR(12)), r.estado, \
+                    CAST(r.comision AS VARCHAR(12)), CAST(r.valor_neto AS VARCHAR(12)), \
                     CAST(r.fecha_recogida AS VARCHAR(10)) \
              FROM rentas r \
              WHERE r.fecha_recogida >= ? AND r.fecha_recogida <= ? \
@@ -88,6 +89,17 @@ impl InformeRepository {
             (inicio.to_string(), fin.to_string()),
         )?;
         Ok(rows)
+    }
+
+    /// Suma de comisiones de las rentas con recogida en el rango (costo de
+    /// intermediarios/agencias; neto = total − comisión)
+    pub fn comisiones(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+        let row: Option<(Option<String>,)> = conn.query_first(
+            "SELECT CAST(COALESCE(SUM(comision), 0) AS VARCHAR(12)) FROM rentas \
+             WHERE fecha_recogida >= ? AND fecha_recogida <= ? AND deleted_at IS NULL",
+            (inicio.to_string(), fin.to_string()),
+        )?;
+        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
     }
 
     // ── Utilidad por vehículo ────────────────────────────────────────────────
@@ -114,6 +126,19 @@ impl InformeRepository {
              WHERE estado <> 'Cancelada' AND placa_asignada IS NOT NULL \
                AND fecha_recogida >= ? AND fecha_recogida <= ? \
              GROUP BY placa_asignada",
+            (inicio.to_string(), fin.to_string()),
+        )?;
+        Ok(rows)
+    }
+
+    /// Comisiones por placa (costo de intermediarios en la utilidad del vehículo)
+    pub fn comisiones_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+        let rows: Vec<(String, String)> = conn.query(
+            "SELECT placa, CAST(SUM(comision) AS VARCHAR(12)) FROM rentas \
+             WHERE placa IS NOT NULL AND comision > 0 \
+               AND fecha_recogida >= ? AND fecha_recogida <= ? \
+               AND deleted_at IS NULL \
+             GROUP BY placa",
             (inicio.to_string(), fin.to_string()),
         )?;
         Ok(rows)

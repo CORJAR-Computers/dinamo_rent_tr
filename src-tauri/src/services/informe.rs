@@ -22,6 +22,10 @@ pub struct RentaInforme {
     pub placa: String,
     pub nombre_cliente: String,
     pub total: String,
+    /// Comisión de la renta (neto = total − comisión)
+    pub comision: String,
+    /// Valor neto = total − comisión (información financiera)
+    pub valor_neto: String,
     pub estado: String,
     pub fecha_recogida: String,
 }
@@ -45,6 +49,12 @@ pub struct InformeMensual {
     pub egresos_comparendos: String,
     pub total_egresos: String,
     pub balance: String,
+    /// Comisiones de las rentas del rango (costo de intermediarios)
+    pub total_comisiones: String,
+    /// Ingresos netos = total_ingresos − total_comisiones
+    pub ingresos_netos: String,
+    /// Balance neto = balance − total_comisiones
+    pub balance_neto: String,
     /// Desglose de gastos por categoría
     pub gastos_por_categoria: Vec<(String, String)>,
     /// Rentas con recogida en el rango
@@ -78,17 +88,28 @@ impl InformeService {
         let total_ingresos = sum(&[&ingresos_pagos, &ingresos_reservas]);
         let total_egresos = sum(&[&egresos_gastos, &egresos_mantenimiento, &egresos_comparendos]);
         let balance = (dec(&total_ingresos) - dec(&total_egresos)).round_dp(2);
+        // Comisiones de las rentas del rango (costo de intermediarios): los
+        // netos reflejan lo que la empresa realmente se queda.
+        let total_comisiones = InformeRepository::comisiones(conn, fecha_inicio, fecha_fin)?;
+        let ingresos_netos = (dec(&total_ingresos) - dec(&total_comisiones)).round_dp(2);
+        let balance_neto = (balance - dec(&total_comisiones)).round_dp(2);
 
         let rentas = InformeRepository::rentas_del_mes(conn, fecha_inicio, fecha_fin)?
             .into_iter()
-            .map(|(id, placa, nombre_cliente, total, estado, fecha_recogida)| RentaInforme {
-                id,
-                placa,
-                nombre_cliente,
-                total,
-                estado,
-                fecha_recogida,
-            })
+            .map(
+                |(id, placa, nombre_cliente, total, estado, comision, valor_neto, fecha_recogida)| {
+                    RentaInforme {
+                        id,
+                        placa,
+                        nombre_cliente,
+                        total,
+                        comision,
+                        valor_neto,
+                        estado,
+                        fecha_recogida,
+                    }
+                },
+            )
             .collect();
 
         Ok(InformeMensual {
@@ -102,6 +123,9 @@ impl InformeService {
             egresos_comparendos,
             total_egresos: total_egresos.clone(),
             balance: balance.to_string(),
+            total_comisiones,
+            ingresos_netos: ingresos_netos.to_string(),
+            balance_neto: balance_neto.to_string(),
             gastos_por_categoria: InformeRepository::gastos_por_categoria(conn, fecha_inicio, fecha_fin)?,
             rentas,
             utilidad_por_vehiculo: utilidad_por_vehiculo(conn, fecha_inicio, fecha_fin)?,
@@ -128,6 +152,9 @@ fn utilidad_por_vehiculo(conn: &mut PooledConnection, inicio: &str, fin: &str) -
         acumular(placa, &total, true);
     }
     for (placa, total) in InformeRepository::gastos_por_placa(conn, inicio, fin)? {
+        acumular(placa, &total, false);
+    }
+    for (placa, total) in InformeRepository::comisiones_por_placa(conn, inicio, fin)? {
         acumular(placa, &total, false);
     }
     for (placa, total) in InformeRepository::mantenimiento_por_placa(conn, inicio, fin)? {

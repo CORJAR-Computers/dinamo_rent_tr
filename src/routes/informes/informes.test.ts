@@ -39,6 +39,9 @@ function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 		egresosComparendos: '100000.00',
 		totalEgresos: '700000.00',
 		balance: '800000.00',
+		totalComisiones: '50000.00',
+		ingresosNetos: '1450000.00',
+		balanceNeto: '750000.00',
 		gastosPorCategoria: [
 			['Combustible', '250000.00'],
 			['Lavado', '150000.00']
@@ -49,6 +52,8 @@ function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 				placa: 'ABC123',
 				nombreCliente: 'Cliente Prueba',
 				total: '535500.00',
+				comision: '50000.00',
+				valorNeto: '485500.00',
 				estado: 'Cerrada',
 				fechaRecogida: '2026-08-01'
 			}
@@ -106,6 +111,21 @@ describe('página de Informes', () => {
 		// Rentas del mes
 		expect(screen.getByText('Rentas del mes (1)')).toBeInTheDocument();
 		expect(screen.getByText('Cliente Prueba')).toBeInTheDocument();
+	});
+
+	it('muestra comisiones, ingresos netos y balance neto cuando hay comisiones', async () => {
+		tauri.register('informe_mensual', () => informe());
+
+		render(InformesPage);
+
+		expect(await screen.findByText('Ingresos del mes')).toBeInTheDocument();
+		expect(screen.getByText(/Comisiones/)).toBeInTheDocument();
+		expect(screen.getByText(/Ingresos netos/)).toBeInTheDocument();
+		expect(screen.getByText(/Balance neto \(tras comisiones\)/)).toBeInTheDocument();
+		// Columnas nuevas en la tabla de rentas del mes
+		expect(screen.getByText('Comisión')).toBeInTheDocument();
+		expect(screen.getByText('Valor neto')).toBeInTheDocument();
+		expect(screen.getAllByText((c) => c.includes('485.500')).length).toBeGreaterThan(0);
 	});
 
 	it('muestra la utilidad por vehículo con rentables y en pérdida', async () => {

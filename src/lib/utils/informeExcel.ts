@@ -90,6 +90,14 @@ export function filasInformeExcel(informe: InformeMensual, periodo: string): Fil
 		{ v: parseFloat(informe.totalIngresos) || 0, estilo: { bold: true, monto: true } }
 	]);
 	filas.push([
+		'Comisiones (intermediarios)',
+		{ v: -(parseFloat(informe.totalComisiones) || 0), estilo: { monto: true } }
+	]);
+	filas.push([
+		{ v: 'Ingresos netos (tras comisiones)', estilo: { bold: true } },
+		{ v: parseFloat(informe.ingresosNetos) || 0, estilo: { bold: true, monto: true } }
+	]);
+	filas.push([
 		'Egresos — gastos',
 		{ v: parseFloat(informe.egresosGastos) || 0, estilo: { monto: true } }
 	]);
@@ -116,6 +124,11 @@ export function filasInformeExcel(informe: InformeMensual, periodo: string): Fil
 			estilo: { bold: true, fontSize: 12, monto: true, color: balance >= 0 ? '1B5E20' : 'B71C1C' }
 		}
 	]);
+	const balanceNeto = parseFloat(informe.balanceNeto) || 0;
+	filas.push([
+		{ v: 'BALANCE NETO (tras comisiones)', estilo: { bold: true } },
+		{ v: balanceNeto, estilo: { bold: true, monto: true } }
+	]);
 	filas.push([{ v: ' ' }]);
 
 	// Gastos por categoría
@@ -139,7 +152,9 @@ export function filasInformeExcel(informe: InformeMensual, periodo: string): Fil
 		{ v: 'Cliente', estilo: { bold: true } },
 		{ v: 'Fecha recogida', estilo: { bold: true } },
 		{ v: 'Estado', estilo: { bold: true } },
-		{ v: 'Total', estilo: { bold: true } }
+		{ v: 'Total', estilo: { bold: true } },
+		{ v: 'Comisión', estilo: { bold: true } },
+		{ v: 'Valor neto', estilo: { bold: true } }
 	]);
 	for (const r of informe.rentas) {
 		filas.push([
@@ -148,7 +163,9 @@ export function filasInformeExcel(informe: InformeMensual, periodo: string): Fil
 			r.nombreCliente,
 			r.fechaRecogida,
 			r.estado,
-			{ v: parseFloat(r.total) || 0, estilo: { monto: true } }
+			{ v: parseFloat(r.total) || 0, estilo: { monto: true } },
+			{ v: -(parseFloat(r.comision) || 0), estilo: { monto: true } },
+			{ v: parseFloat(r.valorNeto) || 0, estilo: { monto: true } }
 		]);
 	}
 	filas.push([{ v: ' ' }]);
