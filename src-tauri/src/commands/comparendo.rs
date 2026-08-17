@@ -10,7 +10,8 @@ use super::{conn, require_eliminacion, require_session};
 
 type Cmd<T> = Result<T, ErrorPayload>;
 
-/// Lista comparendos con filtros opcionales (búsqueda, placa o estado)
+/// Lista comparendos con filtros opcionales (búsqueda, placa, estado o
+/// «no confirmados por SIMIT»)
 #[tauri::command]
 pub fn listar_comparendos(
     state: State<'_, AppState>,
@@ -18,11 +19,18 @@ pub fn listar_comparendos(
     busqueda: Option<String>,
     placa: Option<String>,
     estado: Option<String>,
+    no_confirmados: Option<bool>,
 ) -> Cmd<Vec<Comparendo>> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    ComparendoService::listar(&mut c, busqueda.as_deref(), placa.as_deref(), estado.as_deref())
-        .map_err(|e| e.to_payload())
+    ComparendoService::listar(
+        &mut c,
+        busqueda.as_deref(),
+        placa.as_deref(),
+        estado.as_deref(),
+        no_confirmados.unwrap_or(false),
+    )
+    .map_err(|e| e.to_payload())
 }
 
 /// Obtiene un comparendo por id

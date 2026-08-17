@@ -101,7 +101,8 @@ fn comparendo_crud_y_marcar_pagado() {
     assert_eq!(otra.estado, "Pagado");
 
     // Historial por placa
-    let historial = ComparendoService::listar(&mut conn, None, Some(&placa), None).expect("historial");
+    let historial =
+        ComparendoService::listar(&mut conn, None, Some(&placa), None, false).expect("historial");
     assert!(historial.iter().any(|c| c.id == id));
 
     // Eliminar
@@ -361,6 +362,90 @@ fn comparendo_origen_simit_y_ultimo_visto() {
     ComparendoService::eliminar(&mut conn, manual.id).expect("eliminar manual");
 }
 
+#[test]
+#[serial]
+fn comparendo_no_confirmados_simit() {
+    // Filtro «el SIMIT dejó de confirmar»: entran los de origen SIMIT con
+    // ultimo_visto_simit nulo o anterior al corte; salen los recién
+    // confirmados y los manuales (el SIMIT nunca los confirma, es lo esperado).
+    use dinamo_rent_lib::repositories::comparendo::ComparendoRepository;
+    use dinamo_rent_lib::services::comparendo::DIAS_SIN_CONFIRMAR_SIMIT;
+    use rsfbclient::Execute;
+
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev \
+             (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
+    };
+
+    // a) SIMIT sin confirmar (nunca visto) → ENTRA
+    let mut a = datos_comparendo(&placa, "331000");
+    a.numero_comparendo = Some("TEST-NO-CONF-1".into());
+    a.origen = Some("SIMIT".into());
+    let id_sin_confirmar = ComparendoRepository::insertar(&mut conn, &a).expect("insertar a");
+
+    // b) SIMIT confirmado hace mucho (10 días) → ENTRA
+    let mut b = datos_comparendo(&placa, "332000");
+    b.numero_comparendo = Some("TEST-NO-CONF-2".into());
+    b.origen = Some("SIMIT".into());
+    let id_viejo = ComparendoRepository::insertar(&mut conn, &b).expect("insertar b");
+    conn.execute(
+        "UPDATE comparendos SET ultimo_visto_simit = CURRENT_TIMESTAMP - 10 \
+         WHERE id = ?",
+        (id_viejo,),
+    )
+    .expect("envejecer confirmación");
+
+    // c) SIMIT recién confirmado (ahora) → NO entra
+    let mut c = datos_comparendo(&placa, "333000");
+    c.numero_comparendo = Some("TEST-NO-CONF-3".into());
+    c.origen = Some("SIMIT".into());
+    let id_reciente = ComparendoRepository::insertar(&mut conn, &c).expect("insertar c");
+    ComparendoRepository::marcar_visto_simit_por_id(&mut conn, id_reciente)
+        .expect("confirmar reciente");
+
+    // d) Manual (nunca lo confirma el SIMIT) → NO entra
+    let manual =
+        ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "334000"))
+            .expect("crear manual");
+
+    let ids: Vec<i64> = ComparendoService::listar(&mut conn, None, None, None, true)
+        .expect("listar no confirmados")
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+
+    assert!(
+        ids.contains(&id_sin_confirmar),
+        "SIMIT nunca visto → entra (ids: {ids:?})"
+    );
+    assert!(ids.contains(&id_viejo), "confirmado hace {DIAS_SIN_CONFIRMAR_SIMIT}+ días → entra");
+    assert!(
+        !ids.contains(&id_reciente),
+        "recién confirmado → no entra (ids: {ids:?})"
+    );
+    assert!(!ids.contains(&manual.id), "manual → nunca entra");
+
+    // Sin el filtro vuelve todo
+    let todos: Vec<i64> = ComparendoService::listar(&mut conn, None, None, None, false)
+        .expect("listar todos")
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+    assert!(todos.contains(&id_reciente), "sin filtro incluye el reciente");
+
+    // Limpieza
+    ComparendoService::eliminar(&mut conn, id_sin_confirmar).expect("limpiar a");
+    ComparendoService::eliminar(&mut conn, id_viejo).expect("limpiar b");
+    ComparendoService::eliminar(&mut conn, id_reciente).expect("limpiar c");
+    ComparendoService::eliminar(&mut conn, manual.id).expect("limpiar manual");
+}
+
 /// Renta temporal con rango de fechas dado (para el cruce con comparendos)
 fn datos_renta_cruce(placa: &str, recogida: &str, retorno: &str) -> RentaDatos {
     RentaDatos {
@@ -456,7 +541,8 @@ fn comparendo_cruce_responsable_renta() {
         "fuera del rango → sin renta atribuida"
     );
 
-    let lista = ComparendoService::listar(&mut conn, None, Some(&placa), None).expect("listar");
+    let lista =
+        ComparendoService::listar(&mut conn, None, Some(&placa), None, false).expect("listar");
 
     let dentro = lista
         .iter()

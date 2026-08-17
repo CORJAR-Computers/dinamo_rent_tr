@@ -250,6 +250,25 @@ impl ComparendoRepository {
         Ok(rows.into_iter().map(from_row).collect())
     }
 
+    /// Comparendos de origen SIMIT que el SIMIT dejó de confirmar: su última
+    /// confirmación (`ultimo_visto_simit`) es anterior al corte dado (o nunca
+    /// se confirmó con el mecanismo nuevo). Son candidatos a estar pagados o
+    /// eliminados en el SIMIT sin que la BD lo sepa. Los manuales se excluyen
+    /// (nunca los confirma el SIMIT, es lo esperado).
+    pub fn obtener_no_confirmados_simit(
+        conn: &mut PooledConnection,
+        corte: &str,
+    ) -> Result<Vec<Comparendo>, AppError> {
+        let sql = sql_con_responsable(
+            "AND c.origen = 'SIMIT' \
+             AND (c.ultimo_visto_simit IS NULL \
+                  OR CAST(c.ultimo_visto_simit AS DATE) < ?)",
+            "ORDER BY c2.fecha_infraccion DESC, c2.id DESC",
+        );
+        let rows: Vec<ComparendoRow> = conn.query(&sql, (parse_fecha(corte)?,))?;
+        Ok(rows.into_iter().map(from_row).collect())
+    }
+
     /// Obtiene un comparendo por id (con el responsable del día)
     pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Comparendo>, AppError> {
         let sql = sql_con_responsable("AND c.id = ?", "");

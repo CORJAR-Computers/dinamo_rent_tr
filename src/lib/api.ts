@@ -859,12 +859,13 @@ export interface TotalesComparendos {
 }
 
 export const comparendoApi = {
-	listar: (sessionId: string, busqueda?: string, placa?: string, estado?: string) =>
+	listar: (sessionId: string, busqueda?: string, placa?: string, estado?: string, noConfirmados?: boolean) =>
 		invokeCmd<Comparendo[]>('listar_comparendos', {
 			sessionId,
 			busqueda: busqueda || null,
 			placa: placa || null,
-			estado: estado || null
+			estado: estado || null,
+			noConfirmados: noConfirmados || null
 		}),
 	obtener: (sessionId: string, id: number) =>
 		invokeCmd<Comparendo>('obtener_comparendo', { sessionId, id }),

@@ -62,6 +62,10 @@
 	let busqueda = $state('');
 	let estadoFiltro = $state('');
 	let placaFiltro = $state('');
+	// Solo comparendos de origen SIMIT que el SIMIT dejó de confirmar
+	// (ultimo_visto_simit anterior a 3 días o nunca confirmado): candidatos a
+	// pagados/eliminados en el portal sin que la BD lo sepa.
+	let noConfirmados = $state(false);
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Modal crear/editar
@@ -208,7 +212,8 @@
 				sid(),
 				busqueda.trim() || undefined,
 				placaFiltro || undefined,
-				estadoFiltro || undefined
+				estadoFiltro || undefined,
+				noConfirmados || undefined
 			);
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudieron cargar los comparendos.');
@@ -314,6 +319,7 @@
 		const term = busqueda;
 		const _est = estadoFiltro;
 		const _plac = placaFiltro;
+		const _sinConf = noConfirmados;
 		if (primerCiclo) {
 			primerCiclo = false;
 			return;
@@ -429,8 +435,6 @@
 		return 'bg-alerta/10 text-alerta border-alerta/25';
 	}
 
-	const tablaComparendos = $derived(comparendos as unknown as Record<string, unknown>[]);
-
 	// ids de comparendos insertados en la ÚLTIMA sincronización del Agente SIMIT
 	// (persistidos en el resultado en memoria) → badge 🆕 sobre la fila en la tabla.
 	const idsNuevosUltimaSync = $derived(
@@ -440,6 +444,8 @@
 				.map((r) => r.id as number)
 		)
 	);
+
+	const tablaComparendos = $derived(comparendos as unknown as Record<string, unknown>[]);
 
 	const columnas = [
 		{ key: 'id', header: 'No.' },
@@ -687,6 +693,18 @@
 				<option value={a.placa}>{a.placa} · {a.marca} {a.modelo}</option>
 			{/each}
 		</select>
+		<label
+			class="inline-flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none"
+			title="Comparendos de origen SIMIT que el SIMIT dejó de confirmar (≥3 días) o que nunca se confirmaron — posiblemente pagados o eliminados en el portal."
+		>
+			<input type="checkbox" class="accent-primary" bind:checked={noConfirmados} />
+			<span>
+				No confirmadas por SIMIT
+				{#if noConfirmados}
+					<span class="text-peligro font-semibold">(≥3 días)</span>
+				{/if}
+			</span>
+		</label>
 	</div>
 
 	<!-- Tabla -->

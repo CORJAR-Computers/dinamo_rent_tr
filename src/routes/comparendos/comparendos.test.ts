@@ -212,6 +212,28 @@ describe('página de Comparendos', () => {
 		expect(screen.getAllByText('🆕 Nuevo')).toHaveLength(1);
 	});
 
+	it('filtra las no confirmadas por SIMIT al marcar el checkbox', async () => {
+		const listar = vi.fn((_args: { sessionId: string; noConfirmados: boolean | null }) => [
+			comparendo({ id: 1, origen: 'SIMIT', ultimoVistoSimit: null })
+		]);
+		tauri.register('listar_comparendos', listar);
+
+		render(ComparendosPage);
+		await screen.findByText('Exceso de velocidad');
+
+		await fireEvent.click(screen.getByLabelText(/No confirmadas por SIMIT/));
+
+		// El filtro se envía al backend y el umbral aparece en el label
+		await waitFor(() => {
+			const args = listar.mock.calls.at(-1)?.[0] as {
+				sessionId: string;
+				noConfirmados: boolean | null;
+			};
+			expect(args.noConfirmados).toBe(true);
+		});
+		expect(screen.getByText(/≥3 días/)).toBeInTheDocument();
+	});
+
 	it('muestra en la notificación imprimible quién tenía el vehículo el día de la multa', async () => {
 		tauri.register('listar_comparendos', () => [
 			comparendo({
