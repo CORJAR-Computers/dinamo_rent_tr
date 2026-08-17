@@ -234,6 +234,73 @@ describe('página de Comparendos', () => {
 		expect(screen.getByText(/≥3 días/)).toBeInTheDocument();
 	});
 
+	it('filtra solo los nuevos de la última sincronización al marcar el checkbox', async () => {
+		tauri.register('listar_comparendos', () => [
+			comparendo({ id: 1, origen: 'SIMIT', ultimoVistoSimit: null }),
+			comparendo({ id: 2, placa: 'XYZ987', origen: 'Manual', observaciones: 'Foto-detección' })
+		]);
+		tauri.register('simit_sync_status', () =>
+			infoAgente({
+				ultimoResultado: {
+					sincronizadoEn: '2026-08-17T10:30:00-05:00',
+					placasConsultadas: 2,
+					placasConError: 0,
+					encontrados: 2,
+					insertados: 1,
+					duplicados: 1,
+					totalPendiente: '900000.00',
+					registros: [
+						{
+							numero: 'TEST-250010000000999',
+							placa: 'ABC123',
+							fechaInfraccion: '2026-08-01',
+							horaInfraccion: '14:30',
+							monto: '580000.00',
+							estado: 'Pendiente',
+							organismo: 'Policía de Tránsito',
+							codigoInfraccion: 'C24',
+							descripcion: 'Exceso de velocidad',
+							esComparendo: true,
+							nuevo: true,
+							id: 1
+						}
+					],
+					errores: [],
+					reporteHtml: null,
+					metricas: {
+						tiempoTotalMs: 1200,
+						tiempoPromedioPlacaMs: 600,
+						tiempoCaptchaMs: 400,
+						tiempoConsultaMs: 700,
+						totalReintentos: 0,
+						circuitBreakerState: 'Closed',
+						placasExitosas: 2,
+						placasTimeout: 0,
+						placasErrorRed: 0
+					}
+				}
+			})
+		);
+
+		render(ComparendosPage);
+
+		// Antes del filtro: ambas filas visibles
+		expect(await screen.findByText('Exceso de velocidad')).toBeInTheDocument();
+		expect(screen.getByText('Foto-detección')).toBeInTheDocument();
+		expect(screen.getByText(/2 comparendos/)).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByLabelText(/Solo nuevos de la última sincronización/));
+
+		// Solo queda la fila del comparendo insertado en la última corrida
+		await waitFor(() => {
+			expect(screen.queryByText('Foto-detección')).not.toBeInTheDocument();
+		});
+		expect(screen.getByText('Exceso de velocidad')).toBeInTheDocument();
+		expect(screen.getByText(/1 comparendo/)).toBeInTheDocument();
+		// Contador de nuevos visible junto al label del filtro
+		expect(screen.getByText('(1)')).toBeInTheDocument();
+	});
+
 	it('muestra en la notificación imprimible quién tenía el vehículo el día de la multa', async () => {
 		tauri.register('listar_comparendos', () => [
 			comparendo({

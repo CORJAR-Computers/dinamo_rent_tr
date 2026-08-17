@@ -66,6 +66,9 @@
 	// (ultimo_visto_simit anterior a 3 días o nunca confirmado): candidatos a
 	// pagados/eliminados en el portal sin que la BD lo sepa.
 	let noConfirmados = $state(false);
+	// Solo los que el Agente SIMIT insertó en la última sincronización de esta
+	// sesión (filtro en memoria; se vacía al reiniciar la app).
+	let soloNuevos = $state(false);
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Modal crear/editar
@@ -436,7 +439,8 @@
 	}
 
 	// ids de comparendos insertados en la ÚLTIMA sincronización del Agente SIMIT
-	// (persistidos en el resultado en memoria) → badge 🆕 sobre la fila en la tabla.
+	// (persistidos en el resultado en memoria) → badge 🆕 sobre la fila en la
+	// tabla y filtro «Solo nuevos» (client-side sobre la lista ya cargada).
 	const idsNuevosUltimaSync = $derived(
 		new Set(
 			(agente?.ultimoResultado?.registros ?? [])
@@ -445,7 +449,11 @@
 		)
 	);
 
-	const tablaComparendos = $derived(comparendos as unknown as Record<string, unknown>[]);
+	// Filtro «Solo nuevos»: reduce la lista a los ids de la última corrida.
+	const comparendosVisibles = $derived(
+		soloNuevos ? comparendos.filter((c) => idsNuevosUltimaSync.has(c.id)) : comparendos
+	);
+	const tablaComparendos = $derived(comparendosVisibles as unknown as Record<string, unknown>[]);
 
 	const columnas = [
 		{ key: 'id', header: 'No.' },
@@ -470,7 +478,7 @@
 		<div>
 			<h2 class="text-2xl font-bold text-text-primary">Comparendos</h2>
 			<p class="text-sm text-text-secondary mt-0.5">
-				{comparendos.length} comparendo{comparendos.length === 1 ? '' : 's'} · multas de tránsito por vehículo
+				{comparendosVisibles.length} comparendo{comparendosVisibles.length === 1 ? '' : 's'} · multas de tránsito por vehículo
 			</p>
 		</div>
 		<button class="btn-primary" onclick={abrirNuevo}>
@@ -702,6 +710,24 @@
 				No confirmadas por SIMIT
 				{#if noConfirmados}
 					<span class="text-peligro font-semibold">(≥3 días)</span>
+				{/if}
+			</span>
+		</label>
+		<label
+			class="inline-flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none"
+			title="Solo los comparendos que el Agente SIMIT insertó en la última sincronización de esta sesión (se vacía al reiniciar la app)."
+			class:opacity-50={!agente?.ultimoResultado}
+		>
+			<input
+				type="checkbox"
+				class="accent-primary"
+				bind:checked={soloNuevos}
+				disabled={!agente?.ultimoResultado}
+			/>
+			<span>
+				Solo nuevos de la última sincronización
+				{#if soloNuevos && idsNuevosUltimaSync.size > 0}
+					<span class="text-exito font-semibold">({idsNuevosUltimaSync.size})</span>
 				{/if}
 			</span>
 		</label>
