@@ -1,6 +1,6 @@
 # Resumen Ejecutivo — Dinamo Rent ERP
 
-> **Fecha:** 2026-08-14 · **Estado general:** listo para producción — release v1.0.12 publicada por CI, firmada para el auto-update, validada de punta a punta en Windows limpio y verificada en el equipo de operaciones (contrato en 2 hojas con firmas amplias, campo Gasolina, km sin cola de ceros, errores de BD visibles).
+> **Fecha:** 2026-08-17 · **Estado general:** listo para producción — release v1.0.15 publicada por CI, firmada para el auto-update, con novedades financieras (comisión por renta + informe con netos) y de comparendos (procedencia persistente, filtros combinables, último resultado del agente en BD).
 
 ---
 
@@ -9,24 +9,24 @@
 | Área | Estado |
 |---|---|
 | **Aplicación** | Todos los módulos operativos (rentas, comparendos + agente SIMIT, alertas, calendario, informes, reservas, contratos) |
-| **Versión estable** | **v1.0.12** — la única release que se distribuye (con auto-update activo) |
+| **Versión estable** | **v1.0.15** — la única release que se distribuye (con auto-update activo) |
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
 | **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 233 tests frontend, cargo 48 lib + 8 rentas + 11 migraciones, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
-| **Auto-actualización** | ✅ Activa desde la **v1.0.3** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.4–v1.0.12 publicadas y firmadas |
+| **Auto-actualización** | ✅ Activa desde la **v1.0.3** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.4–v1.0.15 publicadas y firmadas |
 
 ## 2. Releases en GitHub
 
 | Release | Estado | Para quién |
 |---|---|---|
-| **v1.0.12** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
-| v1.0.9 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.12 (auto-update) |
-| v1.0.3 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.12 (auto-update) |
+| **v1.0.15** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
+| v1.0.9 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (auto-update) |
+| v1.0.3 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (auto-update) |
 | v1.0.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3+ (transición al auto-update) |
 | v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3+ |
 | v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación) | Solo referencia — **no instalarla** |
 
-**Assets de la v1.0.12:** [`DinamoRent_1.0.12_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.12/DinamoRent_1.0.12_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.12_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.12/DinamoRent_1.0.12_x64_en-US.msi) (~33 MB, despliegue GPO; sha256 publicados en la release). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
+**Assets de la v1.0.15:** [`DinamoRent_1.0.12_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.12_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.12_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.12_x64_en-US.msi) (~33 MB, despliegue GPO; sha256 publicados en la release). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
 **Auto-actualización (activa desde la v1.0.3):** la app chequea al arrancar el
 `latest.json` de GitHub Releases y ofrece instalar la versión nueva (firma minisign
@@ -78,7 +78,7 @@ embebida.
 |---|---|---|
 | **`importar_autos_clientes.py`** | Poblar Autos/Clientes desde dump SQL o Excel (upsert idempotente por placa/no_doc, PII cifrados con la clave del destino, dry-run por defecto, `--commit` transaccional) | `python scripts/importar_autos_clientes.py --sql dump.sql --commit` |
 | **`test_importar_autos_clientes.py`** | Test de regresión del importador (16 casos, sin BD; corre en CI) | `python scripts/test_importar_autos_clientes.py` |
-| **`verificar-despliegue.ps1`** | Post-instalación en el equipo del cliente: exe v1.0.12, arranque vivo 10 s, `config.ini` + BD del primer arranque — veredicto OK/FALLOS | `powershell -File scripts/verificar-despliegue.ps1` |
+| **`verificar-despliegue.ps1`** | Post-instalación en el equipo del cliente: exe v1.0.15, arranque vivo 10 s, `config.ini` + BD del primer arranque — veredicto OK/FALLOS | `powershell -File scripts/verificar-despliegue.ps1` |
 | **`verificar-updater-e2e.sh`** | Verificación E2E del auto-update sin publicar en GitHub: firma un artifact con la clave real, sirve un `latest.json` local y valida detección + firma + bytes (caso negativo incluido) | `bash scripts/verificar-updater-e2e.sh` |
 | **`dinamorent-sandbox.wsb` + `smoke-test-sandbox.ps1`** | Smoke test del instalador en Windows limpio (Sandbox) | abrir el `.wsb`; resultado en `smoke-result.txt` |
 | **`verificar-despliegue-sandbox.ps1` + `dinamorent-sandbox-verificar.wsb`** | Validar el verifier contra una instalación real en Sandbox | abrir el `.wsb` |
@@ -97,4 +97,4 @@ embebida.
 
 ## 6. Veredicto
 
-**El proyecto está listo para producción.** La única release estable es la v1.0.12 (construida por CI, firmada para el auto-update, validada en Windows limpio y verificada en el equipo de operaciones), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater) está documentado y validado. La **auto-actualización está activa desde la v1.0.3**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
+**El proyecto está listo para producción.** La única release estable es la v1.0.15 (construida por CI, firmada para el auto-update, validada en Windows limpio y verificada en el equipo de operaciones), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater) está documentado y validado. La **auto-actualización está activa desde la v1.0.3**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
