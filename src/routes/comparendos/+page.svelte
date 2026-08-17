@@ -449,9 +449,12 @@
 		)
 	);
 
-	// Filtro «Solo nuevos»: reduce la lista a los ids de la última corrida.
+	// Filtros combinables: «No confirmadas» filtra en el backend (la lista
+	// `comparendos` ya viene reducida) y «Solo nuevos» se aplica client-side
+	// SIEMPRE sobre esa lista. Con ambos marcados se muestra la intersección:
+	// no confirmadas ∧ nuevas de la última sincronización.
 	const comparendosVisibles = $derived(
-		soloNuevos ? comparendos.filter((c) => idsNuevosUltimaSync.has(c.id)) : comparendos
+		comparendos.filter((c) => !soloNuevos || idsNuevosUltimaSync.has(c.id))
 	);
 	const tablaComparendos = $derived(comparendosVisibles as unknown as Record<string, unknown>[]);
 

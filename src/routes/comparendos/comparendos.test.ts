@@ -301,6 +301,96 @@ describe('página de Comparendos', () => {
 		expect(screen.getByText('(1)')).toBeInTheDocument();
 	});
 
+	it('combina «Solo nuevos» y «No confirmadas» mostrando la intersección', async () => {
+		// El backend devuelve solo las no confirmadas cuando el filtro está activo
+		const listar = vi.fn((args: { sessionId: string; noConfirmados: boolean | null }) => {
+			if (args.noConfirmados) {
+				// id 1: no confirmada Y nueva de la última corrida → en la intersección
+				// id 3: no confirmada pero NO nueva → queda fuera al marcar «Solo nuevos»
+				return [
+					comparendo({ id: 1, origen: 'SIMIT', ultimoVistoSimit: null }),
+					comparendo({
+						id: 3,
+						placa: 'LMN456',
+						origen: 'SIMIT',
+						ultimoVistoSimit: null,
+						observaciones: 'Histórica sin confirmar'
+					})
+				];
+			}
+			return [
+				comparendo({ id: 1, origen: 'SIMIT', ultimoVistoSimit: null }),
+				comparendo({ id: 3, placa: 'LMN456', origen: 'SIMIT', ultimoVistoSimit: null, observaciones: 'Histórica sin confirmar' }),
+				comparendo({ id: 2, placa: 'XYZ987', origen: 'Manual', observaciones: 'Foto-detección' })
+			];
+		});
+		tauri.register('listar_comparendos', listar);
+		tauri.register('simit_sync_status', () =>
+			infoAgente({
+				ultimoResultado: {
+					sincronizadoEn: '2026-08-17T10:30:00-05:00',
+					placasConsultadas: 2,
+					placasConError: 0,
+					encontrados: 2,
+					insertados: 1,
+					duplicados: 1,
+					totalPendiente: '900000.00',
+					registros: [
+						{
+							numero: 'TEST-250010000000999',
+							placa: 'ABC123',
+							fechaInfraccion: '2026-08-01',
+							horaInfraccion: '14:30',
+							monto: '580000.00',
+							estado: 'Pendiente',
+							organismo: 'Policía de Tránsito',
+							codigoInfraccion: 'C24',
+							descripcion: 'Exceso de velocidad',
+							esComparendo: true,
+							nuevo: true,
+							id: 1
+						}
+					],
+					errores: [],
+					reporteHtml: null,
+					metricas: {
+						tiempoTotalMs: 1200,
+						tiempoPromedioPlacaMs: 600,
+						tiempoCaptchaMs: 400,
+						tiempoConsultaMs: 700,
+						totalReintentos: 0,
+						circuitBreakerState: 'Closed',
+						placasExitosas: 2,
+						placasTimeout: 0,
+						placasErrorRed: 0
+					}
+				}
+			})
+		);
+
+		render(ComparendosPage);
+
+		// Sin filtros: las tres filas visibles
+		expect(await screen.findByText('Exceso de velocidad')).toBeInTheDocument();
+		expect(screen.getByText('Histórica sin confirmar')).toBeInTheDocument();
+		expect(screen.getByText('Foto-detección')).toBeInTheDocument();
+
+		// «No confirmadas» → el backend devuelve solo 1 y 3 (sale la manual)
+		await fireEvent.click(screen.getByLabelText(/No confirmadas por SIMIT/));
+		await waitFor(() => {
+			expect(screen.queryByText('Foto-detección')).not.toBeInTheDocument();
+		});
+		expect(screen.getByText('Histórica sin confirmar')).toBeInTheDocument();
+
+		// + «Solo nuevos» → intersección: solo queda la id 1 (nueva ∧ no confirmada)
+		await fireEvent.click(screen.getByLabelText(/Solo nuevos de la última sincronización/));
+		await waitFor(() => {
+			expect(screen.queryByText('Histórica sin confirmar')).not.toBeInTheDocument();
+		});
+		expect(screen.getByText('Exceso de velocidad')).toBeInTheDocument();
+		expect(screen.getByText(/1 comparendo/)).toBeInTheDocument();
+	});
+
 	it('muestra en la notificación imprimible quién tenía el vehículo el día de la multa', async () => {
 		tauri.register('listar_comparendos', () => [
 			comparendo({
