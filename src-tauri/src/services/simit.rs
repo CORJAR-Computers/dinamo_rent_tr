@@ -49,6 +49,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{Local, NaiveDate};
 use cookie_store::CookieStore;
+use rsfbclient::{Execute, Queryable};
 use serde::Serialize;
 use serde::Deserialize;
 use sha2::Digest;
@@ -181,7 +182,9 @@ const DEFAULT_TIMEOUT_SECONDS: u64 = 30;
 // ─── Tipos de datos ───────────────────────────────────────────────────────────
 
 /// Un comparendo/multa tal como lo devuelve el SIMIT, ya mapeado al dominio
-#[derive(Debug, Clone, Serialize)]
+/// (Serialize/Deserialize: se persiste en la BD como JSON y se restaura al
+/// arrancar para que el filtro «Solo nuevos» sobreviva al reinicio).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistroSimit {
     /// Número oficial del comparendo (clave de deduplicación)
@@ -206,15 +209,17 @@ pub struct RegistroSimit {
 }
 
 /// Error de una placa individual (no aborta la sincronización)
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorPlacaSimit {
     pub placa: String,
     pub error: String,
 }
 
-/// Resumen serializable de una sincronización (evento + comando de estado)
-#[derive(Debug, Clone, Default, Serialize)]
+/// Resumen serializable de una sincronización (evento + comando de estado).
+/// Serialize/Deserialize: se persiste en la BD tras cada corrida (tabla
+/// `agente_simit_ultimo_resultado`) y se restaura al arrancar.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResultadoSincronizacion {
     /// Marca de tiempo de inicio (RFC3339 local)
@@ -240,7 +245,7 @@ pub struct ResultadoSincronizacion {
 }
 
 /// Métricas de rendimiento de la sincronización
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricasSimit {
     /// Tiempo total de la sincronización (ms)
@@ -1231,6 +1236,75 @@ impl EstadoAgenteSimit {
     }
 }
 
+// ─── Persistencia del último resultado (filtro «Solo nuevos» tras reinicio) ─
+
+/// Fila única de `agente_simit_ultimo_resultado` (id fijo, upsert).
+const ULTIMO_RESULTADO_ID: i16 = 1;
+
+/// Persiste el último resultado de sincronización como JSON en la BD (una
+/// sola fila, upsert). Sin esto el filtro «Solo nuevos» y el panel perdían
+/// la última corrida al reiniciar la app; con esto se restauran al arrancar.
+pub fn persistir_ultimo_resultado(
+    conn: &mut PooledConnection,
+    resultado: &ResultadoSincronizacion,
+) -> Result<(), AppError> {
+    let json = serde_json::to_string(resultado)
+        .map_err(|e| AppError::Generic(format!("serializar último resultado: {e}")))?;
+    let actualizadas = conn.execute(
+        "UPDATE agente_simit_ultimo_resultado \
+         SET resultado_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (json.clone(), ULTIMO_RESULTADO_ID),
+    )?;
+    if actualizadas == 0 {
+        conn.execute(
+            "INSERT INTO agente_simit_ultimo_resultado (id, resultado_json) VALUES (?, ?)",
+            (ULTIMO_RESULTADO_ID, json),
+        )?;
+    }
+    Ok(())
+}
+
+/// Carga el último resultado persistido (None si aún no hay corrida guardada).
+pub fn cargar_ultimo_resultado(
+    conn: &mut PooledConnection,
+) -> Result<Option<ResultadoSincronizacion>, AppError> {
+    let rows: Vec<(Option<String>,)> = conn.query(
+        "SELECT resultado_json FROM agente_simit_ultimo_resultado WHERE id = ?",
+        (ULTIMO_RESULTADO_ID,),
+    )?;
+    let Some((Some(json),)) = rows.first() else {
+        return Ok(None);
+    };
+    let resultado = serde_json::from_str(json)
+        .map_err(|e| AppError::Generic(format!("parsear último resultado persistido: {e}")))?;
+    Ok(Some(resultado))
+}
+
+/// Restaura en el estado en memoria el último resultado persistido (arranque).
+/// Best-effort: si la BD no tiene fila o falla la lectura, el agente arranca
+/// en blanco como antes (la primera corrida programada lo llena de nuevo).
+pub(crate) fn restaurar_ultimo_resultado(pool: &Pool, estado: &EstadoAgenteSimit) {
+    match pool.get() {
+        Ok(mut conn) => match cargar_ultimo_resultado(&mut conn) {
+            Ok(Some(resultado)) => {
+                log::info!(
+                    "Agente SIMIT: último resultado restaurado ({} nuevas, corrida de {})",
+                    resultado.insertados,
+                    resultado.sincronizado_en
+                );
+                estado.registrar_ok(resultado);
+            }
+            Ok(None) => {}
+            Err(e) => log::warn!(
+                "Agente SIMIT: no se pudo cargar el último resultado persistido: {e}"
+            ),
+        },
+        Err(e) => log::warn!(
+            "Agente SIMIT: no se pudo conectar para restaurar el último resultado: {e}"
+        ),
+    }
+}
+
 /// Ejecuta una sincronización y actualiza el estado del agente.
 /// Es la única entrada compartida por el scheduler y el comando manual.
 /// Si se proporciona `app`, emite eventos de progreso al frontend.
@@ -1256,6 +1330,12 @@ pub fn run_sync<R: tauri::Runtime>(
 
     let mut conn = pool.get()?;
     let resultado = sincronizar(&mut conn, cfg, app)?;
+    // Persistir el resultado (filtro «Solo nuevos» y panel sobreviven al
+    // reinicio). Best-effort: si falla, el estado en memoria sigue valiendo
+    // para la sesión actual y se reintenta en la siguiente corrida.
+    if let Err(e) = persistir_ultimo_resultado(&mut conn, &resultado) {
+        log::warn!("Agente SIMIT: no se pudo persistir el último resultado: {e}");
+    }
     estado.registrar_ok(resultado.clone());
     Ok(resultado)
 }

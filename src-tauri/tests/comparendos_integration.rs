@@ -446,6 +446,94 @@ fn comparendo_no_confirmados_simit() {
     ComparendoService::eliminar(&mut conn, manual.id).expect("limpiar manual");
 }
 
+#[test]
+#[serial]
+fn persistencia_ultimo_resultado_simit() {
+    // El filtro «Solo nuevos» sobrevive al reinicio: el resultado de la última
+    // sincronización se persiste como JSON (una fila, upsert) y se restaura.
+    // Round-trip completo: persistir → cargar → re-persistir (upsert).
+    use dinamo_rent_lib::services::simit::{
+        cargar_ultimo_resultado, persistir_ultimo_resultado, ErrorPlacaSimit, MetricasSimit,
+        RegistroSimit, ResultadoSincronizacion,
+    };
+    use rsfbclient::{Execute, Queryable};
+
+    let state = dev_state();
+    let mut conn = state.pool.get().expect("conn");
+
+    conn.execute("DELETE FROM agente_simit_ultimo_resultado", ())
+        .expect("limpiar estado inicial");
+
+    let resultado = ResultadoSincronizacion {
+        sincronizado_en: "2026-08-17T10:30:00-05:00".into(),
+        placas_consultadas: 2,
+        placas_con_error: 0,
+        encontrados: 2,
+        insertados: 1,
+        duplicados: 1,
+        total_pendiente: "900000.00".into(),
+        registros: vec![RegistroSimit {
+            numero: Some("TEST-0022".into()),
+            placa: "ABC123".into(),
+            fecha_infraccion: "2026-08-01".into(),
+            hora_infraccion: "14:30".into(),
+            monto: "580000.00".into(),
+            estado: "Pendiente".into(),
+            organismo: "Policía de Tránsito".into(),
+            codigo_infraccion: "C24".into(),
+            descripcion: "Exceso de velocidad".into(),
+            es_comparendo: true,
+            nuevo: true,
+            id: Some(42),
+        }],
+        errores: vec![ErrorPlacaSimit {
+            placa: "ZZZ111".into(),
+            error: "timeout".into(),
+        }],
+        reporte_html: Some("C:\\tmp\\reporte.html".into()),
+        metricas: MetricasSimit {
+            tiempo_total_ms: 1200,
+            ..Default::default()
+        },
+    };
+
+    // Round-trip: persistir → cargar → misma información
+    persistir_ultimo_resultado(&mut conn, &resultado).expect("persistir");
+    let cargado = cargar_ultimo_resultado(&mut conn)
+        .expect("cargar")
+        .expect("debe haber resultado persistido");
+    assert_eq!(cargado.sincronizado_en, resultado.sincronizado_en);
+    assert_eq!(cargado.insertados, 1);
+    assert_eq!(cargado.registros.len(), 1);
+    let reg = &cargado.registros[0];
+    assert!(reg.nuevo, "el registro nuevo conserva su flag");
+    assert_eq!(reg.id, Some(42), "el id del comparendo sobrevive (filtro «Solo nuevos»)");
+    assert_eq!(reg.numero.as_deref(), Some("TEST-0022"));
+    assert_eq!(cargado.errores[0].placa, "ZZZ111");
+    assert_eq!(cargado.reporte_html.as_deref(), Some("C:\\tmp\\reporte.html"));
+
+    // Upsert: una segunda corrida reemplaza (sigue siendo una sola fila)
+    let mut segunda = resultado.clone();
+    segunda.sincronizado_en = "2026-08-17T12:30:00-05:00".into();
+    segunda.insertados = 3;
+    persistir_ultimo_resultado(&mut conn, &segunda).expect("persistir 2");
+
+    let filas: Option<(i64,)> = conn
+        .query_first("SELECT COUNT(*) FROM agente_simit_ultimo_resultado", ())
+        .expect("contar filas");
+    assert_eq!(filas.map(|r| r.0), Some(1), "el upsert mantiene una sola fila");
+
+    let cargado2 = cargar_ultimo_resultado(&mut conn)
+        .expect("cargar 2")
+        .expect("debe seguir existiendo");
+    assert_eq!(cargado2.sincronizado_en, "2026-08-17T12:30:00-05:00");
+    assert_eq!(cargado2.insertados, 3);
+
+    // Limpieza
+    conn.execute("DELETE FROM agente_simit_ultimo_resultado", ())
+        .expect("limpiar fin");
+}
+
 /// Renta temporal con rango de fechas dado (para el cruce con comparendos)
 fn datos_renta_cruce(placa: &str, recogida: &str, retorno: &str) -> RentaDatos {
     RentaDatos {

@@ -66,8 +66,8 @@
 	// (ultimo_visto_simit anterior a 3 días o nunca confirmado): candidatos a
 	// pagados/eliminados en el portal sin que la BD lo sepa.
 	let noConfirmados = $state(false);
-	// Solo los que el Agente SIMIT insertó en la última sincronización de esta
-	// sesión (filtro en memoria; se vacía al reiniciar la app).
+	// Solo los que el Agente SIMIT insertó en la última sincronización
+	// (persistido en la BD — sobrevive al reinicio de la app).
 	let soloNuevos = $state(false);
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -439,8 +439,8 @@
 	}
 
 	// ids de comparendos insertados en la ÚLTIMA sincronización del Agente SIMIT
-	// (persistidos en el resultado en memoria) → badge 🆕 sobre la fila en la
-	// tabla y filtro «Solo nuevos» (client-side sobre la lista ya cargada).
+	// (persistidos en la BD; se restauran al arrancar) → badge 🆕 sobre la fila
+	// en la tabla y filtro «Solo nuevos» (client-side sobre la lista ya cargada).
 	const idsNuevosUltimaSync = $derived(
 		new Set(
 			(agente?.ultimoResultado?.registros ?? [])
@@ -715,7 +715,7 @@
 		</label>
 		<label
 			class="inline-flex items-center gap-2 text-sm text-text-secondary cursor-pointer select-none"
-			title="Solo los comparendos que el Agente SIMIT insertó en la última sincronización de esta sesión (se vacía al reiniciar la app)."
+			title="Solo los comparendos que el Agente SIMIT insertó en la última sincronización (persistido en la BD — sobrevive al reinicio de la app)."
 			class:opacity-50={!agente?.ultimoResultado}
 		>
 			<input

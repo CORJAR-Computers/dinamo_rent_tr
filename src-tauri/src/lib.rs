@@ -95,6 +95,9 @@ pub fn run() {
 
             // ── Agente SIMIT: consulta automática de comparendos en segundo plano ──
             // Consulta al arrancar y después cada `simit.interval_hours` (2 h).
+            // Antes de la primera corrida se restaura el último resultado
+            // persistido (filtro «Solo nuevos» y panel sobreviven al reinicio).
+            services::simit::restaurar_ultimo_resultado(&pool, &simit_estado);
             services::simit::spawn_scheduler(
                 app.handle().clone(),
                 pool.clone(),
