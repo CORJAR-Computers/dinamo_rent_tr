@@ -152,6 +152,13 @@
 											<span class="text-text-secondary/70">(devuelto {formatDate(r.renta.fechaDevolucionReal)})</span>
 										{/if}
 									</p>
+									<p class="text-xs text-text-secondary mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+										<span>Total <span class="font-semibold text-text-primary tabular-nums">{formatCOP(r.renta.total)}</span></span>
+										{#if parseFloat(r.renta.comision) > 0}
+											<span>Comisión <span class="font-semibold text-peligro tabular-nums">-{formatCOP(r.renta.comision)}</span></span>
+											<span>Valor neto <span class="font-semibold text-text-primary tabular-nums">{formatCOP(r.renta.valorNeto)}</span></span>
+										{/if}
+									</p>
 									{#if r.multas.length > 0}
 										<div class="mt-2 pt-2 border-t border-primary/10">
 											<p class="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">

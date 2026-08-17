@@ -184,6 +184,20 @@ describe('página de Rentas', () => {
 		expect(screen.getByText(/2 rentas/)).toBeInTheDocument();
 	});
 
+	it('muestra comisión y valor neto en el listado', async () => {
+		tauri.register('listar_rentas', () => [
+			renta({ id: 2, comision: '50000.00', valorNeto: '485500.00' })
+		]);
+
+		render(RentasPage);
+
+		expect(await screen.findByText('Comisión')).toBeInTheDocument();
+		expect(screen.getByText('Valor neto')).toBeInTheDocument();
+		// La comisión aparece con signo menos y el neto formateado
+		expect(screen.getAllByText((c) => c.includes('50.000')).length).toBeGreaterThan(0);
+		expect(screen.getAllByText((c) => c.includes('485.500')).length).toBeGreaterThan(0);
+	});
+
 	it('muestra el estado vacío cuando no hay rentas', async () => {
 		tauri.register('listar_rentas', () => []);
 
@@ -253,12 +267,12 @@ describe('página de Rentas', () => {
 
 		// Sin marcar el checkbox, la comisión no aparece ni se envía
 		expect(screen.queryByPlaceholderText('50000')).not.toBeInTheDocument();
-		expect(screen.queryByText('Valor neto')).not.toBeInTheDocument();
+		expect(within(dialogo).queryByText('Valor neto')).not.toBeInTheDocument();
 
 		// Marcar «Cobrar comisión» → aparece el valor y el neto
 		await fireEvent.click(screen.getByLabelText(/Cobrar comisión/));
-		expect(screen.getByText('Valor neto')).toBeInTheDocument();
-		expect(screen.getByText('Comisión')).toBeInTheDocument();
+		expect(within(dialogo).getByText('Valor neto')).toBeInTheDocument();
+		expect(within(dialogo).getByText('Comisión')).toBeInTheDocument();
 		await fireEvent.input(within(dialogo).getByPlaceholderText('50000'), {
 			target: { value: '10000' }
 		});

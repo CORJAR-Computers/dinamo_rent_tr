@@ -667,6 +667,8 @@
 		{ key: 'vehiculo', header: 'Vehículo' },
 		{ key: 'itinerario', header: 'Itinerario' },
 		{ key: 'financiero', header: 'Total / Saldo' },
+		{ key: 'comision', header: 'Comisión' },
+		{ key: 'valorNeto', header: 'Valor neto' },
 		{ key: 'estado', header: 'Estado' },
 		{ key: 'acciones', header: '', align: 'right' as const }
 	];
@@ -764,6 +766,12 @@
 						<p class="font-bold text-text-primary tabular-nums">{formatCOP(r.total)}</p>
 						<p class="text-xs text-text-secondary tabular-nums">Saldo: <span class="font-semibold {parseFloat(r.saldoPendiente) > 0 ? 'text-alerta' : 'text-exito'}">{formatCOP(r.saldoPendiente)}</span></p>
 					</div>
+				{:else if col.key === 'comision'}
+					<p class="text-right tabular-nums whitespace-nowrap {parseFloat(r.comision) > 0 ? 'font-semibold text-peligro' : 'text-text-secondary/50'}">
+						{parseFloat(r.comision) > 0 ? `-${formatCOP(r.comision)}` : '—'}
+					</p>
+				{:else if col.key === 'valorNeto'}
+					<p class="text-right font-semibold text-text-primary tabular-nums whitespace-nowrap">{formatCOP(r.valorNeto)}</p>
 				{:else if col.key === 'estado'}
 					<span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap {estadoClases(r.estado)}">
 						<span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
