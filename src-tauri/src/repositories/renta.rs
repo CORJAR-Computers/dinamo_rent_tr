@@ -83,6 +83,12 @@ pub struct Renta {
     pub impuestos: String,
     /// ¿Cobra IVA esta renta? (checkbox del formulario; false = sin IVA)
     pub cobra_iva: bool,
+    /// ¿Tiene comisión esta renta? (checkbox del formulario; false = sin comisión)
+    pub tiene_comision: bool,
+    /// Valor de la comisión a descontar (información financiera: neto = total − comisión)
+    pub comision: String,
+    /// Valor neto = total − comisión (persistido para reportes financieros)
+    pub valor_neto: String,
     pub total: String,
     pub abono: String,
     pub saldo_pendiente: String,
@@ -138,6 +144,12 @@ pub struct RentaDatos {
     pub impuestos: String,
     /// ¿Cobra IVA? (checkbox del formulario; el servicio lo aplica al calcular)
     pub cobra_iva: bool,
+    /// ¿Tiene comisión? (checkbox del formulario; false = sin comisión)
+    pub tiene_comision: bool,
+    /// Valor de la comisión a restar del total (neto = total − comisión)
+    pub comision: String,
+    /// Valor neto (calculado por el servicio: total − comisión)
+    pub valor_neto: String,
     pub total: String,
     pub abono: String,
     pub saldo_pendiente: String,
@@ -224,7 +236,8 @@ pub const SELECT_COLS_B: &str = "\
     COALESCE(a.marca || ' ' || a.modelo, ''), \
     r.no_contrato, r.anio_contrato, \
     r.cobra_iva = 1, \
-    CAST(r.valor_gasolina AS VARCHAR(12))";
+    CAST(r.valor_gasolina AS VARCHAR(12)), \
+    r.tiene_comision = 1, CAST(r.comision AS VARCHAR(12)), CAST(r.valor_neto AS VARCHAR(12))";
 
 /// Fila A (26 columnas) — mantener alineada con `SELECT_COLS_A`
 #[allow(clippy::type_complexity)]
@@ -257,7 +270,7 @@ pub type RentaRowA = (
     String,
 );
 
-/// Fila B (17 columnas) — mantener alineada con `SELECT_COLS_B`
+/// Fila B (22 columnas) — mantener alineada con `SELECT_COLS_B`
 #[allow(clippy::type_complexity)]
 pub type RentaRowB = (
     i64,
@@ -278,6 +291,9 @@ pub type RentaRowB = (
     i64,
     i64,
     bool,
+    String,
+    bool,
+    String,
     String,
 );
 
@@ -311,6 +327,9 @@ fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
         subtotal: a.24,
         impuestos: a.25,
         cobra_iva: b.17,
+        tiene_comision: b.19,
+        comision: b.20,
+        valor_neto: b.21,
         no_contrato: b.15,
         anio_contrato: b.16,
         valor_gasolina: b.18,
@@ -519,7 +538,7 @@ impl RentaRepository {
                     costo_lavado, costo_silla, costo_retorno, costo_domicilio, costo_cables, costo_inversor, \
                     valor_gasolina, \
                     descuento, subtotal, impuestos, total, abono, saldo_pendiente, \
-                    cobra_iva, estado, observaciones, km_salida, tanque_salida, id_reserva, no_contrato, anio_contrato \
+                    cobra_iva, tiene_comision, comision, valor_neto, estado, observaciones, km_salida, tanque_salida, id_reserva, no_contrato, anio_contrato \
                  ) VALUES (\
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
                     ?, ?, \
@@ -529,7 +548,7 @@ impl RentaRepository {
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
                     CAST(? AS DECIMAL(12,2)), \
-                    ?, 'Activo', ?, CAST(? AS DOUBLE PRECISION), ?, ?, \
+                    ?, ?, CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), 'Activo', ?, CAST(? AS DOUBLE PRECISION), ?, ?, \
                     (SELECT COALESCE(MAX(no_contrato), 0) + 1 FROM rentas WHERE anio_contrato = EXTRACT(YEAR FROM CURRENT_TIMESTAMP)), \
                     EXTRACT(YEAR FROM CURRENT_TIMESTAMP) \
                  ) RETURNING id",
@@ -564,6 +583,9 @@ impl RentaRepository {
                     d.abono.to_string(),
                     d.saldo_pendiente.to_string(),
                     bool_to_i(d.cobra_iva),
+                    bool_to_i(d.tiene_comision),
+                    d.comision.to_string(),
+                    d.valor_neto.to_string(),
                     opt_str(&d.observaciones),
                     d.km_salida.parse::<f64>().unwrap_or(0.0),
                     opt_str(&d.tanque_salida),
@@ -591,7 +613,8 @@ impl RentaRepository {
                 descuento = CAST(? AS DECIMAL(12,2)), \
                 subtotal = CAST(? AS DECIMAL(12,2)), impuestos = CAST(? AS DECIMAL(12,2)), \
                 total = CAST(? AS DECIMAL(12,2)), saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
-                cobra_iva = ?, observaciones = ?, km_salida = CAST(? AS DOUBLE PRECISION), tanque_salida = ?, \
+                cobra_iva = ?, tiene_comision = ?, comision = CAST(? AS DECIMAL(12,2)), valor_neto = CAST(? AS DECIMAL(12,2)), \
+                observaciones = ?, km_salida = CAST(? AS DOUBLE PRECISION), tanque_salida = ?, \
                 id_reserva = ? \
              WHERE id = ?",
             params![
@@ -624,6 +647,9 @@ impl RentaRepository {
                 d.total.to_string(),
                 d.saldo_pendiente.to_string(),
                 bool_to_i(d.cobra_iva),
+                bool_to_i(d.tiene_comision),
+                d.comision.to_string(),
+                d.valor_neto.to_string(),
                 opt_str(&d.observaciones),
                 d.km_salida.parse::<f64>().unwrap_or(0.0),
                 opt_str(&d.tanque_salida),

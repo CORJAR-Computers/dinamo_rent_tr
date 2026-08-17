@@ -85,6 +85,9 @@ fn datos_renta(placa: &str, id_cliente: Option<i64>) -> RentaDatos {
         subtotal: String::new(),
         impuestos: String::new(),
         cobra_iva: true,
+        tiene_comision: false,
+        comision: "0".into(),
+        valor_neto: String::new(),
         total: String::new(),
         abono: "0".into(),
         saldo_pendiente: String::new(),
@@ -342,6 +345,61 @@ fn renta_crear_con_abono_inicial() {
     assert_eq!(creada.abono, "200000.00");
     assert_eq!(creada.total, "535500.00");
     assert_eq!(creada.saldo_pendiente, "335500.00", "saldo = total − abono inicial");
+
+    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+}
+
+#[test]
+#[serial]
+fn renta_comision_resta_del_total_valor_neto() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!(
+            "BD de dev sin autos — se requiere flota real. Siembra la BD dev              (Handsoff §6.3: importar_autos_clientes.py con scripts/fixtures y --commit)"
+        );
+    };
+
+    // Total base: 3 días × 150.000 + IVA 19% = 535.500 (helper datos_renta)
+    let mut datos = datos_renta(&placa, None);
+    datos.tiene_comision = true;
+    datos.comision = "50000".into();
+    let creada = RentaService::crear(&mut conn, cfg, datos).expect("crear con comisión");
+    assert_eq!(creada.total, "535500.00", "el total que paga el cliente NO cambia con la comisión");
+    assert_eq!(creada.comision, "50000.00");
+    assert_eq!(creada.valor_neto, "485500.00", "neto = total − comisión");
+    assert_eq!(creada.saldo_pendiente, "535500.00", "el saldo tampoco cambia (comisión es costo interno)");
+
+    // Editar la comisión → el neto se recalcula (total se mantiene)
+    let mut edit = datos_renta(&placa, None);
+    edit.tiene_comision = true;
+    edit.comision = "100000".into();
+    edit.fecha_recogida = creada.fecha_recogida.clone();
+    edit.fecha_retorno = creada.fecha_retorno.clone();
+    edit.dias_calculados = creada.dias_calculados;
+    edit.horas_extras = creada.horas_extras;
+    edit.valor_dia = creada.valor_dia.clone();
+    edit.valor_hora_extra = creada.valor_hora_extra.clone();
+    let editada = RentaService::actualizar(&mut conn, cfg, creada.id, edit).expect("editar comisión");
+    assert_eq!(editada.total, "535500.00");
+    assert_eq!(editada.valor_neto, "435500.00", "neto recalculado = 535.500 − 100.000");
+
+    // Cerrar → el neto se conserva con la comisión persistida (días/horas explícitos
+    // para que el total no dependa del cálculo automático de la devolución)
+    let cierre = RentaCierreDatos {
+        fecha_devolucion_real: Some(creada.fecha_retorno.clone()),
+        hora_devolucion_real: Some("18:00".into()),
+        dias_calculados: Some(creada.dias_calculados),
+        horas_extras: Some(creada.horas_extras),
+        km_final: Some("42500".into()),
+        tanque_final: Some("Lleno".into()),
+        ..Default::default()
+    };
+    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar");
+    assert_eq!(cerrada.valor_neto, "435500.00", "el cierre conserva el neto");
+    assert_eq!(cerrada.estado, "Cerrada");
 
     RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
 }

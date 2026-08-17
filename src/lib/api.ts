@@ -688,6 +688,12 @@ export interface Renta {
 	subtotal: string;
 	impuestos: string;
 	cobraIva: boolean;
+	/** ¿Tiene comisión esta renta? (checkbox del formulario; false = sin comisión) */
+	tieneComision: boolean;
+	/** Valor de la comisión (se resta del total → valor neto) */
+	comision: string;
+	/** Valor neto = total − comisión (información financiera) */
+	valorNeto: string;
 	total: string;
 	abono: string;
 	saldoPendiente: string;
@@ -739,6 +745,12 @@ export interface RentaDatos {
 	subtotal?: string;
 	impuestos?: string;
 	cobraIva: boolean;
+	/** ¿Tiene comisión? (checkbox del formulario) */
+	tieneComision: boolean;
+	/** Valor de la comisión a restar del total */
+	comision: string;
+	/** Valor neto (calculado por el backend: total − comisión) */
+	valorNeto?: string;
 	total?: string;
 	abono: string;
 	saldoPendiente?: string;

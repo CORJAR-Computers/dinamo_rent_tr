@@ -104,6 +104,7 @@ pub const MIGRACIONES_EMBEDIDAS: &[(&str, &str)] = &[
     ("0019_renta_cobra_iva.sql", include_str!("../../migrations/0019_renta_cobra_iva.sql")),
     ("0020_renta_valor_gasolina.sql", include_str!("../../migrations/0020_renta_valor_gasolina.sql")),
     ("0021_comparendo_origen_simit.sql", include_str!("../../migrations/0021_comparendo_origen_simit.sql")),
+    ("0023_renta_comision.sql", include_str!("../../migrations/0023_renta_comision.sql")),
 ];
 
 /// Aplica las migraciones pendientes. `migrations_dir` = src-tauri/migrations

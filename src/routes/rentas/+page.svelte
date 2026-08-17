@@ -148,6 +148,8 @@
 			valorGasolina: '0',
 			descuento: '0',
 			cobraIva: false,
+			tieneComision: false,
+			comision: '0',
 			abono: '0',
 			observaciones: '',
 			kmSalida: '',
@@ -208,6 +210,9 @@
 		form.cobraIva ? Math.round(subtotalCalc * (tasaIva / 100) * 100) / 100 : 0
 	);
 	const totalCalc = $derived(subtotalCalc + ivaCalc);
+	// Comisión: solo aplica si el checkbox está activo; neto = total − comisión
+	const comisionCalc = $derived(form.tieneComision ? Math.max(0, parseFloat(form.comision) || 0) : 0);
+	const netoCalc = $derived(Math.max(0, totalCalc - comisionCalc));
 	const saldoCalc = $derived(Math.max(0, totalCalc - (parseFloat(form.abono) || 0)));
 
 	function recalcularDias() {
@@ -384,6 +389,8 @@
 			valorGasolina: r.valorGasolina ?? '0',
 			descuento: r.descuento,
 			cobraIva: r.cobraIva,
+			tieneComision: r.tieneComision,
+			comision: r.comision,
 			abono: r.abono,
 			observaciones: r.observaciones ?? '',
 			kmSalida: r.kmSalida,
@@ -1037,6 +1044,17 @@
 						<input class="input" inputmode="decimal" placeholder="100000" bind:value={form.abono} />
 					</FormField>
 				</div>
+				<label class="flex items-center gap-2 text-sm text-text-primary cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-alt-row/60 transition-colors mt-3 w-fit">
+					<input type="checkbox" class="accent-primary" bind:checked={form.tieneComision} />
+					Cobrar comisión <span class="text-xs text-text-secondary">(se resta del total → valor neto)</span>
+				</label>
+				{#if form.tieneComision}
+					<div class="mt-2 max-w-[240px]">
+						<FormField label="Valor comisión" hint="COP" dense>
+							<input class="input" inputmode="decimal" placeholder="50000" bind:value={form.comision} />
+						</FormField>
+					</div>
+				{/if}
 			</div>
 
 			<!-- ── Panel derecho: resumen + observaciones + acciones (sticky) ── -->
@@ -1054,6 +1072,9 @@
 						<p class="text-[10px] opacity-80 mt-0.5">
 							{form.cobraIva ? `IVA ${tasaIva}% incluido` : 'Sin IVA (checkbox desactivado)'}
 						</p>
+						{#if form.tieneComision}
+							<p class="text-[10px] opacity-90 mt-0.5 font-semibold">Valor neto: {formatCOP(netoCalc)}</p>
+						{/if}
 					</div>
 					<!-- Desglose compacto -->
 					<div class="space-y-1 text-xs">
@@ -1065,6 +1086,16 @@
 							<div class="flex justify-between">
 								<span class="text-text-secondary">IVA ({tasaIva}%)</span>
 								<span class="font-semibold text-text-primary tabular-nums">{formatCOP(ivaCalc)}</span>
+							</div>
+						{/if}
+						{#if form.tieneComision}
+							<div class="flex justify-between">
+								<span class="text-text-secondary">Comisión</span>
+								<span class="font-semibold text-text-primary tabular-nums">-{formatCOP(comisionCalc)}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-text-secondary font-semibold">Valor neto</span>
+								<span class="font-bold text-text-primary tabular-nums">{formatCOP(netoCalc)}</span>
 							</div>
 						{/if}
 						<div class="flex justify-between">

@@ -286,6 +286,9 @@ impl RentaService {
         let imp = if actual.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
         let impuestos = (subtotal * imp).round_dp(2);
         let total = subtotal + impuestos;
+        // Valor neto = total − comisión persistida (información financiera)
+        let comision = if actual.tiene_comision { dec_str(&actual.comision) } else { Decimal::ZERO };
+        let valor_neto = (total - comision).max(Decimal::ZERO);
         let abono = dec_str(&actual.abono);
         let saldo = (total - abono).max(Decimal::ZERO);
 
@@ -302,6 +305,7 @@ impl RentaService {
         let subtotal_s = subtotal.round_dp(2).to_string();
         let impuestos_s = impuestos.to_string();
         let total_s = total.round_dp(2).to_string();
+        let valor_neto_s = valor_neto.round_dp(2).to_string();
         let saldo_s = saldo.round_dp(2).to_string();
         let placa_auto = actual.placa.clone();
         let usuario_audit = "sistema".to_string();
@@ -321,6 +325,7 @@ impl RentaService {
                     descuento = CAST(COALESCE(?, descuento) AS DECIMAL(12,2)), \
                     subtotal = CAST(? AS DECIMAL(12,2)), impuestos = CAST(? AS DECIMAL(12,2)), \
                     total = CAST(? AS DECIMAL(12,2)), saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
+                    valor_neto = CAST(? AS DECIMAL(12,2)), \
                     observaciones = COALESCE(?, observaciones) \
                  WHERE id = ?",
                 params![
@@ -337,6 +342,7 @@ impl RentaService {
                     impuestos_s,
                     total_s,
                     saldo_s,
+                    valor_neto_s,
                     observaciones,
                     id,
                 ],
@@ -580,6 +586,7 @@ fn normalizar(d: &mut RentaDatos) {
         &mut d.costo_inversor,
         &mut d.valor_gasolina,
         &mut d.descuento,
+        &mut d.comision,
         &mut d.abono,
     ] {
         *m = m.trim().replace(',', ".");
@@ -640,9 +647,15 @@ fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
     let imp = if d.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
     let impuestos = (subtotal * imp).round_dp(2);
     let total = subtotal + impuestos;
+    // Comisión (checkbox + valor del formulario): se resta del total para
+    // obtener el valor neto (información financiera). El total que paga el
+    // cliente NO cambia: la comisión es un costo de la empresa.
+    let comision = if d.tiene_comision { dec(&d.comision, "") } else { Decimal::ZERO };
+    let valor_neto = (total - comision).max(Decimal::ZERO);
     d.subtotal = subtotal.round_dp(2).to_string();
     d.impuestos = impuestos.to_string();
     d.total = total.round_dp(2).to_string();
+    d.valor_neto = valor_neto.round_dp(2).to_string();
     d.saldo_pendiente = total.round_dp(2).to_string();
 }
 

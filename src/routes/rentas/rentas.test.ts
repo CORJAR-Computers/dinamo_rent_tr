@@ -37,6 +37,9 @@ function renta(overrides: Partial<Renta> = {}): Renta {
 		subtotal: '450000.00',
 		impuestos: '85500.00',
 		cobraIva: true,
+		tieneComision: false,
+		comision: '0.00',
+		valorNeto: '535500.00',
 		total: '535500.00',
 		abono: '0.00',
 		saldoPendiente: '535500.00',
@@ -226,6 +229,49 @@ describe('página de Rentas', () => {
 		expect(args.datos.nombreCliente).toBe('Cliente Nuevo');
 		expect(args.datos.placa).toBe('ABC123');
 		expect(args.datos.kmSalida).toBe('42100');
+		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+	});
+
+	it('envía la comisión al crear una renta y muestra el valor neto', async () => {
+		tauri.register('listar_rentas', () => []);
+		const crear = vi.fn((_args: { sessionId: string; datos: RentaDatos }) => renta({ id: 10 }));
+		tauri.register('crear_renta', crear);
+
+		render(RentasPage);
+		await screen.findByText('No hay rentas');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Nueva Renta' }));
+		const dialogo = await screen.findByRole('dialog');
+
+		// Cliente obligatorio + tarifa: 150.000 × 1 día (sin IVA por defecto) → total 150.000
+		await fireEvent.input(screen.getByPlaceholderText('Nombre para la renta'), {
+			target: { value: 'Cliente Comisión' }
+		});
+		await fireEvent.input(screen.getByPlaceholderText('150000'), {
+			target: { value: '150000' }
+		});
+
+		// Sin marcar el checkbox, la comisión no aparece ni se envía
+		expect(screen.queryByPlaceholderText('50000')).not.toBeInTheDocument();
+		expect(screen.queryByText('Valor neto')).not.toBeInTheDocument();
+
+		// Marcar «Cobrar comisión» → aparece el valor y el neto
+		await fireEvent.click(screen.getByLabelText(/Cobrar comisión/));
+		expect(screen.getByText('Valor neto')).toBeInTheDocument();
+		expect(screen.getByText('Comisión')).toBeInTheDocument();
+		await fireEvent.input(within(dialogo).getByPlaceholderText('50000'), {
+			target: { value: '10000' }
+		});
+
+		// El neto del resumen = total − comisión (150.000 − 10.000 = 140.000)
+		const netoTexto = screen.getAllByText(/140\.000/);
+		expect(netoTexto.length).toBeGreaterThan(0);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Crear renta' }));
+		await waitFor(() => expect(crear).toHaveBeenCalledTimes(1));
+		const args = crear.mock.calls[0][0] as { sessionId: string; datos: RentaDatos };
+		expect(args.datos.tieneComision).toBe(true);
+		expect(args.datos.comision).toBe('10000');
 		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 	});
 
