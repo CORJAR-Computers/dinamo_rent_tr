@@ -834,7 +834,7 @@ fn renta_editar_cerrada_recálculo_totales() {
     let id_cliente = cliente_real(&state);
 
     // Crear renta
-    let mut datos = datos_renta(&placa, id_cliente);
+    let datos = datos_renta(&placa, id_cliente);
     let creada = RentaService::crear(&mut conn, cfg, datos.clone()).expect("crear");
     let id = creada.id;
     assert_eq!(creada.estado, "Activo");
@@ -991,7 +991,7 @@ fn renta_extender_horas_y_dias() {
     assert!(err.to_string().contains("Solo se pueden extender rentas activas"), "error: {err}");
 
     // Tipo inválido
-    let mut datos2 = datos_renta(&placa, id_cliente);
+    let datos2 = datos_renta(&placa, id_cliente);
     let activa = RentaService::crear(&mut conn, cfg, datos2).expect("crear activa");
     let bad_tipo = ExtensionDatos { tipo: "minutos".into(), ..Default::default() };
     let err2 = RentaService::extender(&mut conn, cfg, activa.id, "admin", bad_tipo)

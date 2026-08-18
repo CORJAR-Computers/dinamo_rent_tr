@@ -3,8 +3,6 @@
 use rsfbclient::{Execute, IntoParam, Queryable};
 use serde::Serialize;
 
-use crate::core::error::AppError;
-
 /// Extensión de una renta (historial)
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
