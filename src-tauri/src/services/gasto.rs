@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::gasto::{Gasto, GastoDatos, GastoRepository};
 
@@ -142,20 +142,20 @@ impl GastoService {
     }
 }
 
-/// Normaliza campos (trim, defaults)
+/// Normaliza campos (trim → mayúsculas, defaults)
 fn normalizar(d: &mut GastoDatos) {
     d.placa = d
         .placa
         .as_ref()
-        .map(|s| s.trim().to_uppercase())
+        .map(|s| mayusculas(s))
         .filter(|s| !s.is_empty());
-    d.categoria = d.categoria.trim().to_string();
-    d.descripcion = d.descripcion.trim().to_string();
+    d.categoria = mayusculas(&d.categoria);
+    d.descripcion = mayusculas(&d.descripcion);
     d.monto = d.monto.trim().replace(',', ".");
     d.comprobante = d
         .comprobante
         .as_ref()
-        .map(|s| s.trim().to_string())
+        .map(|s| mayusculas(s))
         .filter(|s| !s.is_empty());
 }
 

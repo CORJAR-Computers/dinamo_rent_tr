@@ -13,7 +13,7 @@ use serde::Serialize;
 use crate::core::config::AppConfig;
 use crate::core::crypto::PiiCipher;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::cliente::{Cliente, ClienteDatos, ClienteRepository};
 
@@ -157,12 +157,28 @@ fn cifrar(cipher: &PiiCipher, d: &mut ClienteDatos) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Normaliza campos (trim, nombre completo calculado, defaults)
+/// Normaliza campos (trim → mayúsculas, nombre completo calculado, defaults)
+/// Los campos email NO se convierten a mayúsculas (convención de correo).
 fn normalizar(d: &mut ClienteDatos) {
-    d.tipo_doc = d.tipo_doc.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.no_doc = d.no_doc.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.nombres = d.nombres.trim().to_string();
-    d.apellidos = d.apellidos.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    d.tipo_doc = d.tipo_doc.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.no_doc = d.no_doc.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.nombres = mayusculas(&d.nombres);
+    d.apellidos = d.apellidos.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    // email: solo trim, sin mayúsculas
+    d.email = d.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    // Teléfonos y ubicaciones: mayúsculas
+    d.celular = d.celular.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.celular2 = d.celular2.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.ciudad = d.ciudad.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.estado_region = d.estado_region.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.pais = d.pais.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.nacionalidad = d.nacionalidad.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.dir_residencia = d.dir_residencia.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.dir_temporal = d.dir_temporal.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.hotel = d.hotel.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.habitacion = d.habitacion.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.no_licencia = d.no_licencia.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.tipo_licencia = d.tipo_licencia.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
     d.nombre_completo = match &d.apellidos {
         Some(ap) if !ap.is_empty() => format!("{} {}", d.nombres, ap),
         _ => d.nombres.clone(),

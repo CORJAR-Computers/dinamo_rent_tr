@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::auto::{Auto, AutoDatos, AutoRepository};
 
@@ -221,13 +221,13 @@ fn estado_vencimiento(dias: i64) -> String {
     }
 }
 
-/// Normaliza campos (trim, mayúsculas donde aplica, defaults)
+/// Normaliza campos (trim → mayúsculas, defaults)
 fn normalizar(d: &mut AutoDatos) {
-    d.placa = d.placa.trim().to_uppercase();
-    d.marca = d.marca.trim().to_string();
-    d.modelo = d.modelo.trim().to_string();
-    d.tipo = d.tipo.trim().to_string();
-    d.estado = d.estado.trim().to_string();
+    d.placa = mayusculas(&d.placa);
+    d.marca = mayusculas(&d.marca);
+    d.modelo = mayusculas(&d.modelo);
+    d.tipo = mayusculas(&d.tipo);
+    d.estado = d.estado.trim().to_string(); // estado con capitalización
     d.costo_fijo_mensual = d.costo_fijo_mensual.trim().replace(',', ".");
     if d.costo_fijo_mensual.is_empty() {
         // vacío → "0.00": evita SQLCODE -303 al enlazar '' a CAST(? AS DECIMAL)

@@ -16,7 +16,7 @@ use crate::core::audit::log_audit;
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
 use crate::core::security;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::usuario::{Usuario, UsuarioRepository};
 
@@ -91,11 +91,11 @@ impl UsuarioService {
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
         actor: &str,
-        mut datos: UsuarioDatos,
-    ) -> Result<Usuario, AppError> {		datos.username = datos.username.trim().to_string();
-		datos.nombre = datos.nombre.trim().to_string();
-		datos.rol = datos.rol.trim().to_string();
-		datos.email = datos.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        mut datos: UsuarioDatos,    ) -> Result<Usuario, AppError> {
+		datos.username = datos.username.trim().to_string();
+		datos.nombre = mayusculas(&datos.nombre);
+		datos.rol = datos.rol.trim().to_string(); // rol: capitalización fija (Administrador, Supervisor, Operador)
+		datos.email = datos.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()); // email: sin mayúsculas
 		validar_base(&datos.nombre, &datos.rol, datos.email.as_deref(), cfg)?;
 
         // Username: obligatorio, sin espacios, longitud permitida
@@ -158,11 +158,11 @@ impl UsuarioService {
         cfg: &Arc<AppConfig>,
         actor: &str,
         id: i64,
-        mut datos: UsuarioDatosActualizar,
-    ) -> Result<Usuario, AppError> {
-        let actual = Self::obtener(conn, id)?;		datos.nombre = datos.nombre.trim().to_string();
-		datos.rol = datos.rol.trim().to_string();
-		datos.email = datos.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        mut datos: UsuarioDatosActualizar,    ) -> Result<Usuario, AppError> {
+        let actual = Self::obtener(conn, id)?;
+		datos.nombre = mayusculas(&datos.nombre);
+		datos.rol = datos.rol.trim().to_string(); // rol: capitalización fija
+		datos.email = datos.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()); // email: sin mayúsculas
 		validar_base(&datos.nombre, &datos.rol, datos.email.as_deref(), cfg)?;		// Protección: último administrador activo no se puede desactivar ni despromover
 		let es_admin_activo = actual.rol.as_deref() == Some("Administrador") && actual.activo;
 		if es_admin_activo

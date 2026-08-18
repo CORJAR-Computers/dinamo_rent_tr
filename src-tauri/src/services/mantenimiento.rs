@@ -14,7 +14,7 @@ use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::auto::AutoRepository;
 use crate::repositories::mantenimiento::{Mantenimiento, MantenimientoDatos, MantenimientoRepository};
@@ -251,13 +251,13 @@ impl MantenimientoService {
     }
 }
 
-/// Normaliza campos (trim, mayúsculas en placa, defaults)
+/// Normaliza campos (trim → mayúsculas, defaults)
 fn normalizar(d: &mut MantenimientoDatos) {
-    d.placa = d.placa.trim().to_uppercase();
-    d.tipo = d.tipo.trim().to_string();
-    d.fecha = d.fecha.trim().to_string();
-    d.descripcion = d.descripcion.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    d.placa = mayusculas(&d.placa);
+    d.tipo = mayusculas(&d.tipo);
+    d.fecha = d.fecha.trim().to_string(); // fecha se mantiene con formato
+    d.descripcion = d.descripcion.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.observaciones = d.observaciones.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
     d.costo = d.costo.trim().replace(',', ".");
 }
 

@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::reserva::{Reserva, ReservaDatos, ReservaRepository};
@@ -122,15 +122,15 @@ impl ReservaService {
     }
 }
 
-/// Normaliza campos (trim, defaults)
+/// Normaliza campos (trim → mayúsculas, defaults)
 fn normalizar(d: &mut ReservaDatos) {
-    d.nombre_cliente = d.nombre_cliente.trim().to_string();
-    d.nacionalidad = d.nacionalidad.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.categoria_vehiculo = d.categoria_vehiculo.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.placa_asignada = d.placa_asignada.as_ref().map(|s| s.trim().to_uppercase()).filter(|s| !s.is_empty());
-    d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    d.nombre_cliente = mayusculas(&d.nombre_cliente);
+    d.nacionalidad = d.nacionalidad.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.categoria_vehiculo = d.categoria_vehiculo.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.placa_asignada = d.placa_asignada.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.observaciones = d.observaciones.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
     // Montos: vacío → "0.00" (evita SQLCODE -303 al enlazar '' a DECIMAL)
     for m in [&mut d.valor_dia, &mut d.valor_hora_adic, &mut d.abono] {
         *m = m.trim().replace(',', ".");

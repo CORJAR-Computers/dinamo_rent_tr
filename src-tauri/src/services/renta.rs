@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::renta::{
@@ -693,16 +693,16 @@ impl RentaService {
     }
 }
 
-/// Normaliza campos (trim, placa a mayúsculas, montos con coma → punto)
+/// Normaliza campos (trim → mayúsculas, montos con coma → punto)
 fn normalizar(d: &mut RentaDatos) {
-    d.placa = d.placa.as_ref().map(|s| s.trim().to_uppercase()).filter(|s| !s.is_empty());
-    d.nombre_cliente = d.nombre_cliente.trim().to_string();
-    d.no_licencia = d.no_licencia.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.nacionalidad = d.nacionalidad.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.tanque_salida = d.tanque_salida.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    d.placa = d.placa.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.nombre_cliente = mayusculas(&d.nombre_cliente);
+    d.no_licencia = d.no_licencia.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.nacionalidad = d.nacionalidad.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.observaciones = d.observaciones.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.tanque_salida = d.tanque_salida.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
     // Montos: vacío → "0.00". Sin esto, un campo monetario en blanco se enlaza
     // como '' a CAST(? AS DECIMAL) y Firebird falla con SQLCODE -303
     // "conversion error from string ''" (error real visto en producción al

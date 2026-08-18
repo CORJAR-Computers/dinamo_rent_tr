@@ -144,7 +144,7 @@ fn cliente_crud_con_pii() {
     // Crear (PII se cifra en BD)
     let creado = ClienteService::crear(&mut conn, cfg, &cipher, datos.clone()).expect("crear cliente");
     let id = creado.cliente.id;
-    assert_eq!(creado.cliente.nombre_completo, "Cliente Prueba");
+    assert_eq!(creado.cliente.nombre_completo, "CLIENTE PRUEBA", "nombres en mayúsculas");
     assert_eq!(creado.cliente.celular.as_deref(), Some("3101234567"), "PII descifrada");
     assert_eq!(creado.cliente.email.as_deref(), Some("prueba@test.co"));
 

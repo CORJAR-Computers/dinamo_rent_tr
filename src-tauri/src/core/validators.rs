@@ -122,6 +122,13 @@ pub fn sanitizar(texto: &str, max_len: usize) -> String {
     texto.trim().chars().take(max_len).collect()
 }
 
+/// Convierte texto a mayúsculas y recorta espacios.
+/// Diseñado para usar en normalizar() de cada servicio.
+/// No toca emails (el caller exlude ese campo).
+pub fn mayusculas(s: &str) -> String {
+    s.trim().to_uppercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

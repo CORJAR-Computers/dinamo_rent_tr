@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::validate_no_xss;
+use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::comparendo::{Comparendo, ComparendoDatos, ComparendoRepository};
 use crate::repositories::auto::AutoRepository;
@@ -160,17 +160,17 @@ impl ComparendoService {
     }
 }
 
-/// Normaliza campos (trim, placa a mayúsculas, monto con coma → punto)
+/// Normaliza campos (trim → mayúsculas, monto con coma → punto)
 fn normalizar(d: &mut ComparendoDatos) {
-    d.placa = d.placa.trim().to_uppercase();
-    d.fecha_infraccion = d.fecha_infraccion.trim().to_string();
-    d.hora_infraccion = d.hora_infraccion.trim().to_string();
+    d.placa = mayusculas(&d.placa);
+    d.fecha_infraccion = d.fecha_infraccion.trim().to_string(); // fecha formato
+    d.hora_infraccion = d.hora_infraccion.trim().to_string(); // hora formato
     d.monto = d.monto.trim().replace(',', ".");
-    d.estado = d.estado.trim().to_string();
+    d.estado = d.estado.trim().to_string(); // estado con capitalización
     d.observaciones = d
         .observaciones
         .as_ref()
-        .map(|s| s.trim().to_string())
+        .map(|s| mayusculas(s))
         .filter(|s| !s.is_empty());
 }
 
