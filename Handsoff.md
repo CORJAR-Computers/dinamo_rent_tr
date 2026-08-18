@@ -734,7 +734,7 @@ actualizados) → auditoría registrada. Fixtures de ejemplo en `scripts/fixture
 
 ### 6.2 Verificación de despliegue — `scripts/verificar-despliegue.ps1`
 
-Post-instalación en el equipo del cliente: comprueba exe **v1.0.3** instalado, **arranca la
+Post-instalación en el equipo del cliente: comprueba exe **v1.0.15** instalado, **arranca la
 app** y verifica que siga viva 10 s (el check crítico — el bug del v1.0.0 moría ahí), y luego
 valida los datos que crea el **primer arranque** (`%APPDATA%\com.corjar.dinamorent`: `config.ini`
 + `dinamo_rent_v3.fdb`). Veredicto `OK` / `FALLOS` con checks numerados, exit 0/1.

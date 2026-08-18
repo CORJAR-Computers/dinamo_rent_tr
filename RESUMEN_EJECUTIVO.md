@@ -26,7 +26,7 @@
 | v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3+ |
 | v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación) | Solo referencia — **no instalarla** |
 
-**Assets de la v1.0.15:** [`DinamoRent_1.0.12_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.12_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.12_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.12_x64_en-US.msi) (~33 MB, despliegue GPO; sha256 publicados en la release). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
+**Assets de la v1.0.15:** [`DinamoRent_1.0.15_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.15_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.15_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.15_x64_en-US.msi) (~33 MB, despliegue GPO; sha256 publicados en la release). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
 **Auto-actualización (activa desde la v1.0.3):** la app chequea al arrancar el
 `latest.json` de GitHub Releases y ofrece instalar la versión nueva (firma minisign
