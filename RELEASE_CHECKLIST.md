@@ -6,50 +6,40 @@
 > `INSTALACION_OPERACIONES.md` (instalación), `DEPLOYMENT_CLIENTES.md`
 > (despliegue a clientes) y `ANUNCIO_RELEASE_TEMPLATE.md` (mensajes de anuncio).
 >
-> **📋 Objetivo actual: v1.0.16 (en preparación, sin publicar aún).**
-> Incluye la versión REAL de la app en el menú lateral y el login (comando
-> `app_version`, package_info → Cargo.toml / tauri.conf.json en el build —
-> antes mostraba la v3.2.0 heredada del proyecto anterior), el modo -DryRun
-> de `verificar-despliegue.ps1` (validación del flujo sin tocar la máquina
-> real) con su paso en `ci.yml`, la actualización de la documentación a la
-> v1.0.15 y los **backups de la BD** (Fase 8 del plan): automáticos en los
-> 4 horarios de `[backup] schedule_times` con rotación a 10 copias
-> (gbak + fallback a copia del `.fdb`), cifrado opcional AES-256-GCM por
-> chunks (PBKDF2-SHA256, `encryption_enabled`/`encryption_password`) y el
-> panel `/backups` (solo Administrador) con «Crear backup ahora», listado de
-> copias, estado de la última corrida y **restauración** de un backup
-> (descifra si está cifrado, `gbak -r` con reinicio de la app;
-> `backup_estado`/`backup_ahora`/`backup_restaurar`). Al publicar el tag, el
-> auto-update (v1.0.14+) + el paso de paginación de `release.yml` + la E2E
-> del auto-update en máquina real (§6) quedan probados de punta a punta.
+> **📋 Objetivo actual: v1.0.17 (en preparación, sin publicar aún).**
+> Incluye la versión REAL de la app (comando `app_version`), backups de la BD
+> (Fase 8: automático, cifrado AES-256-GCM, restauración con `gbak -r`),
+> **edición de rentas cerradas** (solo Admin, recálculo de totales y auditoría
+> ANTES→DESPUÉS para corregir errores de digitación), **extensiones acumulables**
+> de rentas (migración 0024, historial de horas/días extras, modal con preview)
+> y **mayúsculas automáticas** en todos los campos de texto (excepto email, rol,
+> web) con validaciones case-insensitive y selects de categoría/tipo alineados.
 
 ---
 
-**Estado de la v1.0.16 — publicada (18-08, tag `v1.0.16` sobre `a70f67b`):**
+**Estado de la v1.0.17 — en preparación:**
 
-Ya en `main` y validados por el CI (run #90 verde): versión REAL de la app
-(`app_version`), modo -DryRun del verificador, docs a la v1.0.16 y la **Fase 8
-de backups completa** (automático en 4 horarios, rotación a 10, cifrado
-AES-256-GCM, panel `/backups` y restauración con `gbak -r`). El setup wizard y
-el diálogo de config BD quedaron **fuera del alcance** (proyecto de uso interno
-de Dinamo: la instalación con defaults basta).
+Features incluidas:
+- Versión REAL de la app (comando `app_version`, sin el v3.2.0 heredado)
+- Backups de la BD (Fase 8: automático en 4 horarios, rotación a 10, cifrado
+  AES-256-GCM, panel `/backups` y restauración con `gbak -r`)
+- **Edición de rentas cerradas** (solo Admin: recálculo de totales, auditoría
+  ANTES→DESPUÉS, motivo obligatorio)
+- **Extensiones acumulables de rentas** (migración 0024, historial de horas/días
+  extras, modal con preview del nuevo retorno)
+- **Mayúsculas automáticas** en todos los campos de texto (excepto email, rol,
+  web) con validaciones case-insensitive
+- Fix de selects de categoría/tipo (gastos/mantenimiento) alineados con la DB
+- Verificador de despliegue -DryRun en el CI
 
-Ya ejecutado: secret confirmado (§1) · bump + enlaces de descarga (§2) ·
-verificación local + `-DryRun` (§3) · commit `chore: versión 1.0.16` (§4) ·
-tag `v1.0.16` + push → release publicada por `release.yml` (run #17) con los
-5 assets (NSIS 22 MB + MSI 33.7 MB + `.sig` ×2 + `latest.json`) (§5) ·
-**§6 sin máquina** (updater_e2e desde v1.0.15: detecta la v1.0.16, firma
-minisign verificada, bytes idénticos al MSI servido; HTTP 200 de los 5
-assets; sha256 reales `d0f043df…`/`ef93c9c1…` en el ANUNCIO) · docs de
-operación al día (§7).
+Pendientes antes del tag:
 
-Pendiente para cerrar la v1.0.16:
-
-- [ ] **Prueba de campo (§6)**: en un equipo con v1.0.14+ instalada, confirmar
-      que detecta la v1.0.16, instala y reinicia; y la paginación en máquina
-      real (contrato 3-4 páginas Carta, orden en 1 página).
-- [ ] **Anuncio (§8)**: pegar el mensaje de `ANUNCIO_RELEASE_TEMPLATE.md`
-      (versión larga o corta, ya con sha256 reales) en Slack/Teams.
+- [ ] CI verde en main (lint, svelte-check, vitest, cargo test --lib + integración)
+- [ ] Bump a v1.0.17 en los 3 archivos (§2)
+- [ ] Verificación local con `-DryRun` (§3)
+- [ ] Commit `chore: versión 1.0.17` + tag `v1.0.17` (§4-5)
+- [ ] Prueba de campo en máquina real (§6)
+- [ ] Anuncio en canal del equipo (§8)
 
 ---
 
@@ -59,7 +49,7 @@ Pendiente para cerrar la v1.0.16:
 ya estén bumpeados.** El CI (`release.yml`) compila el código del commit del tag
 y los instaladores se nombran con la versión de `src-tauri/tauri.conf.json`,
 NO con el nombre del tag. Un tag sobre un commit sin bumpear publicaría una
-release `v1.0.16` con instaladores `DinamoRent_1.0.15_*` (si el bump quedara a medias).
+release `v1.0.17` con instaladores `DinamoRent_1.0.15_*` (si el bump quedara a medias).
 
 ---
 
@@ -86,9 +76,9 @@ Editar la versión en los **tres** archivos (deben coincidir):
 
 | Archivo | Campo |
 |---|---|
-| `package.json` | `"version": "1.0.16"` |
-| `src-tauri/Cargo.toml` | `version = "1.0.16"` (crate `dinamo-rent`) |
-| `src-tauri/tauri.conf.json` | `"version": "1.0.16"` |
+| `package.json` | `"version": "1.0.17"` |
+| `src-tauri/Cargo.toml` | `version = "1.0.17"` (crate `dinamo-rent`) |
+| `src-tauri/tauri.conf.json` | `"version": "1.0.17"` |
 
 Verificar la consistencia:
 
@@ -125,7 +115,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verificar-despliegue
 Mensaje con el estilo del repo (español, prefijo `chore:`):
 
 ```text
-chore: versión 1.0.16 — versión real de la app, backups de la BD (Fase 8: automático, cifrado, restauración) y documentación al día
+chore: versión 1.0.17 — versión real de la app, backups de la BD (Fase 8: automático, cifrado, restauración) y documentación al día
 # (ajustar el resumen a lo que incluya la release al bumpear)
 ```
 
@@ -133,8 +123,8 @@ chore: versión 1.0.16 — versión real de la app, backups de la BD (Fase 8: au
 
 ```bash
 git push origin main
-git tag v1.0.16
-git push origin v1.0.16
+git tag v1.0.17
+git push origin v1.0.17
 ```
 
 El push del tag dispara `release.yml` (GitHub Actions, `windows-latest`):
@@ -159,14 +149,14 @@ paginación.
 
 ## 6. Verificar la release (no confiar a ciegas en el CI)
 
-- [ ] Release `v1.0.16` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.16>
-      con **5 assets**: los 2 instaladores (`DinamoRent_1.0.16_x64-setup.exe` NSIS ~21 MB y
-      `DinamoRent_1.0.16_x64_en-US.msi` ~33 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
+- [ ] Release `v1.0.17` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.17>
+      con **5 assets**: los 2 instaladores (`DinamoRent_1.0.17_x64-setup.exe` NSIS ~21 MB y
+      `DinamoRent_1.0.17_x64_en-US.msi` ~33 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
       y `latest.json`. Los `.sig` son de **minisign** (verificación del updater), NO firma de
       código Authenticode.
 - [ ] `latest.json` existe y `platforms.windows-x86_64.url` apunta al instalador de esta
       release (el CI elige cuál sube al publicar — en la v1.0.3 fue el `.msi`) — es lo que la
-      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse. En la v1.0.16 la app
+      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse. En la v1.0.17 la app
       instalada debe DETECTAR la release nueva y ofrecer instalarla (prueba de campo del
       auto-update).
 - [ ] **E2E del auto-update — validación sin máquina** (antes de la prueba de campo):
@@ -177,23 +167,23 @@ paginación.
       ```bash
       cd src-tauri && cargo run --features dev --bin updater_e2e -- \
         --endpoint https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/latest/download/latest.json \
-        --expect-version 1.0.16 \
-        --expect-file ./DinamoRent_1.0.16_x64_en-US.msi
+        --expect-version 1.0.17 \
+        --expect-file ./DinamoRent_1.0.17_x64_en-US.msi
       ```
 
-      Debe terminar con `[OK]` (check() detecta v1.0.16, firma minisign verificada contra
+      Debe terminar con `[OK]` (check() detecta v1.0.17, firma minisign verificada contra
       la pubkey de producción y bytes idénticos al instalador).
 
       > ⚠️ El updater sirve por defecto la plataforma `windows-x86_64` = **MSI** — el
       > `--expect-file` debe ser el `.msi` (verificado el 18-08 contra la release real).
-      > Para validar el NSIS en su lugar, usar `--expect-file ./DinamoRent_1.0.16_x64-setup.exe`
+      > Para validar el NSIS en su lugar, usar `--expect-file ./DinamoRent_1.0.17_x64-setup.exe`
       > apuntando el endpoint a una copia local del `latest.json` con `windows-x86_64-nsis`
       > como plataforma por defecto (o verificar el NSIS con `verificar-updater-e2e.sh`).
 - [ ] **E2E del auto-update en máquina real** (la contraparte de campo del test de
       paginación de `release.yml`, que sí corre en CI): en un equipo con una **v1.0.14+
-      instalada** (p. ej. la v1.0.15), abrir la app y confirmar que **detecta la v1.0.16**
+      instalada** (p. ej. la v1.0.15), abrir la app y confirmar que **detecta la v1.0.17**
       («Actualización disponible»), descarga con verificación de firma minisign, instala
-      y **reinicia en la v1.0.16** — verificar la versión resultante (menú lateral / login
+      y **reinicia en la v1.0.17** — verificar la versión resultante (menú lateral / login
       o `scripts/verificar-despliegue.ps1` → VEREDICTO OK).
 - [ ] **Paginación en máquina real** (contraparte de campo del test de `release.yml`): desde
       una renta real, «Ver contrato (Carta)» → contrato en **3-4 páginas Carta** con pie
@@ -205,7 +195,7 @@ paginación.
 
 ```powershell
 # En el PC objetivo
-Get-FileHash .\DinamoRent_1.0.16_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\DinamoRent_1.0.17_x64-setup.exe -Algorithm SHA256
 # comparar contra el sha256 publicado por GitHub en la página de la release
 ```
 
@@ -217,7 +207,7 @@ Get-FileHash .\DinamoRent_1.0.16_x64-setup.exe -Algorithm SHA256
 
 Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
-- [ ] `scripts/verificar-despliegue.ps1` — `Check "Version 1.0.16" ($ver -like '1.0.16*')`.
+- [ ] `scripts/verificar-despliegue.ps1` — `Check "Version 1.0.17" ($ver -like '1.0.17*')`.
 - [ ] `DEPLOYMENT_CLIENTES.md` — versión esperada e instaladores en la tabla de verificación.
 - [ ] `RESUMEN_EJECUTIVO.md` — versión estable, assets, conteos.
 - [ ] `Handsoff.md` — cabecera y nota de portada de la release nueva.
@@ -236,14 +226,14 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
 ```
 [ ] CI verde en main (incluye verificar-despliegue.ps1 -DryRun)
-[ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos, 1.0.16)
+[ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos, 1.0.17)
 [ ] Docs de descarga actualizadas (INSTALACION_OPERACIONES.md, README.md, ANUNCIO)
-[ ] commit chore: versión 1.0.16
-[ ] git push origin main && git push origin v1.0.16
+[ ] commit chore: versión 1.0.17
+[ ] git push origin main && git push origin v1.0.17
 [ ] Release publicada por CI con changelog y 5 assets (NSIS + MSI + .sig x2 + latest.json)
 [ ] sha256 verificado contra el publicado
 [ ] verificar-despliegue.ps1 → OK (equipo de prueba)
-[ ] E2E auto-update en máquina real → v1.0.16 detectada, instalada y reiniciada
+[ ] E2E auto-update en máquina real → v1.0.17 detectada, instalada y reiniciada
 [ ] Docs de operación al día (ps1, DEPLOYMENT_CLIENTES, RESUMEN, Handsoff)
 [ ] Anuncio en Slack/Teams
 ```

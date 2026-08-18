@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-17** · Estado: **todos los módulos operativos, validación verde · release v1.0.15 publicada y firmada (auto-update activo; secret `TAURI_SIGNING_PRIVATE_KEY` configurado) · comisión por renta con informe/balance de netos · comparendos con procedencia persistente y filtros combinables · CI en Node 24 · herramientas de operación (importador de datos + verifier de despliegue) en §6**
+> Última actualización: **2026-08-18** · Estado: **todos los módulos operativos, validación verde · release v1.0.17 en preparación · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -587,7 +587,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       `src/lib/stores/app.svelte.ts`; `+layout.svelte` y `login/+page.svelte` renderizan la
       versión real (`v{version}`) en vez del literal, con test de integración (`15a2311`).
       Queda solo el repaso visual en la app real (con la prueba de campo del auto-update, §6
-      de RELEASE_CHECKLIST, v1.0.16).*
+      de RELEASE_CHECKLIST, v1.0.17).*
 - [-] **Setup wizard de primera ejecución y diálogo de config BD** — **descartados (19-08):**
       el proyecto es de **uso interno de Dinamo**; la instalación con defaults (auto-create del
       `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
