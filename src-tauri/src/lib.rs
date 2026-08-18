@@ -281,6 +281,7 @@ pub fn run() {
             commands::renta::cerrar_renta,
             commands::renta::cambiar_auto_renta,
             commands::renta::cancelar_renta,
+            commands::renta::editar_renta_cerrada,
             commands::renta::eliminar_renta,
             commands::renta::registrar_pago_renta,
             commands::renta::registrar_inspeccion_renta,

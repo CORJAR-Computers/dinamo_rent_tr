@@ -775,6 +775,16 @@ export interface RentaCierreDatos {
 	observaciones?: string;
 }
 
+/** Datos para editar una renta cerrada (corrección de errores de digitación) */
+export interface RentaCierreEditDatos {
+	valorDia?: string;
+	valorHoraExtra?: string;
+	diasCalculados?: number | null;
+	horasExtras?: number | null;
+	descuento?: string;
+	observaciones?: string;
+}
+
 /** Resultado de la cancelación de una renta */
 export interface RentaCancelada {
 	renta: Renta;
@@ -800,6 +810,8 @@ export const rentaApi = {
 		invokeCmd<Renta>('cambiar_auto_renta', { sessionId, id, placa }),
 	cancelar: (sessionId: string, id: number) =>
 		invokeCmd<RentaCancelada>('cancelar_renta', { sessionId, id }),
+	editarCerrada: (sessionId: string, id: number, datos: RentaCierreEditDatos) =>
+		invokeCmd<Renta>('editar_renta_cerrada', { sessionId, id, datos }),
 	eliminar: (sessionId: string, id: number) =>
 		invokeCmd<void>('eliminar_renta', { sessionId, id }),
 	registrarPago: (sessionId: string, idRenta: number, datos: PagoDatos) =>

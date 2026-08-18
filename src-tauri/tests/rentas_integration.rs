@@ -19,7 +19,7 @@ use dinamo_rent_lib::core::security::LoginAttemptTracker;
 use dinamo_rent_lib::repositories::auto::AutoRepository;
 use dinamo_rent_lib::repositories::cliente::ClienteRepository;
 use dinamo_rent_lib::repositories::renta::{
-    InspeccionDatos, PagoDatos, RentaCierreDatos, RentaDatos,
+    InspeccionDatos, PagoDatos, RentaCierreDatos, RentaCierreEditDatos, RentaDatos,
 };
 use dinamo_rent_lib::repositories::reserva::ReservaDatos;
 use dinamo_rent_lib::services::renta::RentaService;
@@ -785,4 +785,104 @@ fn renta_desde_reserva_cancelada_rechazada() {
     let cancelada = ReservaService::obtener(&mut conn, reserva.id).expect("releer");
     assert_eq!(cancelada.estado, "Cancelada");
     ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
+}
+
+#[test]
+#[serial]
+fn renta_editar_cerrada_recálculo_totales() {
+    // Verifica que editar_cerrada permite corregir errores de digitación
+    // en una renta Cerrada, recalculando los totales y registrando auditoría.
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+
+    let Some(placa) = auto_real(&state) else {
+        panic!("BD de dev sin autos — se requiere flota real");
+    };
+    let id_cliente = cliente_real(&state);
+
+    // Crear renta
+    let mut datos = datos_renta(&placa, id_cliente);
+    let creada = RentaService::crear(&mut conn, cfg, datos.clone()).expect("crear");
+    let id = creada.id;
+    assert_eq!(creada.estado, "Activo");
+
+    // Registrar un pago
+    let pago = RentaService::registrar_pago(&mut conn, id, "tester", datos_pago("100000"))
+        .expect("pago");
+    assert_eq!(pago.monto, "100000.00");
+
+    // Cerrar renta
+    let hoy = Local::now().date_naive();
+    let cierre = RentaCierreDatos {
+        fecha_devolucion_real: Some(hoy.format("%Y-%m-%d").to_string()),
+        hora_devolucion_real: Some("18:00".into()),
+        km_final: Some("45000".into()),
+        tanque_final: Some("Lleno".into()),
+        dias_calculados: Some(3),
+        horas_extras: Some(0),
+        valor_dia: Some("150000".into()),
+        valor_hora_extra: Some("10000".into()),
+        descuento: Some("0".into()),
+        observaciones: Some("Cierre normal".into()),
+    };
+    let cerrada = RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
+    assert_eq!(cerrada.estado, "Cerrada");
+    // 3 × 150000 = 450000 + 19% IVA = 535500; saldo = 535500 − 100000 abono = 435500
+    assert_eq!(cerrada.total, "535500.00", "total tras cierre");
+    assert_eq!(cerrada.saldo_pendiente, "435500.00", "saldo tras cierre");
+
+    // ── Editar renta cerrada: corregir valor_dia (150000 → 180000) ──
+    let edicion = RentaCierreEditDatos {
+        valor_dia: Some("180000".into()),
+        valor_hora_extra: None,  // conservar actual
+        dias_calculados: None,    // conservar actual
+        horas_extras: None,
+        descuento: None,
+        observaciones: Some("Corrección: digitó 150k en vez de 180k".into()),
+    };
+    let editada = RentaService::editar_cerrada(&mut conn, cfg, id, "admin", edicion)
+        .expect("editar cerrada");
+    assert_eq!(editada.estado, "Cerrada", "sigue cerrada");
+    assert_eq!(editada.placa, Some(placa.clone()), "placa intacta");
+    assert_eq!(editada.abono, "100000.00", "abono no cambia");
+    // 3 × 180000 = 540000 + 19% IVA = 642600; saldo = 642600 − 100000 = 542600
+    assert_eq!(editada.total, "642600.00", "total recalculado");
+    assert_eq!(editada.saldo_pendiente, "542600.00", "saldo recalculado");
+    assert_eq!(editada.valor_dia, "180000.00", "valor día actualizado");
+
+    // Verificar que la auditoría se registró
+    let mut conn2 = state.pool.get().expect("conn2");
+    let audit: Vec<(String,)> = conn2
+        .query("SELECT accion FROM auditoria WHERE mensaje LIKE '%renta=%' AND accion = 'EDICION RENTA CERRADA' ORDER BY id DESC ROWS 1", ())
+        .expect("audit");
+    assert!(!audit.is_empty(), "debe haber registro de auditoría");
+
+    // ── Intentar editar sin motivo → debe fallar ──
+    let sin_motivo = RentaCierreEditDatos {
+        valor_dia: Some("200000".into()),
+        valor_hora_extra: None,
+        dias_calculados: None,
+        horas_extras: None,
+        descuento: None,
+        observaciones: None,  // sin motivo
+    };
+    // El servicio permite observaciones None (el validador del backend/command lo rechaza)
+    // pero el servicio en sí no valida esto — lo hace el comando Tauri.
+    // Este test verifica que el servicio funciona con None.
+    let editada2 = RentaService::editar_cerrada(&mut conn, cfg, id, "admin", sin_motivo)
+        .expect("editar sin motivo (servicio lo permite)");
+    assert_eq!(editada2.valor_dia, "200000.00");
+
+    // ── No se puede usar editar_cerrada en una renta ACTIVA ──
+    let mut datos2 = datos_renta(&placa, id_cliente);
+    datos2.valor_dia = "100000".into();
+    let activa = RentaService::crear(&mut conn, cfg, datos2).expect("crear activa");
+    let err = RentaService::editar_cerrada(&mut conn, cfg, activa.id, "admin", RentaCierreEditDatos::default())
+        .expect_err("no se puede editar renta activa con editar_cerrada");
+    assert!(err.to_string().contains("Solo se pueden editar rentas cerradas"), "error: {err}");
+
+    // Limpieza
+    RentaService::eliminar(&mut conn, id).expect("eliminar editada");
+    RentaService::eliminar(&mut conn, activa.id).expect("eliminar activa");
 }

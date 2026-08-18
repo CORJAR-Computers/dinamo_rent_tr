@@ -19,7 +19,7 @@ use crate::core::validators::validate_no_xss;
 use crate::core::PooledConnection;
 use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::renta::{
-    Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaDatos, RentaRepository,
+    Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos, RentaRepository,
 };
 use crate::repositories::reserva::ReservaRepository;
 
@@ -386,6 +386,139 @@ impl RentaService {
         RentaRepository::cancelar(conn, id)?;
         let renta = Self::obtener(conn, id)?;
         Ok(RentaCancelada { renta, cancelada: true })
+    }
+
+    /// Edita campos financieros de una renta CERRADA (corrección de errores de digitación).
+    /// Solo permite campos que afectan los totales: valor_dia, valor_hora_extra,
+    /// dias_calculados, horas_extras, descuento y observaciones.
+    /// Los campos de identificación (placa, cliente) y abono NO son editables.
+    /// Recalcula subtotal/impuestos/total/saldo_pendiente/valor_neto.
+    /// Requiere usuario Administrador (caller debe verificar antes).
+    pub fn editar_cerrada(
+        conn: &mut PooledConnection,
+        cfg: &Arc<AppConfig>,
+        id: i64,
+        usuario: &str,
+        datos: RentaCierreEditDatos,
+    ) -> Result<Renta, AppError> {
+        let actual = Self::obtener(conn, id)?;
+        if actual.estado != "Cerrada" {
+            return Err(AppError::Business(
+                "Solo se pueden editar rentas cerradas.".into(),
+            ));
+        }
+        // Reconstruir RentaDatos con los campos originales + los editados
+        let mut d = RentaDatos {
+            placa: actual.placa.clone(),
+            id_cliente: actual.id_cliente,
+            nombre_cliente: actual.nombre_cliente.clone(),
+            no_licencia: actual.no_licencia.clone(),
+            nacionalidad: actual.nacionalidad.clone(),
+            fecha_recogida: actual.fecha_recogida.clone(),
+            hora_recogida: actual.hora_recogida.clone(),
+            ubicacion_recogida: actual.ubicacion_recogida.clone(),
+            fecha_retorno: actual.fecha_retorno.clone(),
+            hora_retorno: actual.hora_retorno.clone(),
+            ubicacion_retorno: actual.ubicacion_retorno.clone(),
+            // Campos editables: usar nuevos valores si se proporcionaron, si no los originales
+            dias_calculados: datos.dias_calculados.unwrap_or(actual.dias_calculados),
+            horas_extras: datos.horas_extras.unwrap_or(actual.horas_extras),
+            valor_dia: datos.valor_dia.clone().unwrap_or_else(|| actual.valor_dia.clone()),
+            valor_hora_extra: datos.valor_hora_extra.clone().unwrap_or_else(|| actual.valor_hora_extra.clone()),
+            valor_dia_extra: actual.valor_dia_extra.clone(),
+            costo_lavado: actual.costo_lavado.clone(),
+            costo_silla: actual.costo_silla.clone(),
+            costo_retorno: actual.costo_retorno.clone(),
+            costo_domicilio: actual.costo_domicilio.clone(),
+            costo_cables: actual.costo_cables.clone(),
+            costo_inversor: actual.costo_inversor.clone(),
+            valor_gasolina: actual.valor_gasolina.clone(),
+            // Descuento: usar nuevo valor si se proporcionó
+            descuento: datos.descuento.clone().unwrap_or_else(|| actual.descuento.clone()),
+            subtotal: actual.subtotal.clone(),
+            impuestos: actual.impuestos.clone(),
+            cobra_iva: actual.cobra_iva,
+            tiene_comision: actual.tiene_comision,
+            comision: actual.comision.clone(),
+            valor_neto: actual.valor_neto.clone(),
+            total: actual.total.clone(),
+            abono: actual.abono.clone(),
+            saldo_pendiente: actual.saldo_pendiente.clone(),
+            observaciones: datos.observaciones.clone().or_else(|| actual.observaciones.clone()),
+            km_salida: actual.km_salida.clone(),
+            tanque_salida: actual.tanque_salida.clone(),
+            id_reserva: actual.id_reserva,
+        };
+        // Recalcular totales con los valores (posiblemente editados)
+        calcular_totales(&mut d, cfg);
+        // Restaurar abono y saldo = total - abono (el abono NO se modifica)
+        let abono = dec_str(&actual.abono);
+        let total = dec(&d.total, "0.00");
+        d.saldo_pendiente = (total - abono).max(Decimal::ZERO).round_dp(2).to_string();
+        // Preparar datos para el repository (solo campos editables)
+        let edit = RentaCierreEditDatos {
+            valor_dia: Some(d.valor_dia.clone()),
+            valor_hora_extra: Some(d.valor_hora_extra.clone()),
+            dias_calculados: Some(d.dias_calculados),
+            horas_extras: Some(d.horas_extras),
+            descuento: Some(d.descuento.clone()),
+            observaciones: d.observaciones.clone(),
+        };
+        // Registrar valores anteriores para auditoría
+        let audit_msg = format!(
+            "renta={id}, placa={}, ANTES: vdia={}, vhe={}, dias={}, hext={}, desc={}, total={} | DESPUES: vdia={}, vhe={}, dias={}, hext={}, desc={}, total={}, motivo={}",
+            actual.placa.as_deref().unwrap_or("-"),
+            actual.valor_dia, actual.valor_hora_extra, actual.dias_calculados, actual.horas_extras,
+            actual.descuento, actual.total,
+            d.valor_dia, d.valor_hora_extra, d.dias_calculados, d.horas_extras,
+            d.descuento, d.total,
+            datos.observaciones.as_deref().unwrap_or("(sin motivo)")
+        );
+        // Transacción: UPDATE rentas + INSERT auditoría
+        conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
+            tx.execute(
+                "UPDATE rentas SET \
+                    valor_dia = CAST(COALESCE(?, valor_dia) AS DECIMAL(12,2)), \
+                    valor_hora_extra = CAST(COALESCE(?, valor_hora_extra) AS DECIMAL(12,2)), \
+                    dias_calculados = COALESCE(?, dias_calculados), \
+                    horas_extras = COALESCE(?, horas_extras), \
+                    descuento = CAST(COALESCE(?, descuento) AS DECIMAL(12,2)), \
+                    subtotal = CAST(? AS DECIMAL(12,2)), \
+                    impuestos = CAST(? AS DECIMAL(12,2)), \
+                    total = CAST(? AS DECIMAL(12,2)), \
+                    saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
+                    valor_neto = CAST(? AS DECIMAL(12,2)), \
+                    observaciones = COALESCE(?, observaciones) \
+                 WHERE id = ?",
+                params![
+                    edit.valor_dia.as_deref().map(|s| s.trim().replace(',', ".")),
+                    edit.valor_hora_extra.as_deref().map(|s| s.trim().replace(',', ".")),
+                    edit.dias_calculados,
+                    edit.horas_extras,
+                    edit.descuento.as_deref().map(|s| s.trim().replace(',', ".")),
+                    d.subtotal,
+                    d.impuestos,
+                    d.total,
+                    d.saldo_pendiente,
+                    d.valor_neto,
+                    edit.observaciones.as_deref().map(|s| s.trim().to_string()),
+                    id,
+                ],
+            )?;
+            tx.execute(
+                "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (
+                    usuario.to_string(),
+                    "EDICION RENTA CERRADA".to_string(),
+                    audit_msg,
+                    "local".to_string(),
+                ),
+            )?;
+            Ok(())
+        })
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Self::obtener(conn, id)
     }
 
     /// Elimina una renta (soft-delete: marca deleted_at en rentas y pagos).

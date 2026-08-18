@@ -176,6 +176,26 @@ pub struct RentaCierreDatos {
     pub observaciones: Option<String>,
 }
 
+/// Datos para editar una renta cerrada (corrección de errores de digitación)
+/// Solo permite campos financieros que afectan los totales. Los campos de
+/// identificación (placa, cliente) y abono no son editables.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RentaCierreEditDatos {
+    /// Valor diario de la renta (corrección de digitación)
+    pub valor_dia: Option<String>,
+    /// Valor hora extra (corrección de digitación)
+    pub valor_hora_extra: Option<String>,
+    /// Días calculados (corrección de digitación)
+    pub dias_calculados: Option<i64>,
+    /// Horas extras (corrección de digitación)
+    pub horas_extras: Option<i64>,
+    /// Descuento aplicado (corrección de digitación)
+    pub descuento: Option<String>,
+    /// Observaciones sobre la corrección (obligatorio para auditoría)
+    pub observaciones: Option<String>,
+}
+
 /// Datos de un pago
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -791,6 +811,51 @@ impl RentaRepository {
             )
             .map_err(map_fb_error)?;
         Ok(id)
+    }
+
+    /// Edita campos financieros de una renta CERRADA (corrección de errores de digitación).
+    /// Recalcula subtotal/impuestos/total/saldo_pendiente/valor_neto con los nuevos valores.
+    /// NO toca abono (se gestiona por pagos) ni estado (permanece 'Cerrada').
+    pub fn editar_cerrada(
+        conn: &mut PooledConnection,
+        id: i64,
+        d: &RentaCierreEditDatos,
+        subtotal: &str,
+        impuestos: &str,
+        total: &str,
+        saldo: &str,
+        valor_neto: &str,
+    ) -> Result<(), AppError> {
+        conn.execute(
+            "UPDATE rentas SET \
+                valor_dia = CAST(COALESCE(?, valor_dia) AS DECIMAL(12,2)), \
+                valor_hora_extra = CAST(COALESCE(?, valor_hora_extra) AS DECIMAL(12,2)), \
+                dias_calculados = COALESCE(?, dias_calculados), \
+                horas_extras = COALESCE(?, horas_extras), \
+                descuento = CAST(COALESCE(?, descuento) AS DECIMAL(12,2)), \
+                subtotal = CAST(? AS DECIMAL(12,2)), \
+                impuestos = CAST(? AS DECIMAL(12,2)), \
+                total = CAST(? AS DECIMAL(12,2)), \
+                saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
+                valor_neto = CAST(? AS DECIMAL(12,2)), \
+                observaciones = COALESCE(?, observaciones) \
+             WHERE id = ?",
+            params![
+                d.valor_dia.as_deref().map(|s| s.trim().replace(',', ".")),
+                d.valor_hora_extra.as_deref().map(|s| s.trim().replace(',', ".")),
+                d.dias_calculados,
+                d.horas_extras,
+                d.descuento.as_deref().map(|s| s.trim().replace(',', ".")),
+                subtotal,
+                impuestos,
+                total,
+                saldo,
+                valor_neto,
+                d.observaciones.as_deref().map(|s| s.trim().to_string()),
+                id,
+            ],
+        )?;
+        Ok(())
     }
 
     /// Rentas activas (para el calendario y el dashboard)

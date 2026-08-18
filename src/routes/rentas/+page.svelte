@@ -10,6 +10,7 @@
 		type Renta,
 		type RentaDatos,
 		type RentaCierreDatos,
+		type RentaCierreEditDatos,
 		type PagoDatos,
 		type InspeccionDatos,
 		type ClienteConPii,
@@ -111,6 +112,13 @@
 	// Modal contrato (documento independiente, papel Carta)
 	let imprimirContrato = $state<Renta | null>(null);
 
+	// Modal editar renta cerrada (solo Administrador)
+	let editandoCerradaId = $state<number | null>(null);
+	let editandoCerradaRenta = $state<Renta | null>(null);
+	let editCerrada = $state<RentaCierreEditDatos>(defaultEditCerrada());
+	let editandoCerrada = $state(false);
+	let editCerradaError = $state('');
+
 	// Cancelar / eliminar
 	let cancelarId = $state<number | null>(null);
 	let cancelarNombre = $state('');
@@ -190,6 +198,17 @@
 			tieneKitCarretera: true,
 			tieneDocumentos: true,
 			danosCarroceria: '',
+			observaciones: ''
+		};
+	}
+
+	function defaultEditCerrada(): RentaCierreEditDatos {
+		return {
+			valorDia: '',
+			valorHoraExtra: '',
+			diasCalculados: null,
+			horasExtras: null,
+			descuento: '',
 			observaciones: ''
 		};
 	}
@@ -561,6 +580,40 @@
 		inspeccionError = '';
 	}
 
+	// ── Editar renta cerrada (solo Administrador) ──
+	function abrirEditarCerrada(r: Renta) {
+		editandoCerradaId = r.id;
+		editandoCerradaRenta = r;
+		// Pre-cargar valores actuales para facilitar la corrección
+		editCerrada = {
+			valorDia: r.valorDia,
+			valorHoraExtra: r.valorHoraExtra,
+			diasCalculados: r.diasCalculados,
+			horasExtras: r.horasExtras,
+			descuento: r.descuento,
+			observaciones: ''
+		};
+		editCerradaError = '';
+	}
+
+	async function confirmarEditarCerrada() {
+		if (editandoCerradaId === null || !editCerrada.observaciones?.trim()) {
+			editCerradaError = 'Debe indicar el motivo de la corrección (obligatorio para auditoría).';
+			return;
+		}
+		editandoCerrada = true;
+		try {
+			await rentaApi.editarCerrada(sid(), editandoCerradaId, editCerrada);
+			toast.success('Renta cerrada actualizada. Valores recalculados.');
+			editandoCerradaId = null;
+			await cargar();
+		} catch (e) {
+			editCerradaError = e instanceof ApiError ? e.message : 'No se pudo editar la renta cerrada.';
+		} finally {
+			editandoCerrada = false;
+		}
+	}
+
 	async function confirmarInspeccion() {
 		if (inspeccionandoId === null) return;
 		inspeccionError = '';
@@ -823,6 +876,15 @@
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" /></svg>
 						</button>
+						{#if r.estado === 'Cerrada' && puedeEliminar}
+							<button
+								class="p-2 rounded-lg text-text-secondary hover:text-alerta hover:bg-alerta/10 transition-colors"
+								title="Editar renta cerrada (corregir digitación)"
+								onclick={() => abrirEditarCerrada(r)}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17l-5.1-5.1m0 0L11.42 4.97m-5.1 5.1H21M3 3h18v18H3V3z" /></svg>
+							</button>
+						{/if}
 						{#if rentaActiva(r)}
 							<button
 								class="p-2 rounded-lg text-text-secondary hover:text-alerta hover:bg-alerta/10 transition-colors"
@@ -1382,6 +1444,63 @@
 				Guardando...
 			{:else}
 				Registrar inspección
+			{/if}
+		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal editar renta cerrada (solo Administrador) -->
+<Modal
+	open={editandoCerradaId !== null}
+	title={editandoCerradaRenta ? `Corregir renta cerrada #${String(editandoCerradaRenta.id).padStart(4, '0')}` : ''}
+	subtitle="Modifica los campos financieros y recalcula los totales."
+	onClose={() => (editandoCerradaId = null)}
+	width="max-w-2xl"
+>
+	{#snippet children()}
+		<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{editCerradaError}</div>
+
+		<div class="mb-4 rounded-lg bg-alerta/10 border border-alerta/30 px-3 py-2.5 text-sm text-alerta">
+			<strong>⚠️ Atención:</strong> Solo los campos financieros se modificarán. El abono, el cliente y la placa NO se pueden editar.
+		</div>
+
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+			<FormField label="Valor día" required>
+				<input class="input" type="number" step="0.01" min="0" bind:value={editCerrada.valorDia} />
+			</FormField>
+			<FormField label="Valor hora extra">
+				<input class="input" type="number" step="0.01" min="0" bind:value={editCerrada.valorHoraExtra} />
+			</FormField>
+			<FormField label="Días calculados" required>
+				<input class="input" type="number" min="1" bind:value={editCerrada.diasCalculados} />
+			</FormField>
+			<FormField label="Horas extras">
+				<input class="input" type="number" min="0" bind:value={editCerrada.horasExtras} />
+			</FormField>
+			<FormField label="Descuento">
+				<input class="input" type="number" step="0.01" min="0" bind:value={editCerrada.descuento} />
+			</FormField>
+			<div class="col-span-full">
+				<FormField label="Motivo de la corrección" required hint="Obligatorio para auditoría">
+					<textarea class="input min-h-[60px] resize-y" placeholder="Describe el error de digitación que se corrige..." bind:value={editCerrada.observaciones} maxlength="500"></textarea>
+			</FormField>
+		</div>
+
+		<div class="mt-4 p-3 rounded-lg bg-alt-row/60 border border-border">
+			<p class="text-sm font-semibold text-text-primary mb-2">Valores actuales de la renta:</p>
+			<p class="text-sm text-text-secondary">Total: <span class="font-semibold text-text-primary">{formatCOP(editandoCerradaRenta?.total ?? '0')}</span> | Saldo: <span class="font-semibold">{formatCOP(editandoCerradaRenta?.saldoPendiente ?? '0')}</span></p>
+		</div>
+		</div>
+	{/snippet}
+
+	{#snippet footer()}
+		<button class="btn-ghost" onclick={() => (editandoCerradaId = null)} disabled={editandoCerrada}>Cancelar</button>
+		<button class="btn-primary" onclick={confirmarEditarCerrada} disabled={editandoCerrada}>
+			{#if editandoCerrada}
+				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				Guardando...
+			{:else}
+				Aplicar corrección
 			{/if}
 		</button>
 	{/snippet}

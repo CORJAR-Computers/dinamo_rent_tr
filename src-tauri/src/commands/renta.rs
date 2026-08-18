@@ -2,7 +2,7 @@
 
 use crate::core::error::ErrorPayload;
 use crate::repositories::renta::{
-    Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaDatos,
+    Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos,
 };
 use crate::services::renta::{RentaCancelada, RentaService};
 use crate::services::AppState;
@@ -96,6 +96,23 @@ pub fn cancelar_renta(
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     RentaService::cancelar(&mut c, id).map_err(|e| e.to_payload())
+}
+
+/// Edita campos financieros de una renta cerrada (solo Administrador)
+/// Corrige errores de digitación que afectan los totales (valor_dia, valor_hora_extra,
+/// dias_calculados, horas_extras, descuento). Los campos de identificación y abono
+/// NO son editables. Recalcula subtotal/impuestos/total/saldo_pendiente/valor_neto.
+#[tauri::command]
+pub fn editar_renta_cerrada(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: i64,
+    datos: RentaCierreEditDatos,
+) -> Cmd<Renta> {
+    let sesion = require_eliminacion(&state, &session_id)?;
+    let mut c = conn(&state)?;
+    RentaService::editar_cerrada(&mut c, &state.config, id, &sesion.username, datos)
+        .map_err(|e| e.to_payload())
 }
 
 /// Elimina una renta (pagos e inspecciones en cascada)
