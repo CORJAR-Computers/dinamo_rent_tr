@@ -63,7 +63,8 @@
 	let eliminando = $state(false);
 
 	const categorias = $derived(
-		lists?.tiposGasto?.length ? lists.tiposGasto : ['Combustible', 'Peajes', 'Lavado', 'Mantenimiento', 'Repuestos', 'Parqueadero', 'Seguros', 'Multas', 'Papelería', 'Otros']
+		(lists?.tiposGasto?.length ? lists.tiposGasto : ['Combustible', 'Peajes', 'Lavado', 'Mantenimiento', 'Repuestos', 'Parqueadero', 'Seguros', 'Multas', 'Papelería', 'Otros'])
+			.map(c => c.toUpperCase())
 	);
 
 	function defaultForm(): GastoDatos {

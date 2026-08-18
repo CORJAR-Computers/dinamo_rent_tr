@@ -11,7 +11,7 @@ function gasto(overrides: Partial<Gasto> = {}): Gasto {
 		id: 1,
 		placa: 'ABC123',
 		fecha: '2026-08-01',
-		categoria: 'Combustible',
+		categoria: 'COMBUSTIBLE',
 		descripcion: 'Tanqueo vehículo',
 		monto: '120000.00',
 		comprobante: 'F-0001',
@@ -57,8 +57,7 @@ function totales(overrides: Partial<TotalesGastos> = {}): TotalesGastos {
 	return {
 		totalGeneral: '250000.00',
 		totalMes: '80000.00',
-		porPlaca: [{ clave: 'ABC123', total: '150000.00' }],
-		porCategoria: [{ clave: 'Combustible', total: '200000.00' }],
+		porPlaca: [{ clave: 'ABC123', total: '150000.00' }],			porCategoria: [{ clave: 'COMBUSTIBLE', total: '200000.00' }],
 		...overrides
 	};
 }
@@ -107,7 +106,7 @@ describe('página de Gastos', () => {
 	it('lista los gastos registrados con totales', async () => {
 		tauri.register('listar_gastos', () => [
 			gasto({ id: 1, placa: 'ABC123', descripcion: 'Tanqueo vehículo' }),
-			gasto({ id: 2, placa: 'XYZ987', categoria: 'Peajes', monto: '45000.00', descripcion: 'Peaje Barranquilla' })
+			gasto({ id: 2, placa: 'XYZ987', categoria: 'PEAJES', monto: '45000.00', descripcion: 'Peaje Barranquilla' })
 		]);
 
 		render(GastosPage);
@@ -147,7 +146,7 @@ describe('página de Gastos', () => {
 		// FormField usa <span> como label (sin `for`), así que localizamos el
 		// select de categoría por su valor actual (único: 'Selecciona...')
 		await fireEvent.change(within(dialogo).getByDisplayValue('Selecciona...'), {
-			target: { value: 'Combustible' }
+			target: { value: 'COMBUSTIBLE' }
 		});
 		await fireEvent.input(screen.getByPlaceholderText('Ej: Cambio de aceite 15W-40'), {
 			target: { value: 'Tanqueo' }
@@ -160,7 +159,7 @@ describe('página de Gastos', () => {
 
 		await waitFor(() => expect(crear).toHaveBeenCalledTimes(1));
 		const args = crear.mock.calls[0][0] as { sessionId: string; datos: GastoDatos };
-		expect(args.datos.categoria).toBe('Combustible');
+		expect(args.datos.categoria).toBe('COMBUSTIBLE');
 		expect(args.datos.descripcion).toBe('Tanqueo');
 		expect(args.datos.monto).toBe('80000');
 		// El modal se cierra tras guardar

@@ -66,9 +66,10 @@
 	let eliminando = $state(false);
 
 	const tiposMantenimiento = $derived(
-		lists?.tiposMantenimiento?.length
+		(lists?.tiposMantenimiento?.length
 			? lists.tiposMantenimiento
-			: ['Cambio Aceite', 'Frenos', 'Llantas', 'Batería', 'Tecno-Mecánica', 'Lavado General', 'Reparación Mecánica', 'Otro']
+			: ['Cambio Aceite', 'Frenos', 'Llantas', 'Batería', 'Tecno-Mecánica', 'Lavado General', 'Reparación Mecánica', 'Otro'])
+			.map(t => t.toUpperCase())
 	);
 
 	function defaultForm(): MantenimientoDatos {

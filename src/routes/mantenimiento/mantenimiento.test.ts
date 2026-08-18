@@ -11,7 +11,7 @@ function mantenimiento(overrides: Partial<Mantenimiento> = {}): Mantenimiento {
 		id: 1,
 		placa: 'ABC123',
 		vehiculo: 'Toyota Corolla',
-		tipo: 'Cambio Aceite',
+		tipo: 'CAMBIO ACEITE',
 		fecha: '2026-08-01',
 		descripcion: 'Cambio de aceite 15W-40',
 		observaciones: null,
@@ -58,8 +58,7 @@ function auto(placa: string, marca = 'Toyota', modelo = 'Corolla', proximoAceite
 function totales(overrides: Partial<TotalesMantenimiento> = {}): TotalesMantenimiento {
 	return {
 		totalGeneral: '350000.00',
-		porPlaca: [{ clave: 'ABC123', total: '350000.00' }],
-		porTipo: [{ clave: 'Cambio Aceite', total: '200000.00' }],
+		porPlaca: [{ clave: 'ABC123', total: '350000.00' }],			porTipo: [{ clave: 'CAMBIO ACEITE', total: '200000.00' }],
 		...overrides
 	};
 }
@@ -109,7 +108,7 @@ describe('página de Mantenimiento', () => {
 	it('lista el historial de mantenimientos con totales', async () => {
 		tauri.register('listar_mantenimientos', () => [
 			mantenimiento({ id: 1, placa: 'ABC123', tipo: 'Cambio Aceite', costo: '200000.00' }),
-			mantenimiento({ id: 2, placa: 'XYZ987', tipo: 'Frenos', costo: '150000.00', descripcion: 'Cambio de pastillas' })
+			mantenimiento({ id: 2, placa: 'XYZ987', tipo: 'FRENOS', costo: '150000.00', descripcion: 'Cambio de pastillas' })
 		]);
 
 		render(MantenimientoPage);
@@ -172,7 +171,7 @@ describe('página de Mantenimiento', () => {
 		await fireEvent.input(placaCombo, { target: { value: 'ABC123' } });
 		await fireEvent.keyDown(placaCombo, { key: 'Enter' });
 		const tipoSelect = within(dialogo).getByDisplayValue('Selecciona...');
-		await fireEvent.change(tipoSelect, { target: { value: 'Frenos' } });
+		await fireEvent.change(tipoSelect, { target: { value: 'FRENOS' } });
 		await fireEvent.input(screen.getByPlaceholderText('Ej: 350000'), {
 			target: { value: '150000' }
 		});
@@ -182,7 +181,7 @@ describe('página de Mantenimiento', () => {
 		await waitFor(() => expect(crear).toHaveBeenCalledTimes(1));
 		const args = crear.mock.calls[0][0] as { sessionId: string; datos: MantenimientoDatos };
 		expect(args.datos.placa).toBe('ABC123');
-		expect(args.datos.tipo).toBe('Frenos');
+		expect(args.datos.tipo).toBe('FRENOS');
 		expect(args.datos.costo).toBe('150000');
 		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 	});
@@ -209,7 +208,7 @@ describe('página de Mantenimiento', () => {
 
 	it('edita un mantenimiento existente', async () => {
 		tauri.register('listar_mantenimientos', () => [
-			mantenimiento({ id: 7, tipo: 'Frenos', costo: '150000.00' })
+			mantenimiento({ id: 7, tipo: 'FRENOS', costo: '150000.00' })
 		]);
 		const actualizar = vi.fn(
 			(_args: { sessionId: string; id: number; datos: MantenimientoDatos }) =>
@@ -240,7 +239,7 @@ describe('página de Mantenimiento', () => {
 
 	it('elimina un mantenimiento tras confirmar', async () => {
 		tauri.register('listar_mantenimientos', () => [
-			mantenimiento({ id: 3, tipo: 'Cambio Aceite' })
+			mantenimiento({ id: 3, tipo: 'CAMBIO ACEITE' })
 		]);
 		const eliminar = vi.fn((_args: { sessionId: string; id: number }) => undefined);
 		tauri.register('eliminar_mantenimiento', eliminar);
@@ -251,7 +250,7 @@ describe('página de Mantenimiento', () => {
 		await fireEvent.click(screen.getByTitle('Eliminar'));
 		const dialogo = await screen.findByRole('dialog');
 		expect(dialogo).toHaveTextContent('Eliminar mantenimiento');
-		expect(screen.getByText(/eliminar el mantenimiento de tipo «Cambio Aceite»/i)).toBeInTheDocument();
+		expect(screen.getByText(/eliminar el mantenimiento de tipo «CAMBIO ACEITE»/i)).toBeInTheDocument();
 
 		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar' }));
 
