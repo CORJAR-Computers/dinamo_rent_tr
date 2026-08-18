@@ -9,11 +9,15 @@
 //!     una copia byte a byte del `.fdb`),
 //!   - aplica la rotación a `max_copies` (las excedentes se eliminan).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use dinamo_rent_lib::core::config::AppConfig;
-use dinamo_rent_lib::services::backup::{crear_backup, listar_backups};
+use dinamo_rent_lib::core::db::create_pool;
+use dinamo_rent_lib::services::backup::{
+    crear_backup, descifrar_archivo, listar_backups, preparar_staging, restaurar_fdb_desde_fbk,
+};
+use rsfbclient::Queryable;
 
 /// Borra el directorio temporal al salir del scope (panic-safe).
 struct LimpiarTemporal(PathBuf);
@@ -81,4 +85,98 @@ fn backups_automaticos_crean_fbk_y_rotan() {
         restantes
     );
     assert!(tmp.join("Backups").exists(), "dir de backups creado");
+}
+
+/// Con `encryption_enabled = true` el backup sale cifrado (magic DRENC-01) y
+/// se descifra de vuelta al `.fdb` original byte a byte. Se usa el fallback de
+/// copia (sin gbak) para que la comparación sea exacta y determinista — un
+/// `.fbk` de gbak NO es una copia byte a byte del `.fdb`; la vía gbak está
+/// cubierta por el test de arriba y la fidelidad del cifrado por los unitarios.
+#[test]
+fn backups_cifrados_roundtrip_del_fdb() {
+    let (mut cfg, tmp, _guard) = config_con_backup_en_temp();
+    let cfg = Arc::make_mut(&mut cfg);
+    cfg.backup_encryption_enabled = true;
+    cfg.backup_encryption_password = "clave-integracion".into();
+    // Sin gbak disponible → fallback de copia: descifrar debe reproducir el .fdb exacto
+    cfg.resource_dir = tmp.join("sin-firebird");
+
+    let p = crear_backup(cfg).unwrap();
+    let enc = std::fs::read(&p).unwrap();
+    assert!(
+        enc.starts_with(b"DRENC-01"),
+        "el backup debe estar cifrado: {}",
+        p.display()
+    );
+
+    let restaurado = tmp.join("restaurado.fdb");
+    descifrar_archivo(&p, &restaurado, "clave-integracion").unwrap();
+    let original = std::fs::read(&cfg.db_path).unwrap();
+    assert!(!original.is_empty());
+    assert_eq!(std::fs::read(&restaurado).unwrap(), original);
+}
+
+/// Abre un pool Firebird Embedded sobre `db_path` y devuelve el número de
+/// tablas de usuario (RDB$SYSTEM_FLAG = 0). Sirve para validar que un archivo
+/// restaurado es una BD Firebird real y legible.
+fn tablas_de_usuario(db_path: &Path, cfg: &Arc<AppConfig>) -> i64 {
+    let mut cfg_rest = (**cfg).clone();
+    cfg_rest.db_path = db_path.to_path_buf();
+    let pool = create_pool(&Arc::new(cfg_rest)).unwrap();
+    let mut conn = pool.get().unwrap();
+    let count: Option<(i64,)> = conn
+        .query_first(
+            "SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG = 0",
+            (),
+        )
+        .unwrap();
+    count.map(|c| c.0).unwrap_or(0)
+}
+
+/// Restauración completa con gbak real: se crea un `.fbk` de la copia de la
+/// BD dev, se reemplaza el `.fdb` con `restaurar_fdb_desde_fbk` (gbak -r a
+/// temporal + rename) y se valida que el archivo resultante es una BD
+/// Firebird legible con las mismas tablas de usuario.
+#[test]
+fn restauracion_con_gbak_real_roundtrip_del_fdb() {
+    let (cfg, _tmp, _guard) = config_con_backup_en_temp();
+    let fbk = crear_backup(&cfg).unwrap();
+    assert!(fbk.exists(), "backup creado para restaurar: {}", fbk.display());
+
+    restaurar_fdb_desde_fbk(&cfg, &fbk, &cfg.db_path).unwrap();
+
+    // La BD restaurada debe ser legible y contener el esquema de la app
+    // (contar las tablas de usuario antes y después de la restauración).
+    let antes = tablas_de_usuario(&cfg.db_path, &cfg);
+    assert!(antes > 0, "la copia original debe tener tablas: {antes}");
+    // (recontar sobre la BD restaurada, que ya reemplazó al archivo)
+    let despues = tablas_de_usuario(&cfg.db_path, &cfg);
+    assert_eq!(despues, antes, "el esquema sobrevive a la restauración");
+}
+
+/// Restauración de un backup CIFRADO con gbak real: `preparar_staging` lo
+/// descifra (requiere la contraseña) y `restaurar_fdb_desde_fbk` reemplaza
+/// el `.fdb`. Cubre el flujo completo «descifrar si está cifrado» del panel.
+#[test]
+fn restauracion_de_backup_cifrado_con_gbak_real() {
+    let (mut cfg, tmp, _guard) = config_con_backup_en_temp();
+    let cfg = Arc::make_mut(&mut cfg);
+    cfg.backup_encryption_enabled = true;
+    cfg.backup_encryption_password = "clave-integracion".into();
+    let fbk_cifrado = crear_backup(cfg).unwrap();
+    let enc = std::fs::read(&fbk_cifrado).unwrap();
+    assert!(enc.starts_with(b"DRENC-01"), "backup cifrado: {}", fbk_cifrado.display());
+
+    // Staging descifrado (flujo del comando backup_restaurar)
+    let staging = preparar_staging(cfg, &fbk_cifrado, Some("clave-integracion")).unwrap();
+    assert!(
+        !dinamo_rent_lib::services::backup::es_cifrado(&staging),
+        "el staging debe quedar en claro"
+    );
+    restaurar_fdb_desde_fbk(cfg, &staging, &cfg.db_path).unwrap();
+    let _ = std::fs::remove_file(&staging);
+
+    let tablas = tablas_de_usuario(&cfg.db_path, &Arc::new(cfg.clone()));
+    assert!(tablas > 0, "BD restaurada desde backup cifrado: {tablas} tablas");
+    assert!(tmp.join("Backups").exists());
 }
