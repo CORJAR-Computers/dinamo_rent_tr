@@ -38,6 +38,8 @@ data/config.ini
 
 # Backups y logs
 Backups/
+# La ruta del panel de Backups (src/routes/backups/) no debe quedar ignorada
+!src/routes/backups/
 logs/
 *.log
 
