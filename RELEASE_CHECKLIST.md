@@ -6,12 +6,12 @@
 > `INSTALACION_OPERACIONES.md` (instalación), `DEPLOYMENT_CLIENTES.md`
 > (despliegue a clientes) y `ANUNCIO_RELEASE_TEMPLATE.md` (mensajes de anuncio).
 >
-> **📋 Objetivo actual: v1.0.15 (publicada).**
-> Incluye comisión por renta (comisión y valor neto en el listado de rentas),
-> informe con netos y comparendos con procedencia persistente (filtro «Solo
-> nuevos» sobrevive al reinicio). Al publicar el tag quedó probado de punta a
-> punta el auto-update (v1.0.14+, con el fix del permiso ACL) junto al paso de
-> paginación de `release.yml`.
+> **📋 Objetivo actual: v1.0.16 (en preparación, sin publicar aún).**
+> Aún sin features nuevas de app definidas: incluye el modo -DryRun de
+> `verificar-despliegue.ps1` (validación del flujo sin tocar la máquina real),
+> su paso en `ci.yml` con `-SimularFallo` y la actualización de la
+> documentación a la v1.0.15. Al publicar el tag, el auto-update (v1.0.14+)
+> + el paso de paginación de `release.yml` quedan probados de punta a punta.
 
 ---
 
@@ -21,7 +21,7 @@
 ya estén bumpeados.** El CI (`release.yml`) compila el código del commit del tag
 y los instaladores se nombran con la versión de `src-tauri/tauri.conf.json`,
 NO con el nombre del tag. Un tag sobre un commit sin bumpear publicaría una
-release `v1.0.15` con instaladores `DinamoRent_1.0.14_*` (si el bump quedara a medias).
+release `v1.0.16` con instaladores `DinamoRent_1.0.15_*` (si el bump quedara a medias).
 
 ---
 
@@ -47,9 +47,9 @@ Editar la versión en los **tres** archivos (deben coincidir):
 
 | Archivo | Campo |
 |---|---|
-| `package.json` | `"version": "1.0.15"` |
-| `src-tauri/Cargo.toml` | `version = "1.0.15"` (crate `dinamo-rent`) |
-| `src-tauri/tauri.conf.json` | `"version": "1.0.15"` |
+| `package.json` | `"version": "1.0.16"` |
+| `src-tauri/Cargo.toml` | `version = "1.0.16"` (crate `dinamo-rent`) |
+| `src-tauri/tauri.conf.json` | `"version": "1.0.16"` |
 
 Verificar la consistencia:
 
@@ -86,15 +86,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verificar-despliegue
 Mensaje con el estilo del repo (español, prefijo `chore:`):
 
 ```text
-chore: versión 1.0.15 — comisión por renta, informe con netos y comparendos con procedencia persistente
+chore: versión 1.0.16 — modo -DryRun del verificador de despliegue y documentación al día
+# (ajustar el resumen a lo que incluya la release al bumpear)
 ```
 
 ## 5. Publicar: push + tag
 
 ```bash
 git push origin main
-git tag v1.0.15
-git push origin v1.0.15
+git tag v1.0.16
+git push origin v1.0.16
 ```
 
 El push del tag dispara `release.yml` (GitHub Actions, `windows-latest`):
@@ -115,14 +116,14 @@ changelog automático → `tauri build` (NSIS + MSI) → crea la release
 
 ## 6. Verificar la release (no confiar a ciegas en el CI)
 
-- [ ] Release `v1.0.15` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.15>
-      con **5 assets**: los 2 instaladores (`DinamoRent_1.0.15_x64-setup.exe` NSIS ~21 MB y
-      `DinamoRent_1.0.15_x64_en-US.msi` ~33 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
+- [ ] Release `v1.0.16` existe en <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.16>
+      con **5 assets**: los 2 instaladores (`DinamoRent_1.0.16_x64-setup.exe` NSIS ~21 MB y
+      `DinamoRent_1.0.16_x64_en-US.msi` ~33 MB), sus firmas del updater (`*.exe.sig` / `*.msi.sig`)
       y `latest.json`. Los `.sig` son de **minisign** (verificación del updater), NO firma de
       código Authenticode.
 - [ ] `latest.json` existe y `platforms.windows-x86_64.url` apunta al instalador de esta
       release (el CI elige cuál sube al publicar — en la v1.0.3 fue el `.msi`) — es lo que la
-      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse. En la v1.0.15 la app
+      app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse. En la v1.0.16 la app
       instalada debe DETECTAR la release nueva y ofrecer instalarla (prueba de campo del
       auto-update).
 - [ ] El **body contiene el changelog** (commits del rango).
@@ -130,7 +131,7 @@ changelog automático → `tauri build` (NSIS + MSI) → crea la release
 
 ```powershell
 # En el PC objetivo
-Get-FileHash .\DinamoRent_1.0.15_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\DinamoRent_1.0.16_x64-setup.exe -Algorithm SHA256
 # comparar contra el sha256 publicado por GitHub en la página de la release
 ```
 
@@ -142,7 +143,7 @@ Get-FileHash .\DinamoRent_1.0.15_x64-setup.exe -Algorithm SHA256
 
 Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
-- [ ] `scripts/verificar-despliegue.ps1` — `Check "Version 1.0.15" ($ver -like '1.0.15*')`.
+- [ ] `scripts/verificar-despliegue.ps1` — `Check "Version 1.0.16" ($ver -like '1.0.16*')`.
 - [ ] `DEPLOYMENT_CLIENTES.md` — versión esperada e instaladores en la tabla de verificación.
 - [ ] `RESUMEN_EJECUTIVO.md` — versión estable, assets, conteos.
 - [ ] `Handsoff.md` — cabecera y nota de portada de la release nueva.
@@ -150,7 +151,7 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
 ## 8. Anunciar
 
-- [ ] Marcar releases anteriores si aplica (la v1.0.3 pasa a "estable anterior"; la v1.0.2 ya lo es — no se descontinúa salvo motivo).
+- [ ] Marcar releases anteriores si aplica (la v1.0.15 pasa a "estable anterior"; la v1.0.9 ya lo es — no se descontinúa salvo motivo).
 - [ ] Pegar el mensaje de `ANUNCIO_RELEASE_TEMPLATE.md` (versión larga o corta) en Slack/Teams
       con los enlaces de descarga y el resumen de la release.
 
@@ -160,10 +161,10 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
 ```
 [ ] CI verde en main (incluye verificar-despliegue.ps1 -DryRun)
-[ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos, 1.0.15)
+[ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos, 1.0.16)
 [ ] Docs de descarga actualizadas (INSTALACION_OPERACIONES.md, README.md, ANUNCIO)
-[ ] commit chore: versión 1.0.15
-[ ] git push origin main && git push origin v1.0.15
+[ ] commit chore: versión 1.0.16
+[ ] git push origin main && git push origin v1.0.16
 [ ] Release publicada por CI con changelog y 5 assets (NSIS + MSI + .sig x2 + latest.json)
 [ ] sha256 verificado contra el publicado
 [ ] verificar-despliegue.ps1 → OK (equipo de prueba)
