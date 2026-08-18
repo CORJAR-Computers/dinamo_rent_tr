@@ -7,11 +7,14 @@
 > (despliegue a clientes) y `ANUNCIO_RELEASE_TEMPLATE.md` (mensajes de anuncio).
 >
 > **📋 Objetivo actual: v1.0.16 (en preparación, sin publicar aún).**
-> Aún sin features nuevas de app definidas: incluye el modo -DryRun de
-> `verificar-despliegue.ps1` (validación del flujo sin tocar la máquina real),
-> su paso en `ci.yml` con `-SimularFallo` y la actualización de la
-> documentación a la v1.0.15. Al publicar el tag, el auto-update (v1.0.14+)
-> + el paso de paginación de `release.yml` quedan probados de punta a punta.
+> Incluye la versión REAL de la app en el menú lateral y el login (comando
+> `app_version`, package_info → Cargo.toml / tauri.conf.json en el build —
+> antes mostraba la v3.2.0 heredada del proyecto anterior), el modo -DryRun
+> de `verificar-despliegue.ps1` (validación del flujo sin tocar la máquina
+> real) con su paso en `ci.yml` y la actualización de la documentación a la
+> v1.0.15. Al publicar el tag, el auto-update (v1.0.14+) + el paso de
+> paginación de `release.yml` + la E2E del auto-update en máquina real (§6)
+> quedan probados de punta a punta.
 
 ---
 
