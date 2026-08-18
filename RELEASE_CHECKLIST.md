@@ -29,6 +29,8 @@ release `v1.0.4` con instaladores `DinamoRent_1.0.3_*` (si el bump quedara a med
 - [ ] `ci.yml` verde en el tope de `main` (lint, svelte-check, vitest, cargo test --lib, importador,
       test de paginación con el 4º caso: orden de reserva 1 página Carta).
       El workflow de release NO valida: un tag sobre un commit roto publicaría igual.
+- [ ] `scripts/verificar-despliegue.ps1 -DryRun` en verde (caso OK exit 0 y `-SimularFallo` exit 1) —
+      validado además por `ci.yml` en cada push (paso «Verificador de despliegue (-DryRun)»).
 - [ ] Working tree limpio y `main` local = `origin/main`.
 - [ ] El secret `TAURI_SIGNING_PRIVATE_KEY` está configurado en Settings → Secrets → Actions
       del repo (y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` solo si la clave tiene password).
@@ -68,6 +70,14 @@ bun run lint
 bunx svelte-check --tsconfig ./tsconfig.json
 bunx vitest run
 cd src-tauri && cargo test --lib
+```
+
+Validar además el verificador de despliegue (sin tocar la máquina):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun
+# el caso FALLOS debe terminar con VEREDICTO: FALLOS y exit 1:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun -SimularFallo
 ```
 
 ## 4. Commit del bump
@@ -123,7 +133,9 @@ Get-FileHash .\DinamoRent_1.0.4_x64-setup.exe -Algorithm SHA256
 # comparar contra el sha256 publicado por GitHub en la página de la release
 ```
 
-- [ ] (Opcional) `scripts/verificar-despliegue.ps1` en un equipo de prueba → VEREDICTO OK.
+- [ ] (Opcional) `scripts/verificar-despliegue.ps1` en un equipo de prueba → VEREDICTO OK
+      (sin `-DryRun`: chequeos reales sobre la instalación; el modo `-DryRun` se valida
+      en `ci.yml` y en el §3, no requiere máquina).
 
 ## 7. Actualizar la operación
 
@@ -146,7 +158,7 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 ## Checklist exprés (resumen)
 
 ```
-[ ] CI verde en main
+[ ] CI verde en main (incluye verificar-despliegue.ps1 -DryRun)
 [ ] Bump en package.json + Cargo.toml + tauri.conf.json (idénticos, 1.0.4)
 [ ] Docs de descarga actualizadas (INSTALACION_OPERACIONES.md, README.md, ANUNCIO)
 [ ] commit chore: versión 1.0.4
