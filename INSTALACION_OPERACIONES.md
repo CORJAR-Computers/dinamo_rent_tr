@@ -1,7 +1,7 @@
 # Instalación de Dinamo Rent ERP — v1.0.15 (estable)
 
 > Guía para el equipo de operaciones. **Última versión estable: v1.0.15** — con el
-> **auto-update** activo desde la v1.0.3 (la app detecta y ofrece instalar las versiones
+> **auto-update** activo desde la v1.0.14 (la app detecta y ofrece instalar las versiones
 > nuevas al arrancar, ver sección 6) y, sobre las features previas (IVA por renta,
 > auto-cálculo de días/horas, cambio de vehículo, combos con búsqueda, errores de BD
 > visibles, fix -303), el **documento**: contrato en 2 hojas, `+57` en los celulares del
@@ -9,7 +9,7 @@
 > el campo **Gasolina** en el formulario de renta. Construida y validada por CI.
 >
 > Las instalaciones **v1.0.2 (sin updater)** se actualizan una vez a mano instalando esta
-> versión encima; desde la v1.0.3 las siguientes llegan solas.
+> versión encima; desde la v1.0.14 las siguientes llegan solas.
 
 ---
 
@@ -97,28 +97,30 @@ los usuarios y datos — solo se aplican las migraciones pendientes.
 
 ## 6. Actualizar / rollback
 
-### Auto-actualización (a partir de la v1.0.3)
+### Auto-actualización (a partir de la v1.0.14)
 
-A partir de la **v1.0.3** la app incorpora el **updater de Tauri v2**: al arrancar comprueba
+A partir de la **v1.0.14** la app incorpora el **updater de Tauri v2 funcional** (la feature llegó en la v1.0.3, pero el permiso ACL del plugin faltaba hasta la v1.0.13 — el check fallaba en silencio y el modal nunca aparecía): al arrancar comprueba
 en GitHub Releases si hay una versión más nueva (`latest.json`) y, si existe, muestra el
 diálogo **«Actualización disponible — vX.Y.Z»** con las notas y los botones **Instalar ahora /
 Más tarde** (descarga con progreso, verifica la **firma minisign** contra la clave pública
 embebida y reinicia la app al terminar).
 
-- **Instalaciones v1.0.3+** → se actualizan **solas**. Requieren conexión a internet en el
+- **Instalaciones v1.0.14+** → se actualizan **solas**. Requieren conexión a internet en el
   arranque para el chequeo; sin conexión la app funciona igual y reintenta en el siguiente
   arranque.
-- **Instalaciones v1.0.2 (sin updater)** → se actualizan **una sola vez a mano**: instalar la
-  v1.0.3 encima (sección 3; idempotente, sin pérdida de datos). A partir de ahí reciben las
-  siguientes versiones automáticamente.
+- **Instalaciones ≤v1.0.13** (incluidas las v1.0.2 sin updater) → se actualizan **una sola
+  vez a mano**: instalar una versión **≥v1.0.14** encima (sección 3; idempotente, sin pérdida
+  de datos). A partir de ahí reciben las siguientes versiones automáticamente.
 - Cada release publicada incluye los instaladores, sus firmas (`.sig`) y el `latest.json`;
   la clave privada de firma vive solo en el secret `TAURI_SIGNING_PRIVATE_KEY` del repo
   (nunca en el instalador). Publicación: ver `RELEASE_CHECKLIST.md`.
 
 - **Actualizar desde v1.0.0**: instalar la v1.0.15 encima. Idempotente, sin pérdida de datos.
 - **Actualizar desde v1.0.2**: instalar la v1.0.15 encima (transición al auto-update).
-- **Actualizar desde v1.0.3+**: desde el diálogo de la app, o a mano instalando la release
+- **Actualizar desde v1.0.14+**: desde el diálogo de la app, o a mano instalando la release
   nueva encima (idempotente).
+- **Actualizar desde v1.0.3–v1.0.13**: a mano, instalando la release nueva encima (el diálogo
+  no aparece en esas versiones; queda la transición al auto-update).
 - **Rollback**: si algo fallara, desinstalar y reinstalar la versión anterior conservando
   `%APPDATA%\com.corjar.dinamorent\` (los datos están ahí, no en la carpeta de programa).
   Un rollback manual funciona igual tras un auto-update (desinstalar la versión actual e

@@ -1,9 +1,9 @@
 # Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.15
 
 > Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.15** (última
-> versión estable, con **auto-actualización** activa desde la v1.0.3): instalación
+> versión estable, con **auto-actualización** activa desde la v1.0.14): instalación
 > silenciosa, verificación post-instalación y rollback. **Este es el último despliegue
-> manual por equipo**: desde la v1.0.3 la app detecta y ofrece las versiones nuevas al
+> manual por equipo**: desde la v1.0.14 la app detecta y ofrece las versiones nuevas al
 > arrancar. Complementa a `INSTALACION_OPERACIONES.md` (enlaces de descarga y credenciales
 > iniciales).
 
@@ -116,7 +116,7 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRu
 | 7 | Login manual | `admin` + contraseña del cliente (primer ingreso: cambio forzado) |
 | 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.0.15 ya es la vigente) |
 
-> Desde la v1.0.3 la app incluye el updater: al arrancar con internet chequea la release
+> Desde la v1.0.14 la app incluye el updater funcional: al arrancar con internet chequea la release
 > vigente y no muestra nada si ya está al día. Si apareciera el diálogo «Actualización
 > disponible», puede instalarse desde la propia app (la firma se verifica sola).
 

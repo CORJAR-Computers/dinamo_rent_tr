@@ -62,7 +62,7 @@ valida que la clave local y la pubkey de `tauri.conf.json` coinciden.
 ## 4. Respaldo y rotación
 
 - **Respaldar** `~/.tauri/dinamorent.key` fuera del repo (ej. gestor de contraseñas).
-  Si se pierde, las instalaciones v1.0.3+ dejarían de poder actualizarse.
+  Si se pierde, las instalaciones v1.0.14+ dejarían de poder actualizarse.
 - Si se rota la clave: regenerar el par (`bunx tauri signer generate`), actualizar el
   secret **y** la pubkey en `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`), y
   publicar una release nueva — las instalaciones que ya tienen la pubkey anterior

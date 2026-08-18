@@ -13,25 +13,25 @@
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
 | **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 233 tests frontend, cargo 48 lib + 8 rentas + 11 migraciones, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
-| **Auto-actualización** | ✅ Activa desde la **v1.0.3** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.4–v1.0.15 publicadas y firmadas |
+| **Auto-actualización** | ✅ Activa desde la **v1.0.14** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.4–v1.0.15 publicadas y firmadas |
 
 ## 2. Releases en GitHub
 
 | Release | Estado | Para quién |
 |---|---|---|
 | **v1.0.15** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
-| v1.0.9 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (auto-update) |
-| v1.0.3 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (auto-update) |
-| v1.0.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3+ (transición al auto-update) |
-| v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.3+ |
+| v1.0.9 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (a mano, una vez) |
+| v1.0.3 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (a mano, una vez) |
+| v1.0.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (a mano; transición al auto-update) |
+| v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.0.15 (a mano) |
 | v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación) | Solo referencia — **no instalarla** |
 
 **Assets de la v1.0.15:** [`DinamoRent_1.0.15_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.15_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.0.15_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.15/DinamoRent_1.0.15_x64_en-US.msi) (~33 MB, despliegue GPO; sha256 publicados en la release). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
-**Auto-actualización (activa desde la v1.0.3):** la app chequea al arrancar el
+**Auto-actualización (activa desde la v1.0.14):** la app chequea al arrancar el
 `latest.json` de GitHub Releases y ofrece instalar la versión nueva (firma minisign
-verificada contra la pubkey embebida). Las instalaciones **v1.0.2 no tienen updater**: se
-actualizan una vez a mano con el instalador de la v1.0.3. La release v1.0.3 salió firmada
+verificada contra la pubkey embebida). Las instalaciones **≤v1.0.13** (incluidas las v1.0.2,
+sin updater) se actualizan **una vez a mano** con un instalador **≥v1.0.14**. La release v1.0.3 salió firmada
 (.sig + `latest.json` generados por el CI con el secret `TAURI_SIGNING_PRIVATE_KEY`, ya
 configurado) y los artefactos publicados validan criptográficamente contra la pubkey
 embebida.
@@ -42,7 +42,7 @@ embebida.
 2. **Las migraciones no viajaban en el instalador** → las migraciones van embebidas en el binario (fallback automático; hoy 20: 0001-0020).
 3. **Crash sin el runtime VC++** (`LoadLibraryExW failed`) → `SetDllDirectoryW(firebird/)` encuentra las DLLs que ya viajan en el instalador; no hace falta instalar redistribuibles.
 
-**Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). Cualquier versión anterior → **v1.0.3** (las v1.0.2 sin updater se instalan a mano una vez; desde la v1.0.3 las siguientes son automáticas).
+**Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). Cualquier versión anterior → **v1.0.15** (las ≤v1.0.13 se instalan a mano una vez; desde la v1.0.14 las siguientes son automáticas).
 
 **Qué añade la v1.0.2** (13-08):
 
@@ -97,4 +97,4 @@ embebida.
 
 ## 6. Veredicto
 
-**El proyecto está listo para producción.** La única release estable es la v1.0.15 (construida por CI, firmada para el auto-update, validada en Windows limpio y verificada en el equipo de operaciones), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater) está documentado y validado. La **auto-actualización está activa desde la v1.0.3**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
+**El proyecto está listo para producción.** La única release estable es la v1.0.15 (construida por CI, firmada para el auto-update, validada en Windows limpio y verificada en el equipo de operaciones), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater) está documentado y validado. La **auto-actualización está activa desde la v1.0.14**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.

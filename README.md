@@ -7,7 +7,7 @@
 
 ## ⬇️ Descarga e instalación (usuarios finales)
 
-> **Última versión estable: [v1.0.15](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.15)** — con el **auto-update** activo desde la v1.0.3 y novedades financieras: **comisión por renta** (checkbox + valor; neto = total − comisión) visible en el informe mensual, el balance, el listado de rentas y la timeline por vehículo; y **comparendos con procedencia persistente** (SIMIT/Manual), filtros «No confirmadas por SIMIT» y «Solo nuevos de la última sincronización» (combinables) con el último resultado del agente guardado en la BD (sobrevive al reinicio). Construida y validada por CI.
+> **Última versión estable: [v1.0.15](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.15)** — con el **auto-update** activo desde la v1.0.14 (las v1.0.3–v1.0.13 no pudieron auto-actualizarse) y novedades financieras: **comisión por renta** (checkbox + valor; neto = total − comisión) visible en el informe mensual, el balance, el listado de rentas y la timeline por vehículo; y **comparendos con procedencia persistente** (SIMIT/Manual), filtros «No confirmadas por SIMIT» y «Solo nuevos de la última sincronización» (combinables) con el último resultado del agente guardado en la BD (sobrevive al reinicio). Construida y validada por CI.
 
 ### 1. Descargar el instalador
 
