@@ -481,6 +481,31 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   (`max-height: none; overflow: visible`) para que tablas largas (p. ej. informes) no se
   recorten. Páginas migradas: rentas, reservas, comparendos, informes.
 
+### ✅ Backups de la BD (`/backups` — Fase 8 del plan, completa el 19-08)
+- **Backend:** `services/backup.rs` — scheduler automático en `[backup] schedule_times`
+  (4 horarios por defecto: 09:00, 13:00, 19:00, 23:00, revisado cada `check_interval_ms`),
+  rotación a `backup_max_copies` (10), **cifrado opcional** AES-256-GCM por chunks de 1 MiB
+  (PBKDF2-SHA256 100k iteraciones, salt aleatorio de 16 B prefijado, magic `DRENC-01`;
+  `encryption_enabled`/`encryption_password`) y **restauración** (staging descifrado/copia +
+  `gbak -r` a temporal + rename atómico con reintentos; la app se relanza con
+  `--restaurar-backup=<staging>` y el swap ocurre en el arranque, antes de abrir el pool).
+  `commands/backup.rs` — `backup_estado`, `backup_ahora` y `backup_restaurar` (solo
+  Administrador: los backups contienen TODA la BD).
+- **Frontend:** `api.ts` (`backupApi`), `+page.svelte` en `/backups` — crear manual, estado
+  (horarios, próxima/última corrida, última restauración, cifrado), listado de copias con
+  tamaño y badge de cifrado, y **restaurar** (confirmación + contraseña si la copia está
+  cifrada; la app se reinicia sola). Ítem «Backups» en ADMINISTRACIÓN del menú lateral y en
+  la paleta Ctrl+K.
+- **Tests:** 19 unitarios en `backup.rs` (formato/rotación/horarios/cifrado roundtrip y
+  manipulación/staging/rename/reintentos) + `tests/backup_integration.rs` (4, con **gbak real**
+  contra una copia de la BD: `.fbk` no byte-a-byte del `.fdb`, roundtrip cifrado, restauración
+  plana y cifrada validadas abriendo un pool sobre la BD restaurada).
+- **Nota:** el motor Embedded abre el `.fdb` en exclusiva por proceso → con la app corriendo
+  la vía operativa del scheduler es el **fallback de copia** (el tradeoff ya documentado en
+  `DEPLOYMENT_CLIENTES.md` §4.1); **restaurar exige reiniciar** la app (el swap ocurre al
+  arrancar). Copy/rename/rotación llevan reintentos ante sharing violations transitorias
+  (Windows Defender, fix `d28d796`).
+
 ---
 
 ## 3. Pendiente / mejoras sugeridas
@@ -537,14 +562,19 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       `contrato-real-pag1..4.png`) sin desbordes, texto cortado ni imágenes rotas.
       Quedan pendientes el **modal de inspección** de rentas, el **calendario** y el **panel del
       Agente SIMIT** en la app real (ver primera tarea de §3).
-- [~] **Mostrar la versión REAL de la app en la barra de menú lateral.** El 14-08 el usuario
+- [x] **Mostrar la versión REAL de la app en la barra de menú lateral.** El 14-08 el usuario
       reportó que el menú lateral muestra **v3.2.0** (versión heredada del proyecto anterior).
-      *EN CURSO (18-08): la solución es el comando Tauri `app_version` (backend,
-      `package_info` → Cargo.toml / tauri.conf.json en el build) + store
-      `src/lib/stores/app.svelte.ts`; `+layout.svelte` y `login/+page.svelte` ya renderizan
-      la versión real (`v{version}`) en vez del literal. Falta: commit/merge del cambio y el
-      repaso visual en la app real (con la prueba de campo del auto-update, §6 de
-      RELEASE_CHECKLIST, v1.0.16).*
+      *HECHO (18-08, commit `81c55a5` feat: version real de la app): comando Tauri `app_version`
+      (backend, `package_info` → Cargo.toml / tauri.conf.json en el build) + store
+      `src/lib/stores/app.svelte.ts`; `+layout.svelte` y `login/+page.svelte` renderizan la
+      versión real (`v{version}`) en vez del literal, con test de integración (`15a2311`).
+      Queda solo el repaso visual en la app real (con la prueba de campo del auto-update, §6
+      de RELEASE_CHECKLIST, v1.0.16).*
+- [-] **Setup wizard de primera ejecución y diálogo de config BD** — **descartados (19-08):**
+      el proyecto es de **uso interno de Dinamo**; la instalación con defaults (auto-create del
+      `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
+      hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
+      automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
 
 ## 4. Convenciones a respetar
 
