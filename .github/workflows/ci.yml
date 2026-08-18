@@ -108,3 +108,18 @@ jobs:
       # instalado en windows-latest. Valida además el fix del polling del PDF.
       - name: Test verificador de paginación (Chrome/Edge headless)
         run: node scripts/test-verificar-paginacion.mjs
+
+      # El verificador de despliegue (scripts/verificar-despliegue.ps1) valida la
+      # instalación post-release en el equipo del cliente. Aquí se prueba con su modo
+      # -DryRun: ejecuta los chequeos y el veredicto reales contra un ambiente simulado
+      # en %TEMP% (sin instalar nada) — el caso OK debe salir con exit 0 y, con
+      # -SimularFallo, el camino de FALLOS debe salir con exit 1. Se usa el shell
+      # powershell (5.1), el objetivo real del script.
+      - name: Verificador de despliegue (-DryRun)
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun
+          if ($LASTEXITCODE -ne 0) { throw "El caso OK (-DryRun) debio salir con exit 0, obtuvo $LASTEXITCODE" }
+          powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun -SimularFallo
+          if ($LASTEXITCODE -ne 1) { throw "-SimularFallo debio salir con exit 1 (camino FALLOS), obtuvo $LASTEXITCODE" }
+          Write-Host "Verificador de despliegue: OK (exit 0) y FALLOS (exit 1) validados"
