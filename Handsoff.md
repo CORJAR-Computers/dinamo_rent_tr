@@ -746,6 +746,11 @@ Validado de punta a punta en Windows Sandbox con la v1.0.1 oficial: **VEREDICTO 
 Harness reutilizable: `scripts/verificar-despliegue-sandbox.ps1` +
 `scripts/dinamorent-sandbox-verificar.wsb`. Ver `DEPLOYMENT_CLIENTES.md` para el plan completo.
 
+> **Modo `-DryRun` (17-08):** `-DryRun` ejecuta los mismos chequeos y el veredicto reales
+> contra un ambiente simulado en `%TEMP%` (exe, carpeta de datos y BD fake), sin tocar la
+> máquina real; `-SimularFallo` fuerza el camino de FALLOS. Validado de punta a punta en el
+> host: caso OK (6/6, exit 0) y caso FALLOS (4 fallos con detalles, exit 1).
+
 También de esta línea: `scripts/dinamorent-sandbox.wsb` + `scripts/smoke-test-sandbox.ps1`
 (smoke test del instalador en Windows limpio, ver nota de portada 12-08).
 

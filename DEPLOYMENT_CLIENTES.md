@@ -92,6 +92,16 @@ psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.15_x64-setup.exe" /S
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
 ```
+> **Probar el script sin tocar la máquina objetivo:** `-DryRun` ejecuta las mismas
+> comprobaciones y el veredicto reales contra un ambiente simulado en `%TEMP%` (exe,
+> carpeta de datos y BD fake), sin instalar ni arrancar nada en el equipo — ideal para
+> validar el script en cualquier máquina. `-SimularFallo` fuerza el camino de FALLOS
+> (versión vieja, app muerta, sin config.ini ni BD) para probar el veredicto de error:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun
+powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun -SimularFallo   # fuerza FALLOS (exit 1)
+```
 
 ### Lo que comprueba (equivalente manual)
 
