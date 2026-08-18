@@ -123,3 +123,7 @@ jobs:
           powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun -SimularFallo
           if ($LASTEXITCODE -ne 1) { throw "-SimularFallo debio salir con exit 1 (camino FALLOS), obtuvo $LASTEXITCODE" }
           Write-Host "Verificador de despliegue: OK (exit 0) y FALLOS (exit 1) validados"
+          # Sin el exit 0 explícito el paso falla: el wrapper `shell: powershell` de GitHub
+          # termina con `exit $LASTEXITCODE`, y tras -SimularFallo (exit 1) el paso saldría
+          # con exit 1 aunque ambos casos hayan validado.
+          exit 0
