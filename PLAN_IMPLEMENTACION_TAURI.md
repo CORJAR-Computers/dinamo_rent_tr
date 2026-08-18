@@ -297,9 +297,10 @@ Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en c
 
 ### 4.8 Backups
 - **Firebird (primario):** invocar **`gbak`** vía `std::process::Command` (se empaqueta `gbak.exe` + `zlib1.dll` junto al binario; usa el mismo `fbclient.dll`). Comando: `gbak -b -user sysdba -password *** dinamo_rent_v3.fdb Backup_Dinamo_<ts>.fbk` (formato nativo, consistente). Ejecutar con la BD sin conexiones activas de escritura.
-- **Firebird (alternativa simple):** copia del archivo `.fdb` (`fs::copy`) con la app sin conexiones activas (mismo patrón de copia de archivo que usa la app actual para Firebird); suficiente para single-user embedded.
+- **Firebird (alternativa simple):** copia del archivo `.fdb` (`fs::copy`) con la app sin conexiones activas (mismo patrón de copia de archivo que usa la app actual para Firebird); suficiente para single-user embedded. En producción con la app corriendo el motor Embedded abre la BD en exclusiva por proceso, así que **el fallback de copia es el camino operativo** del scheduler.
 - **Cifrado:** AES-256-GCM con PBKDF2-SHA256 (salt 16 bytes prefijado) — compatible en concepto con el actual Fernet+PBKDF2.
 - **Rotación:** conservar N copias (config `max_copies`, default 10).
+- **Implementado (Fase 8, 18-08):** `services/backup.rs` — scheduler automático en `[backup] schedule_times` (4 horarios), `backup_ahora`/`backup_estado`, cifrado por chunks de 1 MiB (magic `DRENC-01` + salt PBKDF2 prefijado) y rotación a `max_copies`; panel `/backups` (solo admin) con crear manual, listado de copias y estado de la última corrida. Pendiente de la fase: **restaurar desde la UI** (descifrar + `gbak -r`), `database_config_dialog` y el setup wizard.
 
 ### 4.9 Configuración
 - Se **mantiene `config.ini`** (mismo formato y secciones) para no romper la migración de instalaciones existentes. Se implementa con crate `config` (o `ini` + serde) y los mismos defaults de `core/config.py` (engine fijo `firebird`, `path = dinamo_rent_v3.fdb`, user/password `sysdba`/`masterkey`).
@@ -581,12 +582,12 @@ Plantilla de iteración (por módulo):
 
 ### Fase 8 — Backups, config DB y setup (2–3 días)
 
-1. `services/backup.rs` + diálogo de backups en UI (crear con `gbak`, listar, rotar, desencriptar/restaurar).
+1. ✅ `services/backup.rs` + panel de backups en UI (`/backups`, crear con `gbak`/copia, listar, rotar, cifrar/descifrar) — hecho (18-08). Pendiente solo **restaurar desde la UI** (descifrar + `gbak -r`).
 2. `database_config_dialog`: probar conexión al `.fdb` y guardar credenciales en `config.ini` (sin selector de motor — Firebird Embedded es el único).
 3. Setup wizard de primera ejecución (crear/abrir `.fdb`, crear admin, probar conexión) — puerto de `views/setup_wizard.py`.
-4. Backup automático programado (4 horarios configurables) usando `tauri::async_runtime` o un hilo con timer en Rust; estado visible en UI.
+4. ✅ Backup automático programado (4 horarios configurables) con hilo + timer en Rust; estado visible en UI — hecho (18-08), scheduler en `services/backup.rs` arrancado desde `lib.rs`.
 
-**Hito:** backups automáticos y manuales funcionando (gbak/copia); setup desde cero con Firebird Embedded 5.0.
+**Hito:** backups automáticos y manuales funcionando (gbak/copia); setup desde cero con Firebird Embedded 5.0. Backups ✅ — falta `database_config_dialog`, setup wizard y restaurar desde la UI.
 
 ### Fase 9 — Testing, CI/CD y empaquetado (3–4 días)
 
@@ -642,7 +643,7 @@ Plantilla de iteración (por módulo):
 - [ ] Usuarios: CRUD (solo roles permitidos), desbloquear, forzar cambio
 - [ ] Informes: balance mensual real, export PDF + Excel
 - [ ] Alertas: listado global
-- [ ] Backups: automático (4 horarios) y manual con `gbak`/copia, cifrado, rotación, restaurar
+- [~] Backups: automático (4 horarios), manual con `gbak`/copia, cifrado AES-256-GCM y rotación — implementados (panel `/backups`, `backup_ahora`/`backup_estado`); pendiente solo **restaurar** desde la UI
 - [ ] Config BD: probar conexión al `.fdb`, cambiar ruta/credenciales (Firebird Embedded único motor)
 - [ ] Setup wizard primera ejecución (crear/abrir `.fdb`, admin inicial)
 - [ ] Temas claro/oscuro con colores actuales

@@ -11,10 +11,16 @@
 > `app_version`, package_info → Cargo.toml / tauri.conf.json en el build —
 > antes mostraba la v3.2.0 heredada del proyecto anterior), el modo -DryRun
 > de `verificar-despliegue.ps1` (validación del flujo sin tocar la máquina
-> real) con su paso en `ci.yml` y la actualización de la documentación a la
-> v1.0.15. Al publicar el tag, el auto-update (v1.0.14+) + el paso de
-> paginación de `release.yml` + la E2E del auto-update en máquina real (§6)
-> quedan probados de punta a punta.
+> real) con su paso en `ci.yml`, la actualización de la documentación a la
+> v1.0.15 y los **backups de la BD** (Fase 8 del plan): automáticos en los
+> 4 horarios de `[backup] schedule_times` con rotación a 10 copias
+> (gbak + fallback a copia del `.fdb`), cifrado opcional AES-256-GCM por
+> chunks (PBKDF2-SHA256, `encryption_enabled`/`encryption_password`) y el
+> panel `/backups` (solo Administrador) con «Crear backup ahora», listado de
+> copias y estado de la última corrida (`backup_estado`/`backup_ahora`). Al
+> publicar el tag, el auto-update (v1.0.14+) + el paso de paginación de
+> `release.yml` + la E2E del auto-update en máquina real (§6) quedan probados
+> de punta a punta.
 
 ---
 
