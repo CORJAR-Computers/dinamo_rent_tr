@@ -28,6 +28,7 @@
 
 	const diasVencimiento = $derived.by(() => {
 		const hoy = new Date();
+		hoy.setHours(0, 0, 0, 0);
 		return (fecha: string | null): number | null => {
 			if (!fecha) return null;
 			const d = new Date(fecha + 'T00:00:00');
