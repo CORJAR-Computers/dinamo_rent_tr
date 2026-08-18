@@ -164,6 +164,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::confirmar_cierre,
             commands::app::app_frontend_lista,
+            commands::app::app_version,
             commands::auditoria::listar_auditoria,
             commands::auditoria::acciones_auditoria,
             commands::auditoria::usuarios_auditoria,

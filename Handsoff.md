@@ -537,14 +537,14 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       `contrato-real-pag1..4.png`) sin desbordes, texto cortado ni imágenes rotas.
       Quedan pendientes el **modal de inspección** de rentas, el **calendario** y el **panel del
       Agente SIMIT** en la app real (ver primera tarea de §3).
-- [ ] **Mostrar la versión REAL de la app en la barra de menú lateral.** El 14-08 el usuario
-      reportó que el menú lateral muestra **v3.2.0** (versión heredada del proyecto anterior),
-      no la versión real de la app (hoy **v1.0.12**). Pendiente de retomar cuando el usuario
-      vuelva a su PC: localizar dónde se renderiza esa versión en el layout/menú lateral
-      (`src/routes/+layout.svelte` o similar) y reemplazarla por la versión real de la app,
-      obtenida del backend (p. ej. comando de Tauri que lea `tauri.conf.json`/`Cargo.toml`
-      o `app_version`) en vez de un literal hardcodeado. De paso, aprovechar para **probar el
-      auto-update** (la app v1.0.3+ debe detectar la v1.0.12 instalada y ofrecer actualizarse).
+- [~] **Mostrar la versión REAL de la app en la barra de menú lateral.** El 14-08 el usuario
+      reportó que el menú lateral muestra **v3.2.0** (versión heredada del proyecto anterior).
+      *EN CURSO (18-08): la solución es el comando Tauri `app_version` (backend,
+      `package_info` → Cargo.toml / tauri.conf.json en el build) + store
+      `src/lib/stores/app.svelte.ts`; `+layout.svelte` y `login/+page.svelte` ya renderizan
+      la versión real (`v{version}`) en vez del literal. Falta: commit/merge del cambio y el
+      repaso visual en la app real (con la prueba de campo del auto-update, §6 de
+      RELEASE_CHECKLIST, v1.0.16).*
 
 ## 4. Convenciones a respetar
 

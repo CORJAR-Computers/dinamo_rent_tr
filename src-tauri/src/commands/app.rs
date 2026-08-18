@@ -21,6 +21,14 @@ pub fn app_frontend_lista(state: tauri::State<'_, FrontendListo>) {
     state.0.store(true, Ordering::SeqCst);
 }
 
+/// Versión real de la app (Cargo.toml / tauri.conf.json en el build — la misma
+/// que firma el updater y nombra los instaladores). Reemplaza el literal
+/// v3.2.0 heredado del proyecto anterior en el menú lateral y el login.
+#[tauri::command]
+pub fn app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 /// Cierra la aplicación tras la confirmación del diálogo del frontend.
 ///
 /// El cierre normal de la ventana (botón X) se intercepta en `on_window_event`

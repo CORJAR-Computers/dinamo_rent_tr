@@ -5,6 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { session } from '$lib/stores/session.svelte';
 	import { empresa } from '$lib/stores/empresa.svelte';
+	import { app } from '$lib/stores/app.svelte';
 	import { authApi } from '$lib/api';
 	import { validarSesion } from '$lib/utils/guards';
 	import Toast from '$lib/components/Toast.svelte';
@@ -54,6 +55,8 @@
 		// Branding de la empresa (nombre + logo) para el menú lateral;
 		// best-effort: ante error se conserva el fallback estático.
 		void empresa.cargarPublica();
+		// Versión real de la app (backend, package_info) para el pie del menú.
+		void app.cargarVersion();
 	});
 
 	// ── Tema por usuario (persistido en BD, tabla usuarios) ──
@@ -286,7 +289,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 				{#if sidebarOpen}
 					<div class="overflow-hidden">
 						<p class="font-bold text-sm leading-tight">{empresa.nombreMostrar}</p>
-						<p class="text-[11px] text-white/60">ERP v3.2.0</p>
+						{#if app.version}<p class="text-[11px] text-white/60">ERP v{app.version}</p>{/if}
 					</div>
 				{/if}
 			</div>
