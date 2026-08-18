@@ -570,12 +570,24 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que
 aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
-`schema_migrations`. Serie actual: **0001-0016** (propósito de cada una y esquema canónico de
+`schema_migrations`. Serie actual: **0001-0023** (propósito de cada una y esquema canónico de
 índices en el README §Migraciones). La **0015** (columna `comparendos.numero_comparendo` +
 índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev. La
 **0016** (`atribucion_comparendo_renta.sql`, DML idempotente) vincula los comparendos sin
 renta/cliente con la renta que cubría el vehículo el día de la infracción (misma lógica que
 `renta_del_dia`); aplicada a la BD dev (con datos actuales: 0 de 27 comparendos en rango).
+
+Después vinieron la **0017** (`empresa_config.sql`, datos de la empresa en una tabla de una
+fila para el setup inicial; el logo se guarda como archivo en `<data_dir>/logos/`), la **0018**
+(`empresa_ciudad.sql`, columna `CIUDAD` explícita — antes se derivaba de la dirección con una
+heurística), la **0019** (`renta_cobra_iva.sql`, flag `COBRA_IVA` por renta, default 1 para
+conservar el comportamiento de las existentes) y la **0020** (`renta_valor_gasolina.sql`, cargo
+por gasolina en la renta, default 0). El Agente SIMIT trajo la **0021** (`comparendo_origen_simit.sql`,
+procedencia persistente `origen` 'SIMIT'/'Manual' + `ultimo_visto_simit` + índice) y la **0022**
+(`agente_simit_ultimo_resultado.sql`, último resultado de la sincronización persistido para que
+el filtro «Solo nuevos» sobreviva al reinicio). La **0023** (`renta_comision.sql`) añade la
+comisión por renta (`TIENE_COMISION`/`COMISION`/`VALOR_NETO`) sin tocar el total que cobra al
+cliente. Todas son idempotentes (patrón 5.2) y ya están aplicadas a la BD dev.
 
 ### 5.1 Cómo añadir una migración nueva (000N)
 

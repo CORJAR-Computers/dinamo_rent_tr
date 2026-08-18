@@ -192,6 +192,15 @@ La base de datos es un `.fdb` portable de **Firebird Embedded 5.0**. El esquema 
 | `0012_consolidar_indices_simples.sql` | Elimina índices de una columna subsumidos por compuestos (prefijo izquierdo) |
 | `0013_consolidar_indices_auditoria.sql` | Elimina `IX_AUDITORIA_USUARIO` (último subsumido: lo cubre `IX_AUDITORIA_USUARIO_FECHA`) |
 | `0014_limpiar_tablas_tests.sql` | Elimina tablas residuales de sesiones de test (PROBE_T, T2, T_TEST) |
+| `0015_comparendo_numero_simit.sql` | Columna `comparendos.numero_comparendo` + índice (deduplicación del Agente SIMIT) |
+| `0016_atribucion_comparendo_renta.sql` | DML idempotente: vincula comparendos sin renta/cliente con la renta que cubría el vehículo el día de la infracción (`renta_del_dia`) |
+| `0017_empresa_config.sql` | Tabla de una fila con los datos de la empresa (setup inicial; el logo se guarda como archivo en `<data_dir>/logos/`) |
+| `0018_empresa_ciudad.sql` | Columna `CIUDAD` explícita en `EMPRESA_CONFIG` (antes se derivaba de la dirección) |
+| `0019_renta_cobra_iva.sql` | Flag `COBRA_IVA` por renta (checkbox; default 1 conserva el comportamiento de las existentes) |
+| `0020_renta_valor_gasolina.sql` | Cargo por gasolina en la renta (`VALOR_GASOLINA`, default 0) |
+| `0021_comparendo_origen_simit.sql` | Procedencia persistente (`origen` 'SIMIT'/'Manual') + `ultimo_visto_simit` + índice |
+| `0022_agente_simit_ultimo_resultado.sql` | Último resultado del Agente SIMIT persistido (el filtro «Solo nuevos» sobrevive al reinicio) |
+| `0023_renta_comision.sql` | Comisión por renta (`TIENE_COMISION`/`COMISION`/`VALOR_NETO`) + backfill `valor_neto = total` |
 
 ### Esquema canónico de índices (tras 0010-0013)
 
