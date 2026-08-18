@@ -337,11 +337,29 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   (generator `GEN_RENTA_NO_CONTRATO`, asignado en el INSERT con `NEXT VALUE FOR`; migración
   `0003_no_contrato.sql` con backfill + índice único). El frontend lo recibe como `noContrato`
   y el contrato imprimible lo muestra en «CONTRATO Nº».
-- **Tests:** `tests/rentas_integration.rs` (6, incl. creación con abono inicial → saldo = total − abono
-  y `no_contrato` secuencial +1 e independiente del id) · `src/routes/rentas/rentas.test.ts` (11,
+- **Tests:** `tests/rentas_integration.rs` (8, incl. creación con abono inicial → saldo = total − abono,
+  `no_contrato` secuencial +1 e independiente del id, edición de renta cerrada con recálculo y
+  extensión de horas/días) · `src/routes/rentas/rentas.test.ts` (11,
   incl. impresión con pagos/inspecciones y apertura del contrato como documento independiente).
 - **Nota:** la tabla `rentas` **no tiene `updated_at`** (solo `created_at`); los UPDATE no lo usan.
   No se debe agregar `updated_at = CURRENT_TIMESTAMP` a UPDATEs de `rentas`.
+- **Edición de rentas cerradas** (solo Administrador): `RentaCierreEditDatos` permite corregir
+  errores de digitación post-cierre. Campos editables: `valor_dia`, `valor_hora_extra`,
+  `dias_calculados`, `horas_extras`, `descuento`, `observaciones` (motivo obligatorio).
+  `RentaService::editar_cerrada()` reconstruye subtotal/impuestos/total/saldo con los valores
+  (originales o editados), preserva el abono y registra auditoría detallada ANTES→DESPUÉS.
+  Comando `editar_renta_cerrada` con `require_eliminacion`. Botón «Editar» visible solo en
+  rentas con estado `Cerrada` y usuarios con permiso de eliminación.
+- **Extensiones acumulables** (migración `0024_extensiones_renta.sql`): tablas de historial
+  `extensiones_renta` (tipo horas/días, cantidad, valor_unitario, valor_total, observaciones,
+  usuario, created_at). `RentaService::extender()` valida renta Activa, calcula nuevo retorno,
+  acumula `horas_extras`/`dias_calculados` y `valor_dia_extra`, recalcula totales y registra
+  auditoría `EXTENSION RENTA`. Múltiples extensiones son acumulables y cada una se persiste
+  en el historial. Comando `extender_renta` + `listar_extensiones_renta`. Frontend: botón «Extender»
+  (+) en rentas activas, modal con selector de tipo, cantidad, valor unitario, preview del
+  nuevo retorno y tabla de historial de extensiones previas.
+- **Tests:** `tests/rentas_integration.rs` (8 incl. `renta_editar_cerrada_recalculo_totales` y
+  `renta_extender_horas_y_dias`) · `src/routes/rentas/rentas.test.ts` (11).
 
 ### ✅ Comparendos (`/comparendos`)
 - **Backend:** `repositories/comparendo.rs`, `services/comparendo.rs` (valida placa existente en
@@ -593,6 +611,17 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 7. **Tests:** integración Rust contra `data/dinamo_rent_v3.fdb` (serial, autos/clientes reales de
    solo lectura, limpieza de registros temporales). Frontend con mock de Tauri
    (`src/test/tauri.ts` + `register`), `session.setSession` en `beforeEach`.
+8. **Normalización de texto (mayúsculas automáticas):** todos los campos de texto libre se
+   convierten a MAYÚSCULAS en `services/X.rs::normalizar()` con el helper `core::validators::mayusculas()`
+   (trim + `to_uppercase()`). **Excepciones** (se mantienen tal cual): `email`, `rol`, `web`, fechas,
+   horas, montos y códigos postales. Los `<select>` del frontend (categoría/tipo en gastos y
+   mantenimiento) transforman sus opciones a uppercase (`.map(c => c.toUpperCase())`) para que
+   coincidan con los valores de la DB y el edit-form siempre muestre el valor correcto.
+   Las **validaciones contra listas permitidas** (categoría de gastos, tipo de mantenimiento)
+   son **case-insensitive**: compara `trim().to_uppercase()` del valor contra la lista
+   uppercased, para que no fallen con valores de config.ini en camelCase.
+   `TIPO_CAMBIO_ACEITE` en mantenimiento también se compara case-insensitive para que la
+   sincronización de `proximo_aceite` funcione con el valor stored en mayúsculas.
 
 ---
 
@@ -600,7 +629,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que
 aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
-`schema_migrations`. Serie actual: **0001-0023** (propósito de cada una y esquema canónico de
+`schema_migrations`. Serie actual: **0001-0024** (propósito de cada una y esquema canónico de
 índices en el README §Migraciones). La **0015** (columna `comparendos.numero_comparendo` +
 índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev. La
 **0016** (`atribucion_comparendo_renta.sql`, DML idempotente) vincula los comparendos sin
@@ -617,7 +646,9 @@ procedencia persistente `origen` 'SIMIT'/'Manual' + `ultimo_visto_simit` + índi
 (`agente_simit_ultimo_resultado.sql`, último resultado de la sincronización persistido para que
 el filtro «Solo nuevos» sobreviva al reinicio). La **0023** (`renta_comision.sql`) añade la
 comisión por renta (`TIENE_COMISION`/`COMISION`/`VALOR_NETO`) sin tocar el total que cobra al
-cliente. Todas son idempotentes (patrón 5.2) y ya están aplicadas a la BD dev.
+cliente. Todas son idempotentes (patrón 5.2) y ya están aplicadas a la BD dev. La **0024**
+(`extensiones_renta.sql`) crea la tabla de historial de extensiones de rentas (horas o días
+extras acumulables) con índice, ambos con guards `RDB$RELATIONS`/`RDB$INDICES`.
 
 ### 5.1 Cómo añadir una migración nueva (000N)
 
