@@ -10,6 +10,16 @@
 # + dinamo_rent_v3.fdb) y que la app arranca y queda viva 10 s (el bug del v1.0.0
 # era justamente morirse antes del Login). Ver DEPLOYMENT_CLIENTES.md.
 
+param(
+    [switch]$DryRun,
+    [switch]$SimularFallo
+)
+
+# -DryRun: valida el flujo del script (chequeos, salida y veredicto) contra
+# un ambiente simulado en TEMP, sin tocar la maquina real. -SimularFallo
+# solo tiene sentido con -DryRun: fuerza el camino de FALLOS (version vieja,
+# app muerta, sin config.ini ni BD) para probar el veredicto.
+
 $ErrorActionPreference = 'Continue'
 $failed = @()
 $ok = @()
@@ -26,19 +36,43 @@ function Check([string]$name, [bool]$cond, [string]$detail = '') {
 
 Write-Host "=== Verificacion de despliegue DinamoRent $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
 
+# --- Modo DryRun: ambiente simulado en TEMP ---
+$dryBase = $null
+if ($DryRun) {
+    Write-Host "  [dry-run] ambiente simulado en TEMP (no toca la maquina real)"
+    $dryBase = Join-Path $env:TEMP ("dinamorent-dryrun-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path (Join-Path $dryBase 'DinamoRent') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $dryBase 'com.corjar.dinamorent') | Out-Null
+    if (-not $SimularFallo) {
+        # Caso OK: config.ini + BD simulada (~5 MB)
+        New-Item -ItemType File -Force -Path (Join-Path $dryBase 'com.corjar.dinamorent\config.ini') | Out-Null
+        $fdbBytes = New-Object byte[] (5 * 1024 * 1024)
+        [IO.File]::WriteAllBytes((Join-Path $dryBase 'com.corjar.dinamorent\dinamo_rent_v3.fdb'), $fdbBytes)
+    }
+}
+
 # 1) Ejecutable instalado y version
 $exe = $null
-$cands = @(
-    "$env:LOCALAPPDATA\DinamoRent\dinamo-rent.exe",
-    "$env:LOCALAPPDATA\Programs\DinamoRent\dinamo-rent.exe",
-    "$env:ProgramFiles\DinamoRent\dinamo-rent.exe"
-)
-foreach ($c in $cands) { if (Test-Path $c) { $exe = $c; break } }
-if (-not $exe) {
-    $exe = Get-ChildItem $env:LOCALAPPDATA, $env:ProgramFiles -Recurse -Filter 'dinamo-rent.exe' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+if ($DryRun) {
+    $exe = Join-Path $dryBase 'DinamoRent\dinamo-rent.exe'
+    New-Item -ItemType File -Force -Path $exe | Out-Null
+} else {
+    $cands = @(
+        "$env:LOCALAPPDATA\DinamoRent\dinamo-rent.exe",
+        "$env:LOCALAPPDATA\Programs\DinamoRent\dinamo-rent.exe",
+        "$env:ProgramFiles\DinamoRent\dinamo-rent.exe"
+    )
+    foreach ($c in $cands) { if (Test-Path $c) { $exe = $c; break } }
+    if (-not $exe) {
+        $exe = Get-ChildItem $env:LOCALAPPDATA, $env:ProgramFiles -Recurse -Filter 'dinamo-rent.exe' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    }
 }
 if ($exe) {
-    $ver = (Get-Item $exe).VersionInfo.ProductVersion
+    if ($DryRun) {
+        $ver = if ($SimularFallo) { '1.0.14.0' } else { '1.0.15.0' }
+    } else {
+        $ver = (Get-Item $exe).VersionInfo.ProductVersion
+    }
     Check "Ejecutable instalado" $true $exe
     Check "Version 1.0.15" ($ver -like '1.0.15*') "ProductVersion=$ver"
 } else {
@@ -50,21 +84,31 @@ if ($exe) {
 #    comprobaran antes, una instalacion recien hecha fallaria falsamente.)
 $app = $null
 if ($exe) {
-    Write-Host "  Arrancando la app (10 s)..."
-    $app = Start-Process -FilePath $exe -PassThru
-    Start-Sleep -Seconds 10
-    $app.Refresh()
-    if (-not $app.HasExited) {
-        Check "App viva tras 10 s (sin cuelgue)" $true "PID $($app.Id)"
+    if ($DryRun) {
+        Write-Host "  [dry-run] simulando arranque de 10 s..."
+        Start-Sleep -Milliseconds 400
+        if ($SimularFallo) {
+            Check "App viva tras 10 s (sin cuelgue)" $false 'simulado: salio sola'
+        } else {
+            Check "App viva tras 10 s (sin cuelgue)" $true 'simulado: PID fake'
+        }
     } else {
-        Check "App viva tras 10 s (sin cuelgue)" $false "salio sola con codigo $($app.ExitCode)"
+        Write-Host "  Arrancando la app (10 s)..."
+        $app = Start-Process -FilePath $exe -PassThru
+        Start-Sleep -Seconds 10
+        $app.Refresh()
+        if (-not $app.HasExited) {
+            Check "App viva tras 10 s (sin cuelgue)" $true "PID $($app.Id)"
+        } else {
+            Check "App viva tras 10 s (sin cuelgue)" $false "salio sola con codigo $($app.ExitCode)"
+        }
     }
 } else {
     Write-Host "  (sin exe: no se puede probar el arranque)"
 }
 
 # 3) Carpeta de datos (debe existir tras el primer arranque)
-$data = "$env:APPDATA\com.corjar.dinamorent"
+$data = if ($DryRun) { Join-Path $dryBase 'com.corjar.dinamorent' } else { "$env:APPDATA\com.corjar.dinamorent" }
 $fdb = Join-Path $data 'dinamo_rent_v3.fdb'
 $ini = Join-Path $data 'config.ini'
 Check "Carpeta de datos creada" (Test-Path $data) $data
@@ -83,6 +127,7 @@ if ($app) {
 }
 
 # 5) Veredicto
+if ($DryRun -and $dryBase) { Remove-Item -Recurse -Force $dryBase -ErrorAction SilentlyContinue }
 Write-Host ""
 if ($failed.Count -eq 0) {
     Write-Host "=== VEREDICTO: OK ==="
