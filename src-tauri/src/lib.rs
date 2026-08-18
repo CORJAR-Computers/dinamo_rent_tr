@@ -105,6 +105,13 @@ pub fn run() {
                 simit_estado,
             );
 
+            // ── Backups automáticos programados ──
+            // Fase 8 de PLAN_IMPLEMENTACION_TAURI.md: copia de seguridad de la
+            // BD en los horarios de `[backup] schedule_times` (default
+            // 09:00, 13:00, 19:00, 23:00) con rotación a `max_copies` (10).
+            // Corre en un hilo de fondo igual que el Agente SIMIT (services/backup.rs).
+            services::backup::spawn_scheduler(config.clone());
+
             // ── Logging ──
             // En DEBUG se loguea por defecto (stderr del terminal de dev). En
             // RELEASE también se escribe a archivo (data_dir/logs/app.log): sin

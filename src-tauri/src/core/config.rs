@@ -6,6 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use chrono::{NaiveTime, Timelike};
 use serde::Serialize;
 
 use super::error::AppError;
@@ -196,9 +197,24 @@ pub struct AppConfig {
     // ── UI (para el frontend) ──
     pub ui_color_primario: String,
     pub ui_color_fondo: String,
+    // ── Backup (sección [backup]) ──
+    /// Directorio de backups (relativo a data_dir o absoluto)
+    pub backup_directory: PathBuf,
+    /// Copias a conservar en la rotación (0 = conservar todas)
+    pub backup_max_copies: usize,
+    /// Horarios "HH:MM" tal cual config.ini (para mostrar/editar)
+    pub backup_schedule_times: Vec<String>,
+    /// Horarios parseados a minutos del día (0-1439) para el scheduler
+    pub backup_schedule_minutes: Vec<u32>,
+    /// Cadencia del scheduler (ms), default 60000
+    pub backup_check_interval_ms: u64,
+    pub backup_encryption_enabled: bool,
+    pub backup_encryption_password: String,
     // ── Rutas de runtime ──
     pub config_dir: PathBuf,
     pub data_dir: PathBuf,
+    /// Directorio de recursos (firebird/, gbak.exe) — producción: bundle; dev: resources
+    pub resource_dir: PathBuf,
 }
 
 impl AppConfig {
@@ -299,8 +315,16 @@ impl AppConfig {
             app_version: get_str(&map, "application", "version", "3.2.0"),
             ui_color_primario: get_str(&map, "ui", "color_primario", "#1e40af"),
             ui_color_fondo: get_str(&map, "ui", "color_fondo", "#f8fafc"),
+            backup_directory: PathBuf::from(get_str(&map, "backup", "directory", "Backups")),
+            backup_max_copies: get_usize(&map, "backup", "max_copies", 10),
+            backup_schedule_times: get_list(&map, "backup", "schedule_times"),
+            backup_schedule_minutes: get_backup_minutes(&map),
+            backup_check_interval_ms: get_u64(&map, "backup", "check_interval_ms", 60000),
+            backup_encryption_enabled: get_bool(&map, "backup", "encryption_enabled", false),
+            backup_encryption_password: get_str(&map, "backup", "encryption_password", ""),
             config_dir: config_path.parent().unwrap_or(data_dir).to_path_buf(),
             data_dir: data_dir.to_path_buf(),
+            resource_dir: resource_dir.to_path_buf(),
         }
     }
 
@@ -484,6 +508,28 @@ fn get_set(map: &IniMap, section: &str, key: &str) -> HashSet<String> {
         .unwrap_or_default()
 }
 
+/// Parseo de `backup.schedule_times` ("09:00, 13:00, …") a minutos del día.
+/// Los horarios inválidos se ignoran (con warn) y los duplicados se eliminan:
+/// un horario mal escrito no debe tumbar el scheduler ni la app.
+fn get_backup_minutes(map: &IniMap) -> Vec<u32> {
+    let raw = get_str(map, "backup", "schedule_times", "09:00, 13:00, 19:00, 23:00");
+    let mut minutos: Vec<u32> = raw
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .filter_map(|parte| match NaiveTime::parse_from_str(parte, "%H:%M") {
+            Ok(t) => Some(t.hour() * 60 + t.minute()),
+            Err(_) => {
+                log::warn!("Backup: horario inválido ignorado en config.ini: {parte:?}");
+                None
+            }
+        })
+        .collect();
+    minutos.sort_unstable();
+    minutos.dedup();
+    minutos
+}
+
 /// Listas de negocio (tipos de auto, estados, etc.) para exponer al frontend
 pub fn get_list(map: &IniMap, section: &str, key: &str) -> Vec<String> {
     map.get(section)
@@ -525,5 +571,28 @@ mod tests {
         assert_eq!(get_u64(&ini, "security", "session_timeout", 0), 3600);
         // Retraso inicial del Agente SIMIT (10 min): no debe competir con el arranque
         assert_eq!(get_u64(&ini, "simit", "start_delay_minutes", 0), 10);
+    }
+
+    #[test]
+    fn backup_config_defaults() {
+        let text = build_default_ini_text();
+        let ini = parse_ini(&text);
+        // Sección [backup]: 4 horarios y rotación a 10 copias (Fase 8 del plan)
+        assert_eq!(get_str(&ini, "backup", "max_copies", ""), "10");
+        assert_eq!(
+            get_str(&ini, "backup", "schedule_times", ""),
+            "09:00, 13:00, 19:00, 23:00"
+        );
+        assert_eq!(get_u64(&ini, "backup", "check_interval_ms", 0), 60000);
+    }
+
+    #[test]
+    fn backup_minutes_ignora_horarios_invalidos() {
+        let ini = parse_ini("[backup]\nschedule_times = 09:00, 25:00, abc, 13:00, 09:00\n");
+        // 25:00 y abc se descartan; duplicados se eliminan
+        assert_eq!(get_backup_minutes(&ini), vec![540, 780]);
+        // Sección ausente → defaults
+        let vacio = parse_ini("");
+        assert_eq!(get_backup_minutes(&vacio), vec![540, 780, 1140, 1380]);
     }
 }
