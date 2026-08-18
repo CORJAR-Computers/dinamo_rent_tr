@@ -10,6 +10,43 @@
 # + dinamo_rent_v3.fdb) y que la app arranca y queda viva 10 s (el bug del v1.0.0
 # era justamente morirse antes del Login). Ver DEPLOYMENT_CLIENTES.md.
 
+<#
+.SYNOPSIS
+Verificacion post-instalacion de DinamoRent (exe, datos y arranque).
+
+.DESCRIPTION
+Comprueba en el equipo objetivo: exe instalado con la version esperada,
+%APPDATA%\com.corjar.dinamorent con config.ini + dinamo_rent_v3.fdb, y que
+la app arranca y queda viva 10 s. Termina con "VEREDICTO: OK" y exit 0 si
+todo pasa, o "VEREDICTO: FALLOS" y exit 1 si alguna comprobacion falla.
+
+.PARAMETER DryRun
+No toca la maquina real: ejecuta los chequeos y el veredicto reales contra
+un ambiente simulado en %TEMP% (exe, config.ini y BD falsos). Se usa en el
+CI (paso "Verificador de despliegue (-DryRun)" de ci.yml) para validar el
+flujo del script sin instalar nada.
+
+.PARAMETER SimularFallo
+Solo tiene sentido con -DryRun. Fuerza el camino de FALLOS (version vieja,
+app muerta, sin config.ini ni BD) para probar que el veredicto termina con
+"VEREDICTO: FALLOS" y exit 1.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1
+
+Verificacion real sobre una instalacion hecha (equipo del cliente).
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun
+
+Caso OK simulado: debe terminar con "VEREDICTO: OK" y exit 0.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRun -SimularFallo
+
+Camino de FALLOS simulado: debe terminar con "VEREDICTO: FALLOS" y exit 1.
+#>
+
 param(
     [switch]$DryRun,
     [switch]$SimularFallo
