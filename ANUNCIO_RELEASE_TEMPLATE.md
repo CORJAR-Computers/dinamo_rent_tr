@@ -18,9 +18,9 @@ La versión estable v1.0.16 ya está publicada en GitHub, construida y firmada
 por CI (auto-update activo desde la v1.0.14).
 
 📦 Descarga: release v1.0.16 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.16/DinamoRent_1.0.16_x64-setup.exe
-(~21 MB, NSIS) o el .msi (~33 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.16/DinamoRent_1.0.16_x64_en-US.msi
-sha256 NSIS: (pendiente — se calcula al publicar)
-sha256 MSI:  (pendiente — se calcula al publicar)
+(~22 MB, NSIS) o el .msi (~34 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.16/DinamoRent_1.0.16_x64_en-US.msi
+sha256 NSIS: d0f043dfce442db3b43ba4674ab40a64db6f1023d8a337b22b172a3b23a1a6c3
+sha256 MSI:  ef93c9c17de6dd7d669598d387e89c892ea2106c1da4d06f3a9f2ab241c2515b
 Credenciales iniciales: admin / admin123 (cambio forzado al primer ingreso).
 ⚠️ No instalar versiones anteriores descontinuadas.
 
@@ -80,7 +80,7 @@ RESUMEN_EJECUTIVO.md · INSTALACION_OPERACIONES.md · DEPLOYMENT_CLIENTES.md
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.0.16:** `DinamoRent_1.0.16_x64-setup.exe` (NSIS, ~21 MB, sha256 `(pendiente — se calcula al publicar)`) y `DinamoRent_1.0.16_x64_en-US.msi` (~33 MB, sha256 `(pendiente — se calcula al publicar)`)
+- **Assets de la v1.0.16:** `DinamoRent_1.0.16_x64-setup.exe` (NSIS, ~22 MB, sha256 `d0f043dfce442db3b43ba4674ab40a64db6f1023d8a337b22b172a3b23a1a6c3`) y `DinamoRent_1.0.16_x64_en-US.msi` (~34 MB, sha256 `ef93c9c17de6dd7d669598d387e89c892ea2106c1da4d06f3a9f2ab241c2515b`)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
 - **URLs directas de assets v1.0.16:**
   - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.16/DinamoRent_1.0.16_x64-setup.exe
