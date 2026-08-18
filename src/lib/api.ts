@@ -1015,6 +1015,48 @@ export const simitApi = {
 		invokeCmd<ResultadoSincronizacion>('simit_sync_now', { sessionId })
 };
 
+// ─── Comandos de Backups ─────────────────────────────────────────────────────
+
+/** Una copia de seguridad en disco (services/backup.rs) */
+export interface InfoCopiaBackup {
+	nombre: string;
+	tamanoBytes: number;
+	/** Última modificación (RFC3339 local) */
+	modificado: string;
+	/** true si empieza por el magic DRENC-01 (backup cifrado) */
+	cifrado: boolean;
+}
+
+/** Estado en memoria de los backups (config + última corrida + copias) */
+export interface InfoBackup {
+	directorio: string;
+	maxCopies: number;
+	horarios: string[];
+	cifrado: boolean;
+	ejecutando: boolean;
+	ultimoBackup: string | null;
+	ultimoResultado: string | null;
+	ultimoError: string | null;
+	/** Próxima corrida programada (RFC3339 local) calculada por el backend */
+	proximaCorrida: string | null;
+	/** Copias existentes, de la más reciente a la más vieja */
+	copias: InfoCopiaBackup[];
+	/** Última restauración exitosa (nombre del backup, si hubo) */
+	ultimaRestauracion: string | null;
+	/** Error de la última restauración (si falló) */
+	ultimaRestauracionError: string | null;
+}
+
+export const backupApi = {
+	/** Estado actual (se consulta al abrir la página de Backups) */
+	estado: (sessionId: string) => invokeCmd<InfoBackup>('backup_estado', { sessionId }),
+	/** Crea un backup manual ahora (solo admin); devuelve el estado refrescado */
+	ahora: (sessionId: string) => invokeCmd<InfoBackup>('backup_ahora', { sessionId }),
+	/** Restaura la BD desde un backup; la app se relanza con el flag de restauración */
+	restaurar: (sessionId: string, archivo: string, password: string | null) =>
+		invokeCmd<InfoBackup>('backup_restaurar', { sessionId, archivo, password })
+};
+
 // ─── Comandos de Informes ───────────────────────────────────────────────────
 
 /** Detalle de una renta del mes (services/informe.rs) */

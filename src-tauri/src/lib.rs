@@ -53,6 +53,32 @@ pub fn run() {
             }
             let config = Arc::new(AppConfig::load(&data_dir, &resource_dir, &manifest_dir));
 
+            // ── Restauración desde un backup (Fase 8) ──
+            // `backup_restaurar` relanza la app con `--restaurar-backup=<staging>`
+            // y la cierra. El swap del `.fdb` ocurre AQUÍ, antes de abrir el
+            // pool: el motor Embedded abre la BD en exclusiva por proceso, así
+            // que el proceso anterior debe haber terminado para que gbak
+            // pueda reemplazar el archivo (gbak -r a temporal + rename atómico
+            // con reintentos en `restaurar_en_arranque`). Si falla, la BD
+            // actual queda intacta y la app arranca con ella; el resultado se
+            // registra en el estado del panel más abajo.
+            let restauracion_pendiente = services::backup::staging_restauracion_desde_args();
+            let resultado_restauracion: Option<Result<(), String>> = restauracion_pendiente
+                .as_ref()
+                .map(|staging| {
+                    let r = services::backup::restaurar_en_arranque(&config, staging);
+                    match &r {
+                        Ok(()) => log::info!(
+                            "Restauración completada: {}",
+                            staging.display()
+                        ),
+                        Err(e) => log::error!(
+                            "Restauración falló (se conserva la BD actual): {e}"
+                        ),
+                    }
+                    r.map_err(|e| e.to_string())
+                });
+
             // ── Pool de BD Firebird Embedded ──
             let pool = crate::core::db::create_pool(&config)?;
 
@@ -89,6 +115,21 @@ pub fn run() {
             app.manage(commands::app::FrontendListo(
                 std::sync::atomic::AtomicBool::new(false),
             ));
+            // ── Estado en memoria de los backups (panel de la UI) ──
+            let backup_estado = std::sync::Arc::new(services::backup::EstadoBackup::default());
+            app.manage(services::backup::EstadoBackupManaged(backup_estado.clone()));
+            // Resultado de la restauración del arranque (si hubo flag): queda
+            // visible en el panel (`ultima_restauracion` / `ultima_restauracion_error`).
+            if let (Some(origen), Some(resultado)) =
+                (restauracion_pendiente.as_ref(), resultado_restauracion)
+            {
+                let nombre = origen
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "staging".into());
+                backup_estado.registrar_resultado_restauracion(&nombre, resultado);
+            }
+
             // Sincronizar tracker de intentos fallidos desde la BD (restaura bloqueos)
             let managed_state = app.state::<AppState>();
             AuthService::sync_tracker_from_db(&managed_state);
@@ -110,7 +151,7 @@ pub fn run() {
             // BD en los horarios de `[backup] schedule_times` (default
             // 09:00, 13:00, 19:00, 23:00) con rotación a `max_copies` (10).
             // Corre en un hilo de fondo igual que el Agente SIMIT (services/backup.rs).
-            services::backup::spawn_scheduler(config.clone());
+            services::backup::spawn_scheduler(config.clone(), backup_estado);
 
             // ── Logging ──
             // En DEBUG se loguea por defecto (stderr del terminal de dev). En
@@ -172,6 +213,9 @@ pub fn run() {
             commands::app::confirmar_cierre,
             commands::app::app_frontend_lista,
             commands::app::app_version,
+            commands::backup::backup_estado,
+            commands::backup::backup_ahora,
+            commands::backup::backup_restaurar,
             commands::auditoria::listar_auditoria,
             commands::auditoria::acciones_auditoria,
             commands::auditoria::usuarios_auditoria,

@@ -67,6 +67,7 @@
 			usuarios: 'users',
 			auditoria: 'document',
 			empresa: 'empresa',
+			backups: 'backups',
 			comparendos: 'check',
 			alertas: 'alert',
 			informes: 'chart',
