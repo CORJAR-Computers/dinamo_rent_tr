@@ -112,7 +112,7 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRu
 | 3 | `%APPDATA%\com.corjar.dinamorent\` | existe (la crea el **primer arranque**; por eso se comprueba después del arranque) |
 | 4 | `config.ini` | existe |
 | 5 | `dinamo_rent_v3.fdb` | existe y pesa > 0 (BD creada o migrada) |
-| 6 | Migraciones: `schema_migrations` tiene 20 versiones | 20 (comprobación opcional con tooling dev) |
+| 6 | Migraciones: `schema_migrations` tiene 23 versiones (0001–0023) | 23 (comprobación opcional con tooling dev) |
 | 7 | Login manual | `admin` + contraseña del cliente (primer ingreso: cambio forzado) |
 | 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.0.15 ya es la vigente) |
 
