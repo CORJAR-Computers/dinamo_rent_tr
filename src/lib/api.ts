@@ -785,6 +785,31 @@ export interface RentaCierreEditDatos {
 	observaciones?: string;
 }
 
+/** Datos para extender una renta activa */
+export interface ExtensionDatos {
+	/** Tipo de extensión: "horas" o "dias" */
+	tipo: string;
+	/** Cantidad de horas o días a agregar */
+	cantidad: number;
+	/** Valor unitario (hora o día extra) */
+	valor: string;
+	/** Observaciones sobre la extensión */
+	observaciones?: string;
+}
+
+/** Extensión de una renta (historial) */
+export interface ExtensionRenta {
+	id: number;
+	idRenta: number;
+	tipo: string;
+	cantidad: number;
+	valorUnitario: string;
+	valorTotal: string;
+	observaciones: string | null;
+	usuario: string | null;
+	createdAt: string | null;
+}
+
 /** Resultado de la cancelación de una renta */
 export interface RentaCancelada {
 	renta: Renta;
@@ -812,6 +837,10 @@ export const rentaApi = {
 		invokeCmd<RentaCancelada>('cancelar_renta', { sessionId, id }),
 	editarCerrada: (sessionId: string, id: number, datos: RentaCierreEditDatos) =>
 		invokeCmd<Renta>('editar_renta_cerrada', { sessionId, id, datos }),
+	extender: (sessionId: string, id: number, datos: ExtensionDatos) =>
+		invokeCmd<Renta>('extender_renta', { sessionId, id, datos }),
+	listarExtensiones: (sessionId: string, idRenta: number) =>
+		invokeCmd<ExtensionRenta[]>('listar_extensiones', { sessionId, idRenta }),
 	eliminar: (sessionId: string, id: number) =>
 		invokeCmd<void>('eliminar_renta', { sessionId, id }),
 	registrarPago: (sessionId: string, idRenta: number, datos: PagoDatos) =>

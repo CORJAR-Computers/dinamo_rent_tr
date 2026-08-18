@@ -1,8 +1,9 @@
 //! commands/renta.rs — Comandos Tauri del módulo de rentas (thin wrappers)
 
 use crate::core::error::ErrorPayload;
+use crate::repositories::extension::ExtensionRentaRepository;
 use crate::repositories::renta::{
-    Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos,
+    ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos,
 };
 use crate::services::renta::{RentaCancelada, RentaService};
 use crate::services::AppState;
@@ -96,6 +97,33 @@ pub fn cancelar_renta(
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     RentaService::cancelar(&mut c, id).map_err(|e| e.to_payload())
+}
+
+/// Extiende una renta activa agregando horas o días extras
+#[tauri::command]
+pub fn extender_renta(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: i64,
+    datos: ExtensionDatos,
+) -> Cmd<Renta> {
+    let sesion = require_session(&state, &session_id)?;
+    let mut c = conn(&state)?;
+    RentaService::extender(&mut c, &state.config, id, &sesion.username, datos)
+        .map_err(|e| e.to_payload())
+}
+
+/// Lista extensiones de una renta
+#[tauri::command]
+pub fn listar_extensiones(
+    state: State<'_, AppState>,
+    session_id: String,
+    id_renta: i64,
+) -> Cmd<Vec<crate::repositories::extension::ExtensionRenta>> {
+    require_session(&state, &session_id)?;
+    let mut c = conn(&state)?;
+    ExtensionRentaRepository::listar_por_renta(&mut c, id_renta)
+        .map_err(|e| e.to_payload())
 }
 
 /// Edita campos financieros de una renta cerrada (solo Administrador)

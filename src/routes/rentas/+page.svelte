@@ -11,6 +11,8 @@
 		type RentaDatos,
 		type RentaCierreDatos,
 		type RentaCierreEditDatos,
+		type ExtensionDatos,
+		type ExtensionRenta,
 		type PagoDatos,
 		type InspeccionDatos,
 		type ClienteConPii,
@@ -107,6 +109,15 @@
 	let inspeccionError = $state('');
 	let guardandoInspeccion = $state(false);
 
+	// Modal extender renta
+	let extenderId = $state<number | null>(null);
+	let extenderRenta = $state<Renta | null>(null);
+	let extension = $state<ExtensionDatos>(defaultExtension());
+	let extenderando = $state(false);
+	let extenderError = $state('');
+	let historialExtensiones = $state<ExtensionRenta[]>([]);
+	let cargandoHistorial = $state(false);
+
 	// Modal imprimir
 	let imprimirRenta = $state<Renta | null>(null);
 	// Modal contrato (documento independiente, papel Carta)
@@ -198,6 +209,15 @@
 			tieneKitCarretera: true,
 			tieneDocumentos: true,
 			danosCarroceria: '',
+			observaciones: ''
+		};
+	}
+
+	function defaultExtension(): ExtensionDatos {
+		return {
+			tipo: 'horas',
+			cantidad: 1,
+			valor: '',
 			observaciones: ''
 		};
 	}
@@ -548,6 +568,51 @@
 		}
 	}
 
+	// ── Extender renta ──
+	async function abrirExtender(r: Renta) {
+		extenderId = r.id;
+		extenderRenta = r;
+		extension = defaultExtension();
+		extenderError = '';
+		historialExtensiones = [];
+		// Cargar historial de extensiones
+		cargandoHistorial = true;
+		try {
+			historialExtensiones = await rentaApi.listarExtensiones(sid(), r.id);
+		} catch {
+			// Ignorar errores al cargar historial
+		} finally {
+			cargandoHistorial = false;
+		}
+	}
+
+	async function confirmarExtender() {
+		if (extenderId === null) return;
+		if (!extension.valor || parseFloat(extension.valor) <= 0) {
+			extenderError = 'El valor de la extensión es obligatorio y debe ser mayor a cero.';
+			return;
+		}
+		if (extension.cantidad <= 0) {
+			extenderError = 'La cantidad debe ser mayor a cero.';
+			return;
+		}
+		extenderando = true;
+		try {
+			await rentaApi.extender(sid(), extenderId, extension);
+			toast.success(
+				extension.tipo === 'horas'
+					? `Renta extendida +${extension.cantidad}h.`
+					: `Renta extendida +${extension.cantidad} día(s).`
+			);
+			extenderId = null;
+			await cargar();
+		} catch (e) {
+			extenderError = e instanceof ApiError ? e.message : 'No se pudo extender la renta.';
+		} finally {
+			extenderando = false;
+		}
+	}
+
 	// ── Pago ──
 	function abrirPago(r: Renta) {
 		pagandoId = r.id;
@@ -860,6 +925,13 @@
 								onclick={() => abrirCierre(r)}
 							>
 								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+							</button>
+							<button
+								class="p-2 rounded-lg text-text-secondary hover:text-exito hover:bg-exito/10 transition-colors"
+								title="Extender renta (agregar horas/días)"
+								onclick={() => abrirExtender(r)}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 							</button>
 						{/if}
 						<button
@@ -1501,6 +1573,95 @@
 				Guardando...
 			{:else}
 				Aplicar corrección
+			{/if}
+		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal extender renta -->
+<Modal
+	open={extenderId !== null}
+	title={extenderRenta ? `Extender renta #${String(extenderRenta.id).padStart(4, '0')}` : ''}
+	subtitle="Agregar horas o días extras a la renta activa."
+	onClose={() => (extenderId = null)}
+	width="max-w-md"
+>
+	{#snippet children()}
+		{#if extenderError}
+			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{extenderError}</div>
+		{/if}
+
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+			<FormField label="Tipo de extensión" required>
+				<select class="input" bind:value={extension.tipo}>
+					<option value="horas">Horas extra</option>
+					<option value="dias">Día(s) extra</option>
+				</select>
+			</FormField>
+			<FormField label="Cantidad" required>
+				<input class="input" type="number" min="1" bind:value={extension.cantidad} />
+			</FormField>
+			<FormField label="Valor unitario" required hint={extension.tipo === 'horas' ? 'Valor por hora extra' : 'Valor por día extra'}>
+				<input class="input" type="number" step="0.01" min="0" placeholder="$0" bind:value={extension.valor} />
+			</FormField>
+			<FormField label="Observaciones">
+				<input class="input" placeholder="Motivo de la extensión..." bind:value={extension.observaciones} maxlength="200" />
+			</FormField>
+		</div>
+
+		{#if extenderRenta}
+			<div class="mt-4 p-3 rounded-lg bg-alt-row/60 border border-border">
+				<p class="text-sm font-semibold text-text-primary mb-2">Resumen:</p>
+				<div class="text-sm text-text-secondary space-y-1">
+					<p>Retorno actual: <span class="font-semibold">{formatDate(extenderRenta.fechaRetorno)} {fmtHora(extenderRenta.horaRetorno)}</span></p>
+					<p> Nuevo retorno: <span class="font-semibold text-exito">
+						{extension.tipo === 'horas'
+							? `${extension.cantidad} hora(s) más`
+							: `${extension.cantidad} día(s) más`}
+					</span></p>
+					{#if extension.valor && parseFloat(extension.valor) > 0}
+						<p>Valor total extensión: <span class="font-semibold text-primary">{formatCOP((parseFloat(extension.valor) * extension.cantidad).toString())}</span></p>
+					{/if}
+				</div>
+			</div>
+
+			{#if historialExtensiones.length > 0}
+				<div class="mt-4">
+					<p class="text-sm font-semibold text-text-primary mb-2">Historial de extensiones:</p>
+					<div class="space-y-2">
+						{#each historialExtensiones as ext}
+							<div class="p-2 rounded-lg bg-alt-row/40 border border-border text-sm">
+								<div class="flex justify-between items-center">
+									<span class="font-semibold text-text-primary">
+										{ext.tipo === 'horas' ? `+${ext.cantidad}h` : `+${ext.cantidad}d`}
+								</span>
+									<span class="font-semibold text-primary">{formatCOP(ext.valorTotal)}</span>
+								</div>
+								<div class="text-xs text-text-secondary mt-1">
+									{ext.usuario ?? 'sistema'} · {ext.createdAt ? formatDate(ext.createdAt.split(' ')[0]) : '—'}
+									{#if ext.observaciones}
+										<span class="ml-2">· {ext.observaciones}</span>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+			{#if cargandoHistorial}
+				<p class="text-xs text-text-secondary mt-2">Cargando historial...</p>
+			{/if}
+		{/if}
+	{/snippet}
+
+	{#snippet footer()}
+		<button class="btn-ghost" onclick={() => (extenderId = null)} disabled={extenderando}>Cancelar</button>
+		<button class="btn-primary" onclick={confirmarExtender} disabled={extenderando}>
+			{#if extenderando}
+				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				Extendiendo...
+			{:else}
+				Aplicar extensión
 			{/if}
 		</button>
 	{/snippet}

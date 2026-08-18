@@ -196,6 +196,20 @@ pub struct RentaCierreEditDatos {
     pub observaciones: Option<String>,
 }
 
+/// Datos para extender una renta activa (agregar horas o días extras)
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ExtensionDatos {
+    /// Tipo de extensión: "horas" o "dias"
+    pub tipo: String,
+    /// Cantidad de horas o días a agregar
+    pub cantidad: i64,
+    /// Valor unitario (hora o día extra)
+    pub valor: String,
+    /// Observaciones sobre la extensión
+    pub observaciones: Option<String>,
+}
+
 /// Datos de un pago
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]

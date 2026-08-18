@@ -19,7 +19,7 @@ use crate::core::validators::{validate_no_xss, mayusculas};
 use crate::core::PooledConnection;
 use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::renta::{
-    Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos, RentaRepository,
+    ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos, RentaRepository,
 };
 use crate::repositories::reserva::ReservaRepository;
 
@@ -386,6 +386,170 @@ impl RentaService {
         RentaRepository::cancelar(conn, id)?;
         let renta = Self::obtener(conn, id)?;
         Ok(RentaCancelada { renta, cancelada: true })
+    }
+
+    /// Extiende una renta ACTIVA agregando horas o días extras.
+    /// Actualiza fecha_retorno/hora_retorno y acumula horas_extras o dias_calculados.
+    /// El valor de la extensión se registra en valor_dia_extra.
+    pub fn extender(
+        conn: &mut PooledConnection,
+        cfg: &Arc<AppConfig>,
+        id: i64,
+        usuario: &str,
+        datos: ExtensionDatos,
+    ) -> Result<Renta, AppError> {
+        let actual = Self::obtener(conn, id)?;
+        if actual.estado != "Activa" && actual.estado != "Activo" {
+            return Err(AppError::Business(
+                "Solo se pueden extender rentas activas.".into(),
+            ));
+        }
+        // Validar tipo
+        if datos.tipo != "horas" && datos.tipo != "dias" {
+            return Err(AppError::Validation(
+                "El tipo de extensión debe ser 'horas' o 'dias'.".into(),
+            ));
+        }
+        if datos.cantidad <= 0 {
+            return Err(AppError::Validation(
+                "La cantidad debe ser mayor a cero.".into(),
+            ));
+        }
+        let valor = Decimal::from_str(&datos.valor).map_err(|_| {
+            AppError::Validation("El valor de la extensión no es un número válido.".into())
+        })?;
+        if valor <= Decimal::ZERO {
+            return Err(AppError::Validation(
+                "El valor de la extensión debe ser mayor a cero.".into(),
+            ));
+        }
+        // Calcular nuevo retorno
+        let fecha_retorno_actual = actual.fecha_retorno.clone();
+        let hora_retorno_actual = actual.hora_retorno.clone().unwrap_or_else(|| "10:00".to_string());
+        let _recogida = NaiveDate::parse_from_str(&actual.fecha_recogida, "%Y-%m-%d")
+            .map_err(|_| AppError::Validation("Fecha de recogida inválida".into()))?;
+        let retorno = NaiveDate::parse_from_str(&fecha_retorno_actual, "%Y-%m-%d")
+            .map_err(|_| AppError::Validation("Fecha de retorno inválida".into()))?;
+        let hora_ret = if hora_retorno_actual.len() == 5 {
+            format!("{}:00", hora_retorno_actual)
+        } else {
+            hora_retorno_actual.clone()
+        };
+        let retorno_dt = retorno.and_time(
+            NaiveTime::parse_from_str(&hora_ret, "%H:%M:%S")
+                .map_err(|_| AppError::Validation("Hora de retorno inválida".into()))?
+        );
+        let nuevo_retorno_dt = if datos.tipo == "horas" {
+            retorno_dt + chrono::Duration::hours(datos.cantidad)
+        } else {
+            retorno_dt + chrono::Duration::days(datos.cantidad)
+        };
+        let nuevo_fecha = nuevo_retorno_dt.format("%Y-%m-%d").to_string();
+        let nueva_hora = nuevo_retorno_dt.format("%H:%M").to_string();
+        // Calcular nuevos totales
+        let nuevo_dias = if datos.tipo == "dias" {
+            actual.dias_calculados + datos.cantidad
+        } else {
+            actual.dias_calculados
+        };
+        let nuevas_horas = if datos.tipo == "horas" {
+            actual.horas_extras + datos.cantidad
+        } else {
+            actual.horas_extras
+        };
+        // Recalcular total
+        let vdia = dec_str(&actual.valor_dia);
+        let vhe = dec_str(&actual.valor_hora_extra);
+        let vde = dec_str(&actual.valor_dia_extra);
+        // Valor total de la extensión = cantidad × valor unitario
+        let total_extension = (valor * Decimal::from(datos.cantidad)).round_dp(2);
+        let nuevo_vde = (vde + total_extension).round_dp(2);
+        // Extras incluye el nuevo valor_dia_extra con la extensión
+        let extras = sum_dec(&[
+            &nuevo_vde.to_string(),
+            &actual.costo_lavado,
+            &actual.costo_silla,
+            &actual.costo_retorno,
+            &actual.costo_domicilio,
+            &actual.costo_cables,
+            &actual.costo_inversor,
+            &actual.valor_gasolina,
+        ]);
+        let desc = dec_str(&actual.descuento);
+        let subtotal = (vdia * Decimal::from(nuevo_dias) + vhe * Decimal::from(nuevas_horas) + extras - desc).max(Decimal::ZERO);
+        let imp = if actual.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
+        let impuestos = (subtotal * imp).round_dp(2);
+        let total = subtotal + impuestos;
+        let comision = if actual.tiene_comision { dec_str(&actual.comision) } else { Decimal::ZERO };
+        let valor_neto = (total - comision).max(Decimal::ZERO);
+        let abono = dec_str(&actual.abono);
+        let saldo = (total - abono).max(Decimal::ZERO).round_dp(2);
+        // Auditoría
+        let audit_msg = format!(
+            "renta={id}, placa={}, EXTENSION: tipo={}, cantidad={}, valor={}, nuevo_retorno={} {}, nuevo_total={}",
+            actual.placa.as_deref().unwrap_or("-"),
+            datos.tipo, datos.cantidad, valor,
+            nuevo_fecha, nueva_hora, total,
+        );
+        // Transacción: UPDATE rentas + INSERT extensión + INSERT auditoría
+        conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
+            // 1. Actualizar renta
+            tx.execute(
+                "UPDATE rentas SET \
+                    fecha_retorno = ?, \
+                    hora_retorno = ?, \
+                    dias_calculados = ?, \
+                    horas_extras = ?, \
+                    valor_dia_extra = CAST(? AS DECIMAL(12,2)), \
+                    subtotal = CAST(? AS DECIMAL(12,2)), \
+                    impuestos = CAST(? AS DECIMAL(12,2)), \
+                    total = CAST(? AS DECIMAL(12,2)), \
+                    saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
+                    valor_neto = CAST(? AS DECIMAL(12,2)) \
+                 WHERE id = ?",
+                params![
+                    nuevo_fecha,
+                    nueva_hora,
+                    nuevo_dias,
+                    nuevas_horas,
+                    nuevo_vde.to_string(),
+                    subtotal.round_dp(2).to_string(),
+                    impuestos.to_string(),
+                    total.round_dp(2).to_string(),
+                    saldo.to_string(),
+                    valor_neto.round_dp(2).to_string(),
+                    id,
+                ],
+            )?;
+            // 2. Insertar en historial de extensiones
+            tx.execute(
+                "INSERT INTO extensiones_renta (id_renta, tipo, cantidad, valor_unitario, valor_total, observaciones, usuario) \
+                 VALUES (?, ?, ?, CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), ?, ?)",
+                params![
+                    id,
+                    datos.tipo,
+                    datos.cantidad,
+                    valor.to_string(),
+                    total_extension.to_string(),
+                    datos.observaciones.as_deref().unwrap_or(""),
+                    usuario,
+                ],
+            )?;
+            // 3. Insertar auditoría
+            tx.execute(
+                "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (
+                    usuario.to_string(),
+                    "EXTENSION RENTA".to_string(),
+                    audit_msg,
+                    "local".to_string(),
+                ),
+            )?;
+            Ok(())
+        })
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Self::obtener(conn, id)
     }
 
     /// Edita campos financieros de una renta CERRADA (corrección de errores de digitación).
