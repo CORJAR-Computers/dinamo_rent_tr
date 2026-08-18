@@ -21,7 +21,7 @@ fn app_version_devuelve_la_version_de_cargo_toml() {
 
     let version = app_version(app.handle().clone());
 
-    // La versión del crate en el build (1.0.15 hoy; la misma que tauri.conf.json
+    // La versión del crate en el build (1.0.16 hoy; la misma que tauri.conf.json
     // y la que firma el updater — el checklist de release exige que coincidan).
     assert_eq!(
         version,
