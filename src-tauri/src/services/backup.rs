@@ -139,7 +139,8 @@ pub fn rotar(cfg: &AppConfig) -> Result<usize, AppError> {
     let archivos = listar_backups(cfg);
     let excedentes = archivos.len().saturating_sub(max);
     for p in archivos.iter().take(excedentes) {
-        if let Err(e) = std::fs::remove_file(p) {
+        // Reintentos por la misma carrera de Defender sobre archivos recientes.
+        if let Err(e) = reintentar_io(|| std::fs::remove_file(p), 4, 200) {
             log::warn!("Backup: no se pudo eliminar la copia vieja {}: {e}", p.display());
         }
     }
@@ -202,7 +203,9 @@ fn copiar_fdb(cfg: &AppConfig, destino: &Path) -> Result<(), AppError> {
             cfg.db_path.display()
         )));
     }
-    std::fs::copy(&cfg.db_path, destino)?;
+    // Reintentos: Defender puede escanear la BD justo tras escribirla y
+    // bloquear el copy (sharing violation transitoria).
+    reintentar_io(|| std::fs::copy(&cfg.db_path, destino).map(|_| ()), 8, 250)?;
     Ok(())
 }
 
@@ -403,10 +406,12 @@ pub fn crear_backup(cfg: &AppConfig) -> Result<PathBuf, AppError> {
             ));
         }
         cifrar_archivo(&temporal, &destino, password)?;
-        let _ = std::fs::remove_file(&temporal);
+        let _ = reintentar_io(|| std::fs::remove_file(&temporal), 8, 250);
         log::info!("Backup: cifrado AES-256-GCM aplicado a {}", destino.display());
     } else {
-        std::fs::rename(&temporal, &destino)?;
+        // Reintentos: el `.tmp` recién escrito por gbak puede estar siendo
+        // escaneado por Defender (sharing violation transitoria en Windows).
+        reintentar_io(|| std::fs::rename(&temporal, &destino), 8, 250)?;
     }
     let borrados = rotar(cfg)?;
     if borrados > 0 {
@@ -416,6 +421,34 @@ pub fn crear_backup(cfg: &AppConfig) -> Result<PathBuf, AppError> {
 }
 
 // ─── Restauración desde un backup ────────────────────────────────────────────
+
+/// Reintenta una operación de archivo ante errores transitorios. En Windows,
+/// el antivirus/Defender puede escanear un archivo recién escrito (p. ej. el
+/// `.fbk` que acaba de dejar gbak, o la BD que acaba de sembrar seed_ci en el
+/// runner del CI) y bloquear brevemente el copy/rename con
+/// ERROR_SHARING_VIOLATION (os error 32) — la carrera que hizo fallar de
+/// forma intermitente los tests de backups en GitHub Actions. Reintentos
+/// cortos y acotados: un error real (permisos, ruta) falla al agotarlos igual
+/// que antes; solo se absorbe el destello del escáner.
+pub fn reintentar_io<T>(
+    mut op: impl FnMut() -> std::io::Result<T>,
+    intentos: u32,
+    espera_ms: u64,
+) -> std::io::Result<T> {
+    let mut i = 0;
+    loop {
+        match op() {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                i += 1;
+                if i >= intentos {
+                    return Err(e);
+                }
+                std::thread::sleep(Duration::from_millis(espera_ms));
+            }
+        }
+    }
+}
 
 /// Renombra `origen` sobre `destino` con reintentos. Al relanzar la app, el
 /// proceso anterior puede tardar un momento en soltar el lock del `.fdb`
@@ -1191,6 +1224,38 @@ mod tests {
         // Tras liberar, info() muestra ejecutando = false
         assert!(!info.ejecutando);
         fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    // ─── Reintentos de I/O (carrera de Defender en Windows) ───────────────────
+
+    #[test]
+    fn reintentar_io_absorbe_fallos_transitorios() {
+        // Falla 2 veces con sharing violation (os error 32) y luego funciona
+        let mut intentos = 0;
+        let r = reintentar_io(
+            || {
+                intentos += 1;
+                if intentos < 3 {
+                    Err(std::io::Error::from_raw_os_error(32))
+                } else {
+                    Ok(42)
+                }
+            },
+            5,
+            5,
+        )
+        .unwrap();
+        assert_eq!(r, 42);
+        assert_eq!(intentos, 3, "debe reintentar 2 veces y acertar al 3er intento");
+
+        // Errores persistentes agotan los intentos y devuelven el último error
+        let err = reintentar_io(
+            || -> std::io::Result<i32> { Err(std::io::Error::from_raw_os_error(32)) },
+            2,
+            5,
+        )
+        .unwrap_err();
+        assert_eq!(err.raw_os_error(), Some(32));
     }
 
     // ─── Restauración ────────────────────────────────────────────────────────

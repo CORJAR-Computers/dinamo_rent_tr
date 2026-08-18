@@ -15,7 +15,8 @@ use std::sync::Arc;
 use dinamo_rent_lib::core::config::AppConfig;
 use dinamo_rent_lib::core::db::create_pool;
 use dinamo_rent_lib::services::backup::{
-    crear_backup, descifrar_archivo, listar_backups, preparar_staging, restaurar_fdb_desde_fbk,
+    crear_backup, descifrar_archivo, listar_backups, preparar_staging, reintentar_io,
+    restaurar_fdb_desde_fbk,
 };
 use rsfbclient::Queryable;
 
@@ -47,7 +48,9 @@ fn config_con_backup_en_temp() -> (Arc<AppConfig>, PathBuf, LimpiarTemporal) {
     let src = data_dir.join("dinamo_rent_v3.fdb");
     assert!(src.exists(), "BD de desarrollo no encontrada: {src:?}");
     let db = tmp.join("dinamo_rent_v3.fdb");
-    std::fs::copy(&src, &db).unwrap();
+    // Reintentos: en el runner del CI, seed_ci acaba de crear la BD y Defender
+    // puede bloquear brevemente la copia (sharing violation os error 32).
+    reintentar_io(|| std::fs::copy(&src, &db).map(|_| ()), 8, 250).unwrap();
 
     let mut cfg = AppConfig::load(&data_dir, &resource_dir, &manifest);
     cfg.db_path = db;
