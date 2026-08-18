@@ -105,6 +105,10 @@ changelog automático → `tauri build` (NSIS + MSI) → crea la release
 **publicada** (no draft) y sube los assets. ~10 minutos (referencia v1.0.2:
 11 min · v1.0.3: ~10 min).
 
+La **E2E del auto-update en máquina real** no puede correr en el CI (necesita la
+release ya publicada): se valida en el §6 como contraparte de campo del test de
+paginación.
+
 > El body de la release se genera solo: lista los commits entre el tag anterior
 > y el nuevo, con hash corto y mensaje. Si quieres verlo antes de publicar,
 > cambia `releaseDraft: true` en `release.yml` y publícala a mano.
@@ -126,6 +130,12 @@ changelog automático → `tauri build` (NSIS + MSI) → crea la release
       app instalada (v1.0.3+) consulta al arrancar para auto-actualizarse. En la v1.0.16 la app
       instalada debe DETECTAR la release nueva y ofrecer instalarla (prueba de campo del
       auto-update).
+- [ ] **E2E del auto-update en máquina real** (la contraparte de campo del test de
+      paginación de `release.yml`, que sí corre en CI): en un equipo con una **v1.0.14+
+      instalada** (p. ej. la v1.0.15), abrir la app y confirmar que **detecta la v1.0.16**
+      («Actualización disponible»), descarga con verificación de firma minisign, instala
+      y **reinicia en la v1.0.16** — verificar la versión resultante (menú lateral / login
+      o `scripts/verificar-despliegue.ps1` → VEREDICTO OK).
 - [ ] El **body contiene el changelog** (commits del rango).
 - [ ] Los enlaces responden HTTP 200 y el tamaño coincide:
 
@@ -168,6 +178,7 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 [ ] Release publicada por CI con changelog y 5 assets (NSIS + MSI + .sig x2 + latest.json)
 [ ] sha256 verificado contra el publicado
 [ ] verificar-despliegue.ps1 → OK (equipo de prueba)
+[ ] E2E auto-update en máquina real → v1.0.16 detectada, instalada y reiniciada
 [ ] Docs de operación al día (ps1, DEPLOYMENT_CLIENTES, RESUMEN, Handsoff)
 [ ] Anuncio en Slack/Teams
 ```
