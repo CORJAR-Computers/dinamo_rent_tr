@@ -300,7 +300,7 @@ Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en c
 - **Firebird (alternativa simple):** copia del archivo `.fdb` (`fs::copy`) con la app sin conexiones activas (mismo patrón de copia de archivo que usa la app actual para Firebird); suficiente para single-user embedded. En producción con la app corriendo el motor Embedded abre la BD en exclusiva por proceso, así que **el fallback de copia es el camino operativo** del scheduler.
 - **Cifrado:** AES-256-GCM con PBKDF2-SHA256 (salt 16 bytes prefijado) — compatible en concepto con el actual Fernet+PBKDF2.
 - **Rotación:** conservar N copias (config `max_copies`, default 10).
-- **Implementado (Fase 8, 18-08):** `services/backup.rs` — scheduler automático en `[backup] schedule_times` (4 horarios), `backup_ahora`/`backup_estado`, cifrado por chunks de 1 MiB (magic `DRENC-01` + salt PBKDF2 prefijado) y rotación a `max_copies`; panel `/backups` (solo admin) con crear manual, listado de copias y estado de la última corrida. Pendiente de la fase: **restaurar desde la UI** (descifrar + `gbak -r`), `database_config_dialog` y el setup wizard.
+- **Implementado (Fase 8, 18-08):** `services/backup.rs` — scheduler automático en `[backup] schedule_times` (4 horarios), `backup_ahora`/`backup_estado`, cifrado por chunks de 1 MiB (magic `DRENC-01` + salt PBKDF2 prefijado) y rotación a `max_copies`; panel `/backups` (solo admin) con crear manual, listado de copias, estado de la última corrida y **restauración** (descifrar si aplica + `gbak -r` con reinicio de la app). `database_config_dialog` y el setup wizard **pospuestos** (proyecto de uso interno de Dinamo: la instalación con defaults basta; se retoman solo si hay despliegues externos).
 
 ### 4.9 Configuración
 - Se **mantiene `config.ini`** (mismo formato y secciones) para no romper la migración de instalaciones existentes. Se implementa con crate `config` (o `ini` + serde) y los mismos defaults de `core/config.py` (engine fijo `firebird`, `path = dinamo_rent_v3.fdb`, user/password `sysdba`/`masterkey`).
@@ -582,12 +582,12 @@ Plantilla de iteración (por módulo):
 
 ### Fase 8 — Backups, config DB y setup (2–3 días)
 
-1. ✅ `services/backup.rs` + panel de backups en UI (`/backups`, crear con `gbak`/copia, listar, rotar, cifrar/descifrar) — hecho (18-08). Pendiente solo **restaurar desde la UI** (descifrar + `gbak -r`).
-2. `database_config_dialog`: probar conexión al `.fdb` y guardar credenciales en `config.ini` (sin selector de motor — Firebird Embedded es el único).
-3. Setup wizard de primera ejecución (crear/abrir `.fdb`, crear admin, probar conexión) — puerto de `views/setup_wizard.py`.
+1. ✅ `services/backup.rs` + panel de backups en UI (`/backups`, crear con `gbak`/copia, listar, rotar, cifrar/descifrar) y **restauración desde la UI** (descifrar si aplica + `gbak -r` con reinicio de la app, 19-08) — hecho.
+2. `database_config_dialog`: probar conexión al `.fdb` y guardar credenciales en `config.ini` (sin selector de motor — Firebird Embedded es el único). **Pospuesto (19-08):** proyecto de uso interno de Dinamo — la config por defecto (ruta en data_dir, sysdba/masterkey) es suficiente; se retoma solo si hay despliegues externos.
+3. Setup wizard de primera ejecución (crear/abrir `.fdb`, crear admin, probar conexión) — puerto de `views/setup_wizard.py`. **Pospuesto (19-08):** mismo motivo que el ítem 2; el auto-create + `seed_admin` del arranque cubre el uso interno.
 4. ✅ Backup automático programado (4 horarios configurables) con hilo + timer en Rust; estado visible en UI — hecho (18-08), scheduler en `services/backup.rs` arrancado desde `lib.rs`.
 
-**Hito:** backups automáticos y manuales funcionando (gbak/copia); setup desde cero con Firebird Embedded 5.0. Backups ✅ — falta `database_config_dialog`, setup wizard y restaurar desde la UI.
+**Hito:** backups automáticos y manuales funcionando (gbak/copia) ✅, restauración desde la UI ✅. `database_config_dialog` y setup wizard **pospuestos** (uso interno de Dinamo: la config por defecto y el auto-create/seed del arranque cubren la instalación).
 
 ### Fase 9 — Testing, CI/CD y empaquetado (3–4 días)
 
@@ -643,9 +643,9 @@ Plantilla de iteración (por módulo):
 - [ ] Usuarios: CRUD (solo roles permitidos), desbloquear, forzar cambio
 - [ ] Informes: balance mensual real, export PDF + Excel
 - [ ] Alertas: listado global
-- [~] Backups: automático (4 horarios), manual con `gbak`/copia, cifrado AES-256-GCM y rotación — implementados (panel `/backups`, `backup_ahora`/`backup_estado`); pendiente solo **restaurar** desde la UI
-- [ ] Config BD: probar conexión al `.fdb`, cambiar ruta/credenciales (Firebird Embedded único motor)
-- [ ] Setup wizard primera ejecución (crear/abrir `.fdb`, admin inicial)
+- [x] Backups: automático (4 horarios), manual con `gbak`/copia, cifrado AES-256-GCM, rotación y **restauración** desde la UI (panel `/backups`, `backup_ahora`/`backup_estado`/`backup_restaurar`) — completo
+- [-] Config BD: probar conexión al `.fdb`, cambiar ruta/credenciales — **pospuesto**: uso interno, la config por defecto basta
+- [-] Setup wizard primera ejecución (crear/abrir `.fdb`, admin inicial) — **pospuesto**: uso interno, auto-create + seed del arranque cubren la instalación
 - [ ] Temas claro/oscuro con colores actuales
 - [ ] Toasts, confirmaciones, estados vacíos/carga en todas las vistas
 - [ ] Auditoría: eventos de login, cambios de contraseña, accesos denegados
