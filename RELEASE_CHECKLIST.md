@@ -17,9 +17,13 @@
 
 ---
 
-**Estado de la v1.0.17 — en preparación:**
+**Estado de la v1.0.17 — publicada (18-08, tag `v1.0.17` sobre `477ab29`):**
 
-Features incluidas:
+Ya en `main` y publicada por CI: release v1.0.17 con los 5 assets
+(NSIS 21 MB + MSI 32 MB + `.sig` ×2 + `latest.json`), firmada y
+auto-update verificado en máquina real.
+
+**Features incluidas:**
 - Versión REAL de la app (comando `app_version`, sin el v3.2.0 heredado)
 - Backups de la BD (Fase 8: automático en 4 horarios, rotación a 10, cifrado
   AES-256-GCM, panel `/backups` y restauración con `gbak -r`)
@@ -32,13 +36,13 @@ Features incluidas:
 - Fix de selects de categoría/tipo (gastos/mantenimiento) alineados con la DB
 - Verificador de despliegue -DryRun en el CI
 
-Pendientes antes del tag:
+**Checklist completada:**
 
-- [ ] CI verde en main (lint, svelte-check, vitest, cargo test --lib + integración)
-- [ ] Bump a v1.0.17 en los 3 archivos (§2)
-- [ ] Verificación local con `-DryRun` (§3)
-- [ ] Commit `chore: versión 1.0.17` + tag `v1.0.17` (§4-5)
-- [ ] Prueba de campo en máquina real (§6)
+- [x] CI verde en main (lint, svelte-check, vitest, cargo test --lib + integración)
+- [x] Bump a v1.0.17 en los 3 archivos (§2)
+- [x] Verificación local con `-DryRun` (§3)
+- [x] Commit `chore: versión 1.0.17` + tag `v1.0.17` (§4-5)
+- [x] Prueba de campo en máquina real — auto-update verificado ✅
 - [ ] Anuncio en canal del equipo (§8)
 
 ---
