@@ -72,7 +72,7 @@ fn mantenimiento_crud_roundtrip() {
     let creado = MantenimientoService::crear(&mut conn, cfg, datos.clone()).expect("crear mantenimiento");
     let id = creado.id;
     assert_eq!(creado.placa, placa);
-    assert_eq!(creado.tipo, "Frenos");
+    assert_eq!(creado.tipo, "FRENOS");
     assert_eq!(creado.costo, "350000.00", "costo normalizado con 2 decimales");
     assert_eq!(creado.total, "350000.00", "total = costo");
     assert!(!creado.vehiculo.is_empty(), "JOIN con autos para la UI");
@@ -86,7 +86,7 @@ fn mantenimiento_crud_roundtrip() {
     datos.costo = "400000".into();
     let actualizado =
         MantenimientoService::actualizar(&mut conn, cfg, id, datos.clone()).expect("actualizar");
-    assert_eq!(actualizado.tipo, "Llantas");
+    assert_eq!(actualizado.tipo, "LLANTAS");
     assert_eq!(actualizado.costo, "400000.00");
 
     // Historial por placa
@@ -226,7 +226,7 @@ fn mantenimiento_totales_y_contar() {
         "la placa aparece en los totales por placa"
     );
     assert!(
-        totales.por_tipo.iter().any(|t| t.clave == "Frenos"),
+        totales.por_tipo.iter().any(|t| t.clave == "FRENOS"),
         "el tipo aparece en los totales por tipo"
     );
 

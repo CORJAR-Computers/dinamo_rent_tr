@@ -175,7 +175,9 @@ fn validar(d: &GastoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
     if d.categoria.is_empty() {
         return Err(AppError::Validation("La categoría es obligatoria.".into()));
     }
-    if !categorias.contains(&d.categoria.as_str()) {
+    let cat_upper = d.categoria.trim().to_uppercase();
+    let cats_upper: Vec<String> = categorias.iter().map(|c| c.to_uppercase()).collect();
+    if !cats_upper.contains(&cat_upper) {
         return Err(AppError::Validation(format!(
             "Categoría inválida '{}'. Permitidas: {}",
             d.categoria,

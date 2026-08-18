@@ -67,8 +67,8 @@ fn gasto_crud_roundtrip() {
     // Crear (actor registrado en la columna usuario)
     let creado = GastoService::crear(&mut conn, cfg, "tester", datos.clone()).expect("crear gasto");
     let id = creado.id;
-    assert_eq!(creado.descripcion, "Gasto roundtrip");
-    assert_eq!(creado.categoria, "Combustible");
+    assert_eq!(creado.descripcion, "GASTO ROUNDTRIP");
+    assert_eq!(creado.categoria, "COMBUSTIBLE");
     assert_eq!(creado.monto, "120000.00", "monto normalizado con 2 decimales");
     assert_eq!(creado.usuario.as_deref(), Some("tester"), "actor registrado");
     if let Some(placa) = &datos.placa {
@@ -85,7 +85,7 @@ fn gasto_crud_roundtrip() {
     let actualizado = GastoService::actualizar(&mut conn, cfg, id, datos.clone())
         .expect("actualizar gasto");
     assert_eq!(actualizado.monto, "150000.00");
-    assert_eq!(actualizado.descripcion, "Gasto actualizado");
+    assert_eq!(actualizado.descripcion, "GASTO ACTUALIZADO");
 
     // Eliminar
     GastoService::eliminar(&mut conn, id).expect("eliminar gasto");
@@ -144,13 +144,13 @@ fn gasto_totales_y_contar() {
     // Dos gastos: 120000 + 80000 = 200000
     let mut g1 = datos_gasto("Gasto totales 1");
     g1.monto = "120000".into();
-    g1.categoria = "Combustible".into();
+    g1.categoria = "Combustible".into();  // uppercased to COMBUSTIBLE by normalizar
     let creado1 = GastoService::crear(&mut conn, cfg, "tester", g1).expect("crear g1");
     let id1 = creado1.id;
 
     let mut g2 = datos_gasto("Gasto totales 2");
     g2.monto = "80000".into();
-    g2.categoria = "Lavado".into();
+    g2.categoria = "Lavado".into();  // uppercased to LAVADO by normalizar
     let creado2 = GastoService::crear(&mut conn, cfg, "tester", g2).expect("crear g2");
     let id2 = creado2.id;
 
@@ -163,7 +163,7 @@ fn gasto_totales_y_contar() {
     let comb = totales
         .por_categoria
         .iter()
-        .find(|t| t.clave == "Combustible")
+        .find(|t| t.clave == "COMBUSTIBLE")
         .map(|t| t.total.parse::<rust_decimal::Decimal>().unwrap_or_default());
     assert!(comb.is_some_and(|m| m >= rust_decimal::Decimal::from(120_000)));
 

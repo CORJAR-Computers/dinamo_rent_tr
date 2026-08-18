@@ -4,7 +4,6 @@ use rsfbclient::{Execute, IntoParam, Queryable};
 use serde::Serialize;
 
 use crate::core::error::AppError;
-use crate::core::PooledConnection;
 
 /// Extensión de una renta (historial)
 #[derive(Debug, Clone, Serialize)]

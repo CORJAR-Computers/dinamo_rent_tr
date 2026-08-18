@@ -91,7 +91,7 @@ fn comparendo_crud_y_marcar_pagado() {
     let actualizado =
         ComparendoService::actualizar(&mut conn, cfg, id, datos.clone()).expect("actualizar");
     assert_eq!(actualizado.monto, "650000.00");
-    assert_eq!(actualizado.observaciones.as_deref(), Some("Foto-detección"));
+    assert_eq!(actualizado.observaciones.as_deref(), Some("FOTO-DETECCIÓN"));
 
     // Marcar pagado
     let pagado = ComparendoService::marcar_pagado(&mut conn, id).expect("marcar pagado");

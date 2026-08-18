@@ -144,7 +144,7 @@ impl MantenimientoService {
     /// original de Grupo B se reemplazó por UPDATE ... SET deleted_at.)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
         let actual = Self::obtener(conn, id)?;
-        let es_cambio_aceite = actual.tipo == TIPO_CAMBIO_ACEITE;
+        let es_cambio_aceite = actual.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
         let placa = actual.placa.clone();
         let tipo = actual.tipo.clone();
 
@@ -164,7 +164,7 @@ impl MantenimientoService {
                      WHERE placa = ? AND pieza_varias_tipo = ? AND km_proximo_cambio_aceite > 0 \
                        AND deleted_at IS NULL \
                      ORDER BY pieza_varias_fecha DESC, id DESC",
-                    (placa.clone(), TIPO_CAMBIO_ACEITE.to_string()),
+                    (placa.clone(), TIPO_CAMBIO_ACEITE.to_uppercase()),
                 )?;
                 let nuevo_km = km.and_then(|(k,)| k);
                 tx.execute(
@@ -284,7 +284,9 @@ fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppCon
     if d.tipo.is_empty() {
         return Err(AppError::Validation("El tipo de mantenimiento es obligatorio.".into()));
     }
-    if !tipos.contains(&d.tipo.as_str()) {
+    let tipo_upper = d.tipo.trim().to_uppercase();
+    let tipos_upper: Vec<String> = tipos.iter().map(|t| t.to_uppercase()).collect();
+    if !tipos_upper.contains(&tipo_upper) {
         return Err(AppError::Validation(format!(
             "Tipo inválido '{}'. Permitidos: {}",
             d.tipo,
@@ -340,7 +342,7 @@ fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppCon
 /// con el km programado (o lo limpia si el registro ya no lo indica) para que las
 /// alertas del dashboard se disparen o se apaguen correctamente.
 fn sincronizar_proximo_aceite(conn: &mut PooledConnection, d: &MantenimientoDatos) -> Result<(), AppError> {
-    if d.tipo == TIPO_CAMBIO_ACEITE {
+    if d.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase() {
         let km = d.km_proximo_cambio_aceite.filter(|&k| k > 0);
         AutoRepository::actualizar_proximo_aceite(conn, &d.placa, km)?;
     }
