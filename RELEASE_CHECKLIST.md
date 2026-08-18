@@ -25,29 +25,31 @@
 
 ---
 
-**Estado de la v1.0.16 — pasos restantes antes del tag:**
+**Estado de la v1.0.16 — publicada (18-08, tag `v1.0.16` sobre `a70f67b`):**
 
-Ya en `main` y validados por el CI (run #87 verde): versión REAL de la app
-(`app_version`), modo -DryRun del verificador, docs a la v1.0.15 y la **Fase 8
+Ya en `main` y validados por el CI (run #90 verde): versión REAL de la app
+(`app_version`), modo -DryRun del verificador, docs a la v1.0.16 y la **Fase 8
 de backups completa** (automático en 4 horarios, rotación a 10, cifrado
 AES-256-GCM, panel `/backups` y restauración con `gbak -r`). El setup wizard y
 el diálogo de config BD quedaron **fuera del alcance** (proyecto de uso interno
 de Dinamo: la instalación con defaults basta).
 
-Pendiente antes de crear el tag `v1.0.16`:
+Ya ejecutado: secret confirmado (§1) · bump + enlaces de descarga (§2) ·
+verificación local + `-DryRun` (§3) · commit `chore: versión 1.0.16` (§4) ·
+tag `v1.0.16` + push → release publicada por `release.yml` (run #17) con los
+5 assets (NSIS 22 MB + MSI 33.7 MB + `.sig` ×2 + `latest.json`) (§5) ·
+**§6 sin máquina** (updater_e2e desde v1.0.15: detecta la v1.0.16, firma
+minisign verificada, bytes idénticos al MSI servido; HTTP 200 de los 5
+assets; sha256 reales `d0f043df…`/`ef93c9c1…` en el ANUNCIO) · docs de
+operación al día (§7).
 
-1. Confirmar el secret `TAURI_SIGNING_PRIVATE_KEY` en Actions (§1).
-2. Bump a `1.0.16` en `package.json`, `src-tauri/Cargo.toml` y
-   `src-tauri/tauri.conf.json` (§2).
-3. Actualizar enlaces de descarga en `INSTALACION_OPERACIONES.md`, `README.md`
-   y `ANUNCIO_RELEASE_TEMPLATE.md` (§2).
-4. Verificación local opcional + `verificar-despliegue.ps1 -DryRun` (§3).
-5. Commit `chore: versión 1.0.16` + push (§4).
-6. Tag `v1.0.16` + push → `release.yml` publica con changelog y los 5 assets (§5).
-7. Verificación §6: assets, `latest.json`, **E2E del auto-update**
-   (validación sin máquina con `updater_e2e` + prueba de campo v1.0.14+),
-   paginación en campo, sha256.
-8. Docs de operación al día (§7) y anuncio (§8).
+Pendiente para cerrar la v1.0.16:
+
+- [ ] **Prueba de campo (§6)**: en un equipo con v1.0.14+ instalada, confirmar
+      que detecta la v1.0.16, instala y reinicia; y la paginación en máquina
+      real (contrato 3-4 páginas Carta, orden en 1 página).
+- [ ] **Anuncio (§8)**: pegar el mensaje de `ANUNCIO_RELEASE_TEMPLATE.md`
+      (versión larga o corta, ya con sha256 reales) en Slack/Teams.
 
 ---
 
@@ -176,11 +178,17 @@ paginación.
       cd src-tauri && cargo run --features dev --bin updater_e2e -- \
         --endpoint https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/latest/download/latest.json \
         --expect-version 1.0.16 \
-        --expect-file ./DinamoRent_1.0.16_x64-setup.exe
+        --expect-file ./DinamoRent_1.0.16_x64_en-US.msi
       ```
 
       Debe terminar con `[OK]` (check() detecta v1.0.16, firma minisign verificada contra
       la pubkey de producción y bytes idénticos al instalador).
+
+      > ⚠️ El updater sirve por defecto la plataforma `windows-x86_64` = **MSI** — el
+      > `--expect-file` debe ser el `.msi` (verificado el 18-08 contra la release real).
+      > Para validar el NSIS en su lugar, usar `--expect-file ./DinamoRent_1.0.16_x64-setup.exe`
+      > apuntando el endpoint a una copia local del `latest.json` con `windows-x86_64-nsis`
+      > como plataforma por defecto (o verificar el NSIS con `verificar-updater-e2e.sh`).
 - [ ] **E2E del auto-update en máquina real** (la contraparte de campo del test de
       paginación de `release.yml`, que sí corre en CI): en un equipo con una **v1.0.14+
       instalada** (p. ej. la v1.0.15), abrir la app y confirmar que **detecta la v1.0.16**
@@ -217,9 +225,10 @@ Si el bump cambió algo de operación (p. ej. el check de versión del exe):
 
 ## 8. Anunciar
 
-- [ ] Marcar releases anteriores si aplica (la v1.0.15 pasa a "estable anterior"; la v1.0.9 ya lo es — no se descontinúa salvo motivo).
-- [ ] Pegar el mensaje de `ANUNCIO_RELEASE_TEMPLATE.md` (versión larga o corta) en Slack/Teams
-      con los enlaces de descarga y el resumen de la release.
+- [x] Marcar releases anteriores si aplica (la v1.0.15 pasa a "estable anterior" en `RESUMEN_EJECUTIVO.md` §2; la v1.0.9 ya lo es — no se descontinúa salvo motivo).
+- [ ] Pegar el mensaje de `ANUNCIO_RELEASE_TEMPLATE.md` (versión larga o corta, **ya con los
+      sha256 reales** `d0f043df…`/`ef93c9c1…`) en Slack/Teams con los enlaces de descarga y
+      el resumen de la release. **El bloque está listo para copiar tal cual** (18-08).
 
 ---
 
