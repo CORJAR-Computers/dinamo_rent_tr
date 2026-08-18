@@ -180,7 +180,7 @@
 					icon: 'informes',
 					// Espejo del default de config.ini (business.roles_con_informes).
 					// El guard real de la página y del comando lee la config.
-					roles: ['Administrador', 'Supervisor']
+					roles: ['Administrador']
 				},
 				{ label: 'Gastos', href: '/gastos', icon: 'gastos' }
 			]

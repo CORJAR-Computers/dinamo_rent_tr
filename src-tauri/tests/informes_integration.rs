@@ -231,32 +231,31 @@ fn informe_comisiones_y_balance_neto() {
 }
 
 /// RBAC: `informe_mensual` solo es accesible para los roles de
-/// `roles_con_informes` (config.ini — por defecto Administrador y Supervisor).
+/// `roles_con_informes` (config.ini — por defecto solo Administrador).
 #[test]
 #[serial]
 fn informe_requiere_roles_con_informes() {
     let state = dev_state();
 
-    // Operador → denegado con kind "permission"
+    // Operador y Supervisor → denegados con kind "permission"
     {
         let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        let token = sessions.create(1, "operador", "Operador", "Op", false);
+        let token_op = sessions.create(1, "operador", "Operador", "Op", false);
+        let token_sup = sessions.create(2, "supervisor", "Supervisor", "Sup", false);
         drop(sessions);
-        let err = dinamo_rent_lib::commands::require_informes(&state, &token)
+        let err_op = dinamo_rent_lib::commands::require_informes(&state, &token_op)
             .expect_err("Operador no puede consultar informes");
-        assert_eq!(err.kind, "permission");
+        assert_eq!(err_op.kind, "permission");
+        let err_sup = dinamo_rent_lib::commands::require_informes(&state, &token_sup)
+            .expect_err("Supervisor no puede consultar informes (solo Admin)");
+        assert_eq!(err_sup.kind, "permission");
     }
 
-    // Supervisor y Administrador → permitidos (default de roles_con_informes)
+    // Administrador → permitido (único rol en default de roles_con_informes)
     {
         let mut sessions = state.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        let token_sup = sessions.create(2, "supervisor", "Supervisor", "Sup", false);
         let token_admin = sessions.create(3, "admin", "Administrador", "Adm", false);
         drop(sessions);
-        assert!(
-            dinamo_rent_lib::commands::require_informes(&state, &token_sup).is_ok(),
-            "Supervisor tiene rol de informes"
-        );
         assert!(
             dinamo_rent_lib::commands::require_informes(&state, &token_admin).is_ok(),
             "Administrador tiene rol de informes"

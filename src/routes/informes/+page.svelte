@@ -18,7 +18,7 @@
 	// (business.roles_con_informes). Si la carga falla, se usa el fallback
 	// del default de config: Administrador y Supervisor.
 	let lists = $state<BusinessLists | null>(null);
-	const rolesInformes = $derived(lists?.rolesConInformes ?? ['Administrador', 'Supervisor']);
+	const rolesInformes = $derived(lists?.rolesConInformes ?? ['Administrador']);
 
 	// Selector de rango de fechas
 	const ahora = new Date();

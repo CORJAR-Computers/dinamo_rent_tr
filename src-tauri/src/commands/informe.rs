@@ -10,7 +10,7 @@ use super::{conn, require_informes};
 type Cmd<T> = Result<T, ErrorPayload>;
 
 /// Balance mensual por rango de fechas
-/// (solo roles de `roles_con_informes` en config.ini — por defecto Admin y Supervisor).
+/// (solo roles de `roles_con_informes` en config.ini — por defecto solo Admin).
 #[tauri::command]
 pub fn informe_mensual(
     state: State<'_, AppState>,

@@ -77,7 +77,7 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
     ("business", "alert_extintor_days", "15"),
     ("business", "km_alert_aceite", "500"),
     ("business", "impuesto_porcentaje", "19"),
-    ("business", "roles_con_informes", "Administrador, Supervisor"),
+    ("business", "roles_con_informes", "Administrador"),
     ("business", "roles_con_usuarios", "Administrador"),
     ("business", "roles_con_eliminar", "Administrador, Supervisor"),
     ("business", "roles_usuarios", "Administrador, Supervisor, Operador"),
@@ -566,7 +566,7 @@ mod tests {
     fn defaults_roundtrip() {
         let text = build_default_ini_text();
         let ini = parse_ini(&text);
-        assert_eq!(get_str(&ini, "business", "roles_con_informes", ""), "Administrador, Supervisor");
+        assert_eq!(get_str(&ini, "business", "roles_con_informes", ""), "Administrador");
         assert_eq!(get_str(&ini, "business", "roles_con_eliminar", ""), "Administrador, Supervisor");
         assert_eq!(get_u64(&ini, "security", "session_timeout", 0), 3600);
         // Retraso inicial del Agente SIMIT (10 min): no debe competir con el arranque

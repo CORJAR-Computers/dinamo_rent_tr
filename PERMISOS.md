@@ -13,7 +13,7 @@ Roles disponibles (`roles_usuarios`): **Administrador, Supervisor, Operador**.
 | Clave de config (`[business]`) | Default | Guarda backend | Finalidad |
 |---|---|---|---|
 | `roles_con_usuarios` | `Administrador` | `require_usuario_admin` | Gestión de usuarios, auditoría, PII |
-| `roles_con_informes` | `Administrador, Supervisor` | `require_informes` | Balance mensual (informes) |
+| `roles_con_informes` | `Administrador` | `require_informes` | Balance mensual (informes contables) |
 | `roles_con_eliminar` | `Administrador, Supervisor` | `require_eliminacion` | Borrado de registros |
 
 Guardas disponibles en `commands/mod.rs`:
@@ -22,7 +22,7 @@ Guardas disponibles en `commands/mod.rs`:
 |---|---|---|
 | `require_session` | Cualquier rol autenticado | — |
 | `require_usuario_admin` | `roles_con_usuarios` | `[Administrador]` |
-| `require_informes` | `roles_con_informes` | `[Administrador, Supervisor]` |
+| `require_informes` | `roles_con_informes` | `[Administrador]` |
 | `require_eliminacion` | `roles_con_eliminar` | `[Administrador, Supervisor]` |
 
 ## A. Públicos / pre-autenticación (sin guarda — intencional)
@@ -63,7 +63,7 @@ Operación normal del negocio; ningún dato restringido.
 | `eliminar_mantenimiento` | mantenimiento |
 | `simit_sync_now` | simit |
 
-## D. `require_informes` — roles_con_informes (Admin + Supervisor) · 1 comando
+## D. `require_informes` — roles_con_informes (solo Admin) · 1 comando
 
 | Comando | Módulo |
 |---|---|
