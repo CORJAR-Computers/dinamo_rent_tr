@@ -12,6 +12,7 @@ pub mod dashboard;
 pub mod empresa;
 pub mod gasto;
 pub mod informe;
+pub mod logs;
 pub mod mantenimiento;
 pub mod pii;
 pub mod reserva;

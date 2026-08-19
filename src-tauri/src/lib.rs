@@ -326,6 +326,11 @@ pub fn run() {
             commands::pii::probar_clave_pii,
             commands::pii::guardar_clave_pii,
             commands::pii::eliminar_clave_pii,
+            commands::logs::leer_logs,
+            commands::logs::leer_errores_frontend,
+            commands::logs::registrar_error_frontend,
+            commands::logs::exportar_logs,
+            commands::logs::limpiar_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

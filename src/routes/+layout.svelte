@@ -6,6 +6,7 @@
 	import { session } from '$lib/stores/session.svelte';
 	import { empresa } from '$lib/stores/empresa.svelte';
 	import { app } from '$lib/stores/app.svelte';
+	import { initErrorHandler } from '$lib/utils/errorHandler';
 	import { authApi } from '$lib/api';
 	import { validarSesion } from '$lib/utils/guards';
 	import Toast from '$lib/components/Toast.svelte';
@@ -52,6 +53,9 @@
 		await validarSesion();
 		checking = false;
 		ready = true;
+		// Handler global de errores JS (window.onerror, unhandledrejection)
+		// → envía errores al backend para diagnóstico.
+		initErrorHandler(() => session.token ?? null);
 		// Branding de la empresa (nombre + logo) para el menú lateral;
 		// best-effort: ante error se conserva el fallback estático.
 		void empresa.cargarPublica();
@@ -165,9 +169,9 @@
 			items: [
 				{ label: 'Usuarios', href: '/usuarios', icon: 'usuarios', adminOnly: true },
 				{ label: 'Auditoría', href: '/auditoria', icon: 'auditoria', adminOnly: true },
-				{ label: 'Empresa', href: '/empresa', icon: 'empresa', adminOnly: true },
-				{ label: 'Backups', href: '/backups', icon: 'backups', adminOnly: true },
-				{ label: 'Comparendos', href: '/comparendos', icon: 'comparendos' },
+				{ label: 'Empresa', href: '/empresa', icon: 'empresa', adminOnly: true },					{ label: 'Backups', href: '/backups', icon: 'backups', adminOnly: true },
+					{ label: 'Logs', href: '/logs', icon: 'logs', adminOnly: true },
+					{ label: 'Comparendos', href: '/comparendos', icon: 'comparendos' },
 				{ label: 'Alertas', href: '/alertas', icon: 'alertas' }
 			]
 		},
@@ -236,9 +240,9 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			'/mantenimiento': 'Mantenimiento',
 			'/usuarios': 'Usuarios',
 			'/auditoria': 'Auditoría',
-			'/empresa': 'Empresa',
-			'/backups': 'Backups',
-			'/comparendos': 'Comparendos',
+			'/empresa': 'Empresa',				'/backups': 'Backups',
+				'/logs': 'Logs',
+				'/comparendos': 'Comparendos',
 			'/alertas': 'Alertas',
 			'/informes': 'Informes',
 			'/gastos': 'Caja Menor (Gastos)'

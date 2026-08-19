@@ -41,6 +41,8 @@ Backups/
 # La ruta del panel de Backups (src/routes/backups/) no debe quedar ignorada
 !src/routes/backups/
 logs/
+# La ruta del panel de Logs (src/routes/logs/) no debe quedar ignorada
+!src/routes/logs/
 *.log
 
 # Binarios Firebird duplicados (el bundle usa src-tauri/resources/firebird/)
