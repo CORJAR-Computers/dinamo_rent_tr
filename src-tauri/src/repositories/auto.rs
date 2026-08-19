@@ -4,6 +4,11 @@
 //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio)
 //! - DATE/TIMESTAMP → CAST a VARCHAR (formato 'YYYY-MM-DD')
 //! - DOUBLE PRECISION → f64
+//!
+//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
+//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
+//! > `crate::core::repository`. Migración pendiente — ver
+//! > `src/core/repository.rs` para el módulo centralizado.
 
 use rsfbclient::{Execute, ParamsType, Queryable};
 

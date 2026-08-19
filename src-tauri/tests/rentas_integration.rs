@@ -224,7 +224,7 @@ fn renta_crud_cierre_pagos_inspecciones() {
         descuento: Some("10000".into()),
         observaciones: Some("Devolución en buen estado".into()),
     };
-    let cerrada = RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
+    let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.estado, "Cerrada");
     assert_eq!(cerrada.fecha_devolucion_real.as_deref(), Some(hoy.format("%Y-%m-%d").to_string().as_str()));
     // 4×150.000 − 10.000 descuento = 590.000 + 112.100 IVA = 702.100; saldo = 702.100 − 200.000
@@ -232,11 +232,11 @@ fn renta_crud_cierre_pagos_inspecciones() {
     assert_eq!(cerrada.saldo_pendiente, "502100.00");
 
     // No se puede cerrar dos veces
-    let err = RentaService::cerrar(&mut conn, cfg, id, RentaCierreDatos::default()).expect_err("doble cierre");
+    let err = RentaService::cerrar(&mut conn, cfg, id, "test", RentaCierreDatos::default()).expect_err("doble cierre");
     assert_eq!(err.kind(), "business");
 
     // ── Limpieza: eliminar (pagos e inspecciones caen en cascada) ──
-    RentaService::eliminar(&mut conn, id).expect("eliminar");
+    RentaService::eliminar(&mut conn, id, "test").expect("eliminar");
     assert!(RentaService::obtener(&mut conn, id).is_err(), "eliminada");
 }
 
@@ -299,12 +299,12 @@ fn renta_montos_en_blanco_ok() {
         observaciones: None,
     };
     let cerrada =
-        RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar con ajustes en blanco");
+        RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar con ajustes en blanco");
     assert_eq!(cerrada.estado, "Cerrada");
     assert_eq!(cerrada.total, "0.00");
 
     // ── Limpieza ──
-    RentaService::eliminar(&mut conn, creada.id).expect("eliminar");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("eliminar");
 }
 
 #[test]
@@ -353,7 +353,7 @@ fn renta_no_contrato_secuencial_independiente_del_id() {
         "no_contrato independiente del id (secuencia propia)"
     );
 
-    RentaService::eliminar(&mut conn, r3.id).expect("limpieza r3");
+    RentaService::eliminar(&mut conn, r3.id, "test").expect("limpieza r3");
 }
 
 #[test]
@@ -378,7 +378,7 @@ fn renta_crear_con_abono_inicial() {
     assert_eq!(creada.total, "535500.00");
     assert_eq!(creada.saldo_pendiente, "335500.00", "saldo = total − abono inicial");
 
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
 
 #[test]
@@ -429,11 +429,11 @@ fn renta_comision_resta_del_total_valor_neto() {
         tanque_final: Some("Lleno".into()),
         ..Default::default()
     };
-    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar");
+    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.valor_neto, "435500.00", "el cierre conserva el neto");
     assert_eq!(cerrada.estado, "Cerrada");
 
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
 
 #[test]
@@ -483,15 +483,15 @@ fn renta_validaciones_y_cancelacion() {
 
     // ── Cancelar ──
     let creada = RentaService::crear(&mut conn, cfg, datos_renta(&placa, None)).expect("crear");
-    let cancelada = RentaService::cancelar(&mut conn, creada.id).expect("cancelar");
+    let cancelada = RentaService::cancelar(&mut conn, creada.id, "test").expect("cancelar");
     assert!(cancelada.cancelada);
     assert_eq!(cancelada.renta.estado, "Cancelada");
     // Doble cancelación → ok con cancelada=false
-    let otra = RentaService::cancelar(&mut conn, creada.id).expect("doble cancelar");
+    let otra = RentaService::cancelar(&mut conn, creada.id, "test").expect("doble cancelar");
     assert!(!otra.cancelada);
 
     // No se puede cerrar una cancelada
-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, RentaCierreDatos::default())
+    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", RentaCierreDatos::default())
         .expect_err("cerrar cancelada");
     assert_eq!(err.kind(), "business");
 
@@ -500,7 +500,7 @@ fn renta_validaciones_y_cancelacion() {
         .expect_err("pago en cancelada");
     assert_eq!(err.kind(), "business");
 
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
 
 #[test]
@@ -535,7 +535,7 @@ fn renta_pago_supera_saldo() {
         .expect_err("pago inválido");
     assert_eq!(err.kind(), "validation");
 
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
 
 #[test]
@@ -559,7 +559,7 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
         fecha_devolucion_real: Some("no-es-fecha".into()),
         ..Default::default()
     };
-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, cierre_mal).expect_err("fecha inválida");
+    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_mal).expect_err("fecha inválida");
     assert_eq!(err.kind(), "validation");
 
     // Hora de devolución inválida → validation
@@ -567,10 +567,10 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
         hora_devolucion_real: Some("25:99".into()),
         ..Default::default()
     };
-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, cierre_hora).expect_err("hora inválida");
+    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_hora).expect_err("hora inválida");
     assert_eq!(err.kind(), "validation");
 
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
 
 /// Dos autos reales de la BD de dev en estado Disponible (lectura) — o None
@@ -659,7 +659,7 @@ fn renta_cambiar_auto_sin_cerrar() {
         (placa_a.clone(),),
     )
     .expect("restaurar a");
-    RentaService::eliminar(&mut conn, id).expect("limpieza");
+    RentaService::eliminar(&mut conn, id, "test").expect("limpieza");
 }
 
 #[test]
@@ -693,10 +693,10 @@ fn renta_cierre_calcula_dias_horas_automatico() {
         horas_extras: None,
         ..Default::default()
     };
-    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar tarde");
+    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar tarde");
     assert_eq!(cerrada.dias_calculados, 3, "6 h de excedente → día completo");
     assert_eq!(cerrada.horas_extras, 0);
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 
     // ── Excedente 2 h (≤ 3 h) → 2 horas extras ──
     let creada2 = RentaService::crear(&mut conn, cfg, base).expect("crear2");
@@ -707,10 +707,10 @@ fn renta_cierre_calcula_dias_horas_automatico() {
         horas_extras: None,
         ..Default::default()
     };
-    let cerrada2 = RentaService::cerrar(&mut conn, cfg, creada2.id, cierre2).expect("cerrar puntual");
+    let cerrada2 = RentaService::cerrar(&mut conn, cfg, creada2.id, "test", cierre2).expect("cerrar puntual");
     assert_eq!(cerrada2.dias_calculados, 2);
     assert_eq!(cerrada2.horas_extras, 2, "2 h de excedente → horas extras");
-    RentaService::eliminar(&mut conn, creada2.id).expect("limpieza2");
+    RentaService::eliminar(&mut conn, creada2.id, "test").expect("limpieza2");
 }
 
 /// Una renta creada con `id_reserva` completa automáticamente la reserva
@@ -770,7 +770,7 @@ fn renta_creada_desde_reserva_completa_la_reserva() {
     assert!(err.to_string().contains("ya fue completada"));
 
     // Limpieza: renta + reserva
-    RentaService::eliminar(&mut conn, renta.id).expect("limpiar renta");
+    RentaService::eliminar(&mut conn, renta.id, "test").expect("limpiar renta");
     ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
 }
 
@@ -858,7 +858,7 @@ fn renta_editar_cerrada_recálculo_totales() {
         descuento: Some("0".into()),
         observaciones: Some("Cierre normal".into()),
     };
-    let cerrada = RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
+    let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.estado, "Cerrada");
     // 3 × 150000 = 450000 + 19% IVA = 535500; saldo = 535500 − 100000 abono = 435500
     assert_eq!(cerrada.total, "535500.00", "total tras cierre");
@@ -915,8 +915,8 @@ fn renta_editar_cerrada_recálculo_totales() {
     assert!(err.to_string().contains("Solo se pueden editar rentas cerradas"), "error: {err}");
 
     // Limpieza
-    RentaService::eliminar(&mut conn, id).expect("eliminar editada");
-    RentaService::eliminar(&mut conn, activa.id).expect("eliminar activa");
+    RentaService::eliminar(&mut conn, id, "test").expect("eliminar editada");
+    RentaService::eliminar(&mut conn, activa.id, "test").expect("eliminar activa");
 }
 
 #[test]
@@ -985,7 +985,7 @@ fn renta_extender_horas_y_dias() {
         hora_devolucion_real: Some("18:00".into()),
         ..Default::default()
     };
-    RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
+    RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     let err = RentaService::extender(&mut conn, cfg, id, "admin", ExtensionDatos::default())
         .expect_err("no extender cerrada");
     assert!(err.to_string().contains("Solo se pueden extender rentas activas"), "error: {err}");
@@ -999,6 +999,6 @@ fn renta_extender_horas_y_dias() {
     assert!(err2.to_string().contains("'horas' o 'dias'"), "error: {err2}");
 
     // Limpieza
-    RentaService::eliminar(&mut conn, id).expect("eliminar");
-    RentaService::eliminar(&mut conn, activa.id).expect("eliminar activa");
+    RentaService::eliminar(&mut conn, id, "test").expect("eliminar");
+    RentaService::eliminar(&mut conn, activa.id, "test").expect("eliminar activa");
 }

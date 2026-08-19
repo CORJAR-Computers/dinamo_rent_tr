@@ -6,6 +6,10 @@ pub mod crypto;
 pub mod db;
 pub mod error;
 pub mod migrations;
+/// Helpers compartidos por los repositorios (DRY de `map_fb_error`,
+/// `opt_str`, `parse_fecha_opt`, `parse_hora_opt` y el macro `params!`).
+/// Ver módulo para el detalle de la migración parcial (Bloque 4 / TAREA 4.2).
+pub mod repository;
 pub mod rbac;
 pub mod security;
 pub mod validators;

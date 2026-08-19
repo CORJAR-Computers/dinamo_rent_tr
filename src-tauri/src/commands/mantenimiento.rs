@@ -73,9 +73,9 @@ pub fn actualizar_mantenimiento(
 /// Elimina un mantenimiento
 #[tauri::command]
 pub fn eliminar_mantenimiento(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<()> {
-    require_eliminacion(&state, &session_id)?;
+    let sesion = require_eliminacion(&state, &session_id)?;
     let mut c = conn(&state)?;
-    MantenimientoService::eliminar(&mut c, id).map_err(|e| e.to_payload())
+    MantenimientoService::eliminar(&mut c, id, &sesion.username).map_err(|e| e.to_payload())
 }
 
 /// Totales general, por placa y por tipo

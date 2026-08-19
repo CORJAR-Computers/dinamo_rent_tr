@@ -227,7 +227,6 @@
 			await cargarTodo();
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el mantenimiento.');
-			eliminarId = null;
 		} finally {
 			eliminando = false;
 		}

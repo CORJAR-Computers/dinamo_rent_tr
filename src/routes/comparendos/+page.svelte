@@ -418,7 +418,6 @@
 			await cargar();
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el comparendo.');
-			eliminarId = null;
 		} finally {
 			eliminando = false;
 		}

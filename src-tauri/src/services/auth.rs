@@ -74,7 +74,17 @@ impl AuthService {
         password: &str,
         ip: Option<&str>,
     ) -> Result<LoginResult, AppError> {
+        // ── Span de tracing (Bloque 4 / TAREA 4.1) ──
+        // El login concentra los eventos de seguridad más relevantes (cuenta
+        // bloqueada, rate-limit, rehash legacy, login OK/fallido). El span
+        // etiqueta todos los `tracing::info!`/`warn!` con el username y la IP
+        // para correlacionar con los registros de `auditoria`.
+        // Nota: el password NUNCA se loguea (ni siquiera en debug).
+        let span = tracing::info_span!("login", username = %username, ip = ?ip);
+        let _enter = span.enter();
+
         if username.trim().is_empty() || password.is_empty() {
+            tracing::warn!("Login rechazado: username o password vacío");
             return Err(AppError::InvalidCredentials);
         }
 
@@ -191,6 +201,11 @@ impl AuthService {
         );
 
         log::info!("Login exitoso: {username} (rol={}, ip={})", rol.unwrap_or("-"), ip.unwrap_or("-"));
+        tracing::info!(
+            rol = %rol.unwrap_or("-"),
+            debe_cambiar_password = debe_cambiar,
+            "Login exitoso (tracing)"
+        );
         crate::core::audit::log_audit(
             &mut conn,
             username,

@@ -12,7 +12,13 @@ use super::{conn, require_usuario_admin};
 
 type Cmd<T> = Result<T, ErrorPayload>;
 
-/// Lista eventos de auditoría con filtros opcionales y paginación (solo admin)
+/// Lista eventos de auditoría con filtros opcionales y paginación (solo admin).
+///
+/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
+/// `tauri::async_runtime::spawn_blocking`. `listar_auditoria` hace 2 queries
+/// (COUNT + SELECT paginado) con LIKE sobre `mensaje` que puede escanear toda
+/// la tabla `auditoria` si crece mucho — conviene no retener el event loop
+/// mientras Firebird resuelve el WHERE.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn listar_auditoria(

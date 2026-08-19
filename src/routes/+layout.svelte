@@ -276,6 +276,10 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 		</div>
 	</div>
 {:else if ready && session.isAuthenticated}
+	<!-- Skip-link de accesibilidad: primer elemento enfocable. Salta al contenido principal. -->
+	<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-surface focus:text-primary focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary-focus">
+		Saltar al contenido
+	</a>
 	<div class="flex h-screen overflow-hidden">
 		<!-- Sidebar -->
 		<aside
@@ -297,7 +301,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			</div>
 
 			<!-- Navegación -->
-			<nav class="flex-1 overflow-y-auto py-4 px-2 space-y-5">
+			<nav class="flex-1 overflow-y-auto py-4 px-2 space-y-5" aria-label="Navegación principal">
 				{#each menu as group}
 					{#if sidebarOpen}
 						<p class="px-3 text-[10px] font-bold tracking-widest text-white/40 uppercase">{group.section}</p>
@@ -413,7 +417,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			</header>
 
 			<!-- Vista actual -->
-			<main class="flex-1 overflow-y-auto p-6">
+			<main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 focus:outline-none">
 				{@render children()}
 			</main>
 		</div>

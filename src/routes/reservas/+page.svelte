@@ -4,7 +4,6 @@
 		reservaApi,
 		clienteApi,
 		autoApi,
-		businessApi,
 		ApiError,
 		type Reserva,
 		type ReservaDatos,
@@ -13,6 +12,7 @@
 		type BusinessLists
 	} from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
+	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatDate } from '$lib/utils/format';
 	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
@@ -34,7 +34,9 @@
 	let proximas = $state<Reserva[]>([]);
 	let clientes = $state<ClienteConPii[]>([]);
 	let autos = $state<Auto[]>([]);
-	let lists = $state<BusinessLists | null>(null);
+	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
+	// global `businessLists` (cache TTL 5 min, invalidable).
+	const lists = $derived<BusinessLists | null>(businessLists.lists);
 
 	// ¿El rol actual puede eliminar registros? (roles_con_eliminar de config.ini)
 	const puedeEliminar = $derived(
@@ -183,24 +185,19 @@
 
 	onMount(async () => {
 		if (!guardSesion()) return;
-		if (!lists) {
-			try {
-				lists = await businessApi.listas(sid());
-			} catch {
-				/* opcional */
-			}
-		}
-		try {
-			clientes = await clienteApi.listar(sid());
-		} catch {
-			clientes = [];
-		}
-		try {
-			autos = await autoApi.listar(sid());
-		} catch {
-			autos = [];
-		}
-		await cargarProximas();
+		// TAREA 3.2 + 3.3 (Bloque 3 — Performance):
+		//  - `businessLists.ensure` carga las listas si no están en cache
+		//    (TTL 5 min) o reutiliza las cacheadas — evita 1 round-trip por
+		//    cada navegación a /reservas.
+		//  - `Promise.all` paraleliza las 4 cargas independientes que antes
+		//    corrían en secuencia (listas → clientes → autos → proximas) →
+		//    4 round-trips en paralelo en vez de 4 secuenciales.
+		await Promise.all([
+			businessLists.ensure(sid()).catch(() => null),
+			clienteApi.listar(sid()).then((c) => (clientes = c)).catch(() => (clientes = [])),
+			autoApi.listar(sid()).then((a) => (autos = a)).catch(() => (autos = [])),
+			cargarProximas()
+		]);
 		// La carga inicial de reservas la dispara el $effect de filtros (una sola vez)
 	});
 
@@ -303,7 +300,6 @@
 			await Promise.all([cargar(), cargarProximas()]);
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo cancelar la reserva.');
-			cancelarId = null;
 		} finally {
 			cancelando = false;
 		}
@@ -319,7 +315,6 @@
 			await Promise.all([cargar(), cargarProximas()]);
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar la reserva.');
-			eliminarId = null;
 		} finally {
 			eliminando = false;
 		}

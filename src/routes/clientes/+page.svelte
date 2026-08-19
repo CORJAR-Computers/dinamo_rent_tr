@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { clienteApi, businessApi, ApiError, type Cliente, type ClienteConPii, type BusinessLists } from '$lib/api';
+	import { clienteApi, ApiError, type Cliente, type ClienteConPii, type BusinessLists } from '$lib/api';
 	import { sid, session } from '$lib/stores/session.svelte';
+	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion, tieneRol } from '$lib/utils/guards';
@@ -16,7 +17,9 @@
 	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
 
 	let clientes = $state<ClienteConPii[]>([]);
-	let lists = $state<BusinessLists | null>(null);
+	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
+	// global `businessLists` (cache TTL 5 min, invalidable).
+	const lists = $derived<BusinessLists | null>(businessLists.lists);
 	let loading = $state(true);
 	let piiDialogOpen = $state(false);
 
@@ -55,13 +58,10 @@
 
 	onMount(async () => {
 		if (!guardSesion()) return;
-		if (!lists) {
-			try {
-				lists = await businessApi.listas(sid());
-			} catch {
-				/* opcional */
-			}
-		}
+		// TAREA 3.2 (Bloque 3 — Performance): las listas se sirven desde el
+		// store global `businessLists` (cache TTL 5 min, invalidable). Evita
+		// 1 round-trip por cada navegación a /clientes.
+		await businessLists.ensure(sid()).catch(() => null);
 		// La carga inicial de clientes la dispara el $effect de filtros (una sola vez)
 	});
 
@@ -103,7 +103,6 @@
 			await cargar();
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el cliente.');
-			eliminarId = null;
 		} finally {
 			eliminando = false;
 		}

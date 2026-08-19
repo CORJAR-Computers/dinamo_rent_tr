@@ -665,5 +665,5 @@ fn comparendo_cruce_responsable_renta() {
     // Limpieza (comparendos soft-delete; la renta cae limpia)
     ComparendoService::eliminar(&mut conn, c1.id).expect("limpiar c1");
     ComparendoService::eliminar(&mut conn, c2.id).expect("limpiar c2");
-    RentaService::eliminar(&mut conn, renta.id).expect("limpiar renta");
+    RentaService::eliminar(&mut conn, renta.id, "test").expect("limpiar renta");
 }

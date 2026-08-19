@@ -4,10 +4,15 @@
 //! se guardan cifradas. Este repositorio NO descifra: el servicio (services/cliente.rs)
 //! aplica `PiiCipher` al leer/escribir.
 
-use rsfbclient::{Execute, ParamsType, Queryable};
+use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
 use crate::core::error::AppError;
 use crate::core::PooledConnection;
+// Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
+// localmente en este archivo. La migración los importa de `core::repository`
+// para DRY. Se conserva un wrapper `map_fb_error` (1 línea) que delega en
+// `map_fb_error_dup` con el mensaje Duplicate específico de clientes.
+use crate::core::repository::{opt_str, params};
 
 use serde::Serialize;
 
@@ -38,14 +43,6 @@ pub struct Cliente {
     pub estado: String,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-}
-
-/// Construye parámetros posicionales de cualquier longitud (las tuplas de
-/// `IntoParams` están limitadas a 15 elementos en rsfbclient).
-macro_rules! params {
-    ($($e:expr),+ $(,)?) => {
-        ParamsType::Positional(vec![$($e.into()),+])
-    };
 }
 
 /// Datos de entrada para crear/actualizar (PII en claro; el servicio cifra)
@@ -138,14 +135,13 @@ pub fn from_row(r: ClienteRow) -> Cliente {
     }
 }
 
+/// Mapea errores de Firebird a AppError (duplicidad de documento).
+///
+/// Wrapper que delega en `crate::core::repository::map_fb_error_dup` con el
+/// mensaje específico de clientes. Antes esto estaba duplicado en 3+
+/// repositorios (Bloque 4 / TAREA 4.2).
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("duplicate") || lower.contains("unique") {
-        AppError::Duplicate("Ya existe un cliente con ese documento.".into())
-    } else {
-        AppError::Database(msg)
-    }
+    crate::core::repository::map_fb_error_dup(e, "Ya existe un cliente con ese documento.")
 }
 
 pub struct ClienteRepository;
@@ -323,6 +319,4 @@ impl ClienteRepository {
     }
 }
 
-fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-}
+

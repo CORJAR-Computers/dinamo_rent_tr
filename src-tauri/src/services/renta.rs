@@ -240,13 +240,24 @@ impl RentaService {
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
         id: i64,
+        usuario: &str,
         mut datos: RentaCierreDatos,
     ) -> Result<Renta, AppError> {
+        // ── Span de tracing (Bloque 4 / TAREA 4.1) ──
+        // Atributos del span: id de la renta, usuario que ejecuta el cierre y
+        // estado previo. Cualquier `tracing::info!`/`error!` dentro de la fn
+        // queda etiquetado con estos campos (útil para filtrar en Jaeger o en
+        // `grep "renta_id=42"` sobre el log).
+        let span = tracing::info_span!("cerrar_renta", renta_id = id, %usuario);
+        let _enter = span.enter();
+
         let actual = Self::obtener(conn, id)?;
         if actual.estado == "Cerrada" {
+            tracing::warn!(estado = %actual.estado, "Intento de cierre de renta ya cerrada");
             return Err(AppError::Business("La renta ya está cerrada.".into()));
         }
         if actual.estado == "Cancelada" {
+            tracing::warn!(estado = %actual.estado, "Intento de cierre de renta cancelada");
             return Err(AppError::Business(
                 "No se puede cerrar una renta cancelada.".into(),
             ));
@@ -308,7 +319,11 @@ impl RentaService {
         let valor_neto_s = valor_neto.round_dp(2).to_string();
         let saldo_s = saldo.round_dp(2).to_string();
         let placa_auto = actual.placa.clone();
-        let usuario_audit = "sistema".to_string();
+        let usuario_audit = usuario.to_string();
+        // Clones para tracing post-transacción (los originales se mueven al closure)
+        let placa_log = placa_auto.clone();
+        let total_log = total_s.clone();
+        let saldo_log = saldo_s.clone();
 
         // TRANSACCIÓN: UPDATE rentas (estado Cerrada + devolución) + UPDATE autos
         // (liberar vehículo) + INSERT auditoría. Atómico: si cualquiera falla,
@@ -368,12 +383,21 @@ impl RentaService {
             )?;
             Ok(())
         })
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Transacción de cierre de renta falló");
+            AppError::Database(e.to_string())
+        })?;
+        tracing::info!(
+            placa = %placa_log.as_deref().unwrap_or("-"),
+            total = %total_log,
+            saldo = %saldo_log,
+            "Renta cerrada y vehículo liberado"
+        );
         Self::obtener(conn, id)
     }
 
     /// Cancela una renta activa (no las cerradas)
-    pub fn cancelar(conn: &mut PooledConnection, id: i64) -> Result<RentaCancelada, AppError> {
+    pub fn cancelar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<RentaCancelada, AppError> {
         let actual = Self::obtener(conn, id)?;
         if actual.estado == "Cancelada" {
             return Ok(RentaCancelada { renta: actual, cancelada: false });
@@ -384,6 +408,14 @@ impl RentaService {
             ));
         }
         RentaRepository::cancelar(conn, id)?;
+        // Auditoría: registra quién canceló la renta (no-repudio)
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "CANCELAR RENTA",
+            &format!("renta={}, placa={}", id, actual.placa.as_deref().unwrap_or("-")),
+            "local",
+        )?;
         let renta = Self::obtener(conn, id)?;
         Ok(RentaCancelada { renta, cancelada: true })
     }
@@ -688,9 +720,18 @@ impl RentaService {
     /// Elimina una renta (soft-delete: marca deleted_at en rentas y pagos).
     /// Las inspecciones no tienen deleted_at; dejan de ser accesibles porque la
     /// renta no aparece en los SELECTs. Ver RentaRepository::eliminar.
-    pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        Self::obtener(conn, id)?;
-        RentaRepository::eliminar(conn, id)
+    pub fn eliminar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<(), AppError> {
+        let renta = Self::obtener(conn, id)?;
+        RentaRepository::eliminar(conn, id)?;
+        // Auditoría: registra quién eliminó (soft-delete) la renta (no-repudio)
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "ELIMINAR RENTA",
+            &format!("renta={}, placa={}", renta.id, renta.placa.as_deref().unwrap_or("-")),
+            "local",
+        )?;
+        Ok(())
     }
 
     /// Registra un pago contra una renta activa y actualiza abono/saldo
@@ -700,8 +741,16 @@ impl RentaService {
         usuario: &str,
         mut pago: PagoDatos,
     ) -> Result<Pago, AppError> {
+        // ── Span de tracing (Bloque 4 / TAREA 4.1) ──
+        // El pago es el flujo financiero más sensible (manipula saldo de la
+        // renta y deja registro en `auditoria`). El span permite correlacionar
+        // logs de validación, error de BD y éxito en una sola traza.
+        let span = tracing::info_span!("registrar_pago", renta_id = id_renta, %usuario);
+        let _enter = span.enter();
+
         let renta = Self::obtener(conn, id_renta)?;
         if renta.estado != "Activa" && renta.estado != "Activo" {
+            tracing::warn!(estado = %renta.estado, "Pago rechazado: renta no activa");
             return Err(AppError::Business(
                 "Solo se pueden registrar pagos en rentas activas.".into(),
             ));
@@ -778,7 +827,17 @@ impl RentaService {
                 )?;
                 Ok(id)
             })
-            .map_err(|e| AppError::Database(e.to_string()))?;
+            .map_err(|e| {
+                tracing::error!(error = %e, "Transacción de pago falló");
+                AppError::Database(e.to_string())
+            })?;
+        tracing::info!(
+            pago_id = id,
+            monto = %pago.monto,
+            abono_nuevo = %abono_nuevo,
+            saldo_nuevo = %saldo_nuevo,
+            "Pago registrado contra renta"
+        );
         Ok(RentaRepository::pagos_de(conn, id_renta)?
             .into_iter()
             .find(|p| p.id == id)

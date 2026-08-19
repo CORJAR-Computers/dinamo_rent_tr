@@ -5,7 +5,6 @@
 		reservaApi,
 		clienteApi,
 		autoApi,
-		businessApi,
 		ApiError,
 		type Renta,
 		type RentaDatos,
@@ -21,6 +20,7 @@
 		type Reserva
 	} from '$lib/api';
 	import { sid, session } from '$lib/stores/session.svelte';
+	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
 	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
@@ -63,7 +63,11 @@
 			sub: [a.tipo ?? '', a.color ?? ''].filter(Boolean).join(' ').trim()
 		}))
 	);
-	let lists = $state<BusinessLists | null>(null);
+	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
+	// global `businessLists` (cache TTL 5 min, invalidable). La primera
+	// ruta que monta dispara la carga; las siguientes leen del cache sin
+	// round-trip.
+	const lists = $derived<BusinessLists | null>(businessLists.lists);
 	let loading = $state(true);
 
 	// ¿El rol actual puede eliminar registros? (roles_con_eliminar de config.ini)
@@ -339,23 +343,18 @@
 
 	onMount(async () => {
 		if (!guardSesion()) return;
-		if (!lists) {
-			try {
-				lists = await businessApi.listas(sid());
-			} catch {
-				/* opcional */
-			}
-		}
-		try {
-			clientes = await clienteApi.listar(sid());
-		} catch {
-			clientes = [];
-		}
-		try {
-			autos = await autoApi.listar(sid());
-		} catch {
-			autos = [];
-		}
+		// TAREA 3.2 + 3.3 (Bloque 3 — Performance):
+		//  - `businessLists.ensure` carga las listas si no están en cache
+		//    (TTL 5 min) o reutiliza las cacheadas — evita 1 round-trip por
+		//    cada navegación a /rentas.
+		//  - `Promise.all` paraleliza las cargas independientes (clientes,
+		//    autos, listas) que antes corrían en secuencia → 3 round-trips
+		//    en paralelo en vez de 3 secuenciales.
+		await Promise.all([
+			businessLists.ensure(sid()).catch(() => null),
+			clienteApi.listar(sid()).then((c) => (clientes = c)).catch(() => (clientes = [])),
+			autoApi.listar(sid()).then((a) => (autos = a)).catch(() => (autos = []))
+		]);
 		await cargar();
 
 		// Precarga desde una reserva (?desdeReserva=<id>): abre el formulario
@@ -707,7 +706,6 @@
 			await cargar();
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo cancelar la renta.');
-			cancelarId = null;
 		} finally {
 			cancelando = false;
 		}
@@ -723,7 +721,6 @@
 			await cargar();
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar la renta.');
-			eliminarId = null;
 		} finally {
 			eliminando = false;
 		}

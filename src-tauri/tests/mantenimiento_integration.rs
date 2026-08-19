@@ -95,7 +95,7 @@ fn mantenimiento_crud_roundtrip() {
     assert!(historial.iter().any(|m| m.id == id));
 
     // Eliminar
-    MantenimientoService::eliminar(&mut conn, id).expect("eliminar");
+    MantenimientoService::eliminar(&mut conn, id, "test").expect("eliminar");
     assert!(MantenimientoService::obtener(&mut conn, id).is_err(), "eliminado");
 }
 
@@ -187,7 +187,7 @@ fn mantenimiento_sincroniza_proximo_aceite_y_alertas() {
 
     // Limpieza: eliminar mantenimiento (recalcula proximo_aceite desde el
     // historial restante) y restaurar el valor previo sin importar si era None.
-    MantenimientoService::eliminar(&mut conn, id).expect("eliminar");
+    MantenimientoService::eliminar(&mut conn, id, "test").expect("eliminar");
     AutoRepository::actualizar_proximo_aceite(&mut conn, &placa, previo).expect("restaurar");
 }
 
@@ -236,6 +236,6 @@ fn mantenimiento_totales_y_contar() {
     let recientes = MantenimientoService::recientes(&mut conn, 50).expect("recientes");
     assert!(recientes.iter().any(|m| m.id == c1.id || m.id == c2.id));
 
-    MantenimientoService::eliminar(&mut conn, c1.id).expect("eliminar m1");
-    MantenimientoService::eliminar(&mut conn, c2.id).expect("eliminar m2");
+    MantenimientoService::eliminar(&mut conn, c1.id, "test").expect("eliminar m1");
+    MantenimientoService::eliminar(&mut conn, c2.id, "test").expect("eliminar m2");
 }

@@ -81,6 +81,29 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
 
+# ── Logging estructurado (Bloque 4 / TAREA 4.1) ──
+# `tracing` coexiste con `log` (tauri-plugin-log). El crate `tracing` expone
+# un bridge que captura los `log::info!`/`log::error!` existentes cuando se
+# inicializa `tracing_subscriber` con el layer `tracing-log`. De este modo NO
+# hace falta reescribir los `log::*!` ya cableados y se gana:
+#   - spans estructurados (registrar_pago, cerrar_renta, login)
+#   - `RUST_LOG=info,dinamo_rent_lib=debug` vía EnvFilter
+#   - futuro OpenTelemetry/Jaeger sin tocar el código de servicios
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# ── Contrato de tipos TypeScript (Bloque 4 / TAREA 4.3) ──
+# `ts-rs` genera archivos `.ts` a partir de `#[derive(TS)]` en tiempo de
+# `cargo test`. Las estructuras marcadas (`Renta`, `RentaDatos`, `Pago`)
+# producen tipos en `src/lib/types/generated/` que el frontend puede importar
+# directamente en lugar de mantenerlos a mano en `src/lib/api.ts`.
+# Features:
+#   - `chrono-impl`: serializa NaiveDate/NaiveTime (no se usa hoy, listo para
+#     futura migración de `String` -> `NaiveDate` en los structs de dominio).
+#   - `no-serde-warnings`: silencia avisos cuando un campo no tiene `#[serde(...)]`
+#     pero sí `#[ts(...)]` (evita ruido en structs híbridos).
+ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings"] }
+
 # Base de datos Firebird
 rsfbclient = { version = "0.27", default-features = false, features = ["dynamic_loading"] }
 r2d2 = "0.8"
