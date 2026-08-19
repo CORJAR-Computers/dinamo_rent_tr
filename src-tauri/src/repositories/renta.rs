@@ -4,17 +4,31 @@
 //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio/frontend)
 //! - DATE/TIME/TIMESTAMP → CAST a VARCHAR
 
-use chrono::{NaiveDate, NaiveTime};
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
 use crate::core::error::AppError;
 use crate::core::PooledConnection;
+// Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
+// localmente en este archivo. La migración los importa de `core::repository`
+// para DRY. Se conserva un wrapper `map_fb_error` (1 línea) que delega en
+// `map_fb_error_fk` con el mensaje FK específico de rentas (preserva UX).
+use crate::core::repository::{opt_str, params, parse_fecha, parse_fecha_opt, parse_hora_opt};
 
 use serde::Serialize;
+// ts-rs (Bloque 4 / TAREA 4.3): genera tipos TypeScript en
+// `src/lib/types/generated/` cuando se ejecuta `cargo test`. El frontend
+// puede importarlos en lugar de mantenerlos a mano en `src/lib/api.ts`.
+// El atributo `#[ts(export, export_to = "...")]` controla la generación.
+use ts_rs::TS;
 
 /// Pago registrado contra una renta
-#[derive(Debug, Clone, Serialize)]
+///
+/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/Pago.ts`
+/// (Bloque 4 / TAREA 4.3). El frontend puede importarlo con:
+///   `import type { Pago } from '$lib/types/generated/Pago';`
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../src/lib/types/generated/")]
 pub struct Pago {
     pub id: i64,
     pub id_renta: i64,
@@ -27,8 +41,14 @@ pub struct Pago {
 }
 
 /// Inspección de salida/entrada de una renta
-#[derive(Debug, Clone, Serialize)]
+///
+/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/Inspeccion.ts`
+/// (Bloque 4 / TAREA 4.3). Necesario derivar `TS` aquí porque `Renta` la
+/// referencia como `Vec<Inspeccion>` (ts-rs requiere que todo tipo anidado
+/// tambien implemente `TS`).
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../src/lib/types/generated/")]
 pub struct Inspeccion {
     pub id: i64,
     pub id_renta: i64,
@@ -46,8 +66,14 @@ pub struct Inspeccion {
 }
 
 /// Renta completa (serializable al frontend, camelCase)
-#[derive(Debug, Clone, Serialize)]
+///
+/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/Renta.ts`
+/// (Bloque 4 / TAREA 4.3). Es el contrato FE<->BE mas importante: cualquier
+/// cambio en los campos de `Renta` se refleja automaticamente en el `.ts`
+/// generado al correr `cargo test`, evitando drift entre Rust y Svelte.
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../src/lib/types/generated/")]
 pub struct Renta {
     pub id: i64,
     /// Número de contrato: secuencia DENTRO del año (2026-001, 2026-002, ...)
@@ -111,8 +137,13 @@ pub struct Renta {
 }
 
 /// Datos de entrada para crear/actualizar (validados por el servicio)
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+///
+/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/RentaDatos.ts`
+/// (Bloque 4 / TAREA 4.3). El frontend usa este tipo para construir el body
+/// del command `crear_renta` / `actualizar_renta` (ver `src/lib/api.ts`).
+#[derive(Debug, Clone, Default, serde::Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "../src/lib/types/generated/")]
 pub struct RentaDatos {
     pub placa: Option<String>,
     pub id_cliente: Option<i64>,
@@ -234,14 +265,6 @@ pub struct InspeccionDatos {
     pub tiene_documentos: bool,
     pub danos_carroceria: Option<String>,
     pub observaciones: Option<String>,
-}
-
-/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
-/// limitadas a 15 elementos en rsfbclient).
-macro_rules! params {
-    ($($e:expr),+ $(,)?) => {
-        ParamsType::Positional(vec![$($e.into_param()),+])
-    };
 }
 
 /// rsfbclient solo implementa FromRow para tuplas de hasta 26 elementos,
@@ -386,21 +409,16 @@ fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
     }
 }
 
-/// Mapea errores de Firebird a AppError (FKs de placa/cliente/reserva)
+/// Mapea errores de Firebird a AppError (FKs de placa/cliente/reserva).
+///
+/// Wrapper que delega en `crate::core::repository::map_fb_error_fk` con el
+/// mensaje de negocio específico de rentas. Antes esto estaba duplicado en
+/// 5+ repositorios (Bloque 4 / TAREA 4.2).
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("foreign key")
-        || lower.contains("not a valid reference")
-        || lower.contains("referential")
-    {
-        AppError::Business(
-            "El cliente, el vehículo o la reserva seleccionada no existe (o está referenciado por otros registros)."
-                .into(),
-        )
-    } else {
-        AppError::Database(msg)
-    }
+    crate::core::repository::map_fb_error_fk(
+        e,
+        "El cliente, el vehículo o la reserva seleccionada no existe (o está referenciado por otros registros).",
+    )
 }
 
 pub struct RentaRepository;
@@ -593,10 +611,10 @@ impl RentaRepository {
                     opt_str(&d.no_licencia),
                     opt_str(&d.nacionalidad),
                     parse_fecha(&d.fecha_recogida)?,
-                    parse_hora(&d.hora_recogida)?,
+                    parse_hora_opt(&d.hora_recogida)?,
                     opt_str(&d.ubicacion_recogida),
                     parse_fecha(&d.fecha_retorno)?,
-                    parse_hora(&d.hora_retorno)?,
+                    parse_hora_opt(&d.hora_retorno)?,
                     opt_str(&d.ubicacion_retorno),
                     d.dias_calculados,
                     d.horas_extras,
@@ -658,10 +676,10 @@ impl RentaRepository {
                 opt_str(&d.no_licencia),
                 opt_str(&d.nacionalidad),
                 parse_fecha(&d.fecha_recogida)?,
-                parse_hora(&d.hora_recogida)?,
+                parse_hora_opt(&d.hora_recogida)?,
                 opt_str(&d.ubicacion_recogida),
                 parse_fecha(&d.fecha_retorno)?,
-                parse_hora(&d.hora_retorno)?,
+                parse_hora_opt(&d.hora_retorno)?,
                 opt_str(&d.ubicacion_retorno),
                 d.dias_calculados,
                 d.horas_extras,
@@ -720,7 +738,7 @@ impl RentaRepository {
              WHERE id = ?",
             params![
                 parse_fecha_opt(&d.fecha_devolucion_real)?,
-                parse_hora(&d.hora_devolucion_real)?,
+                parse_hora_opt(&d.hora_devolucion_real)?,
                 opt_str(&d.km_final),
                 opt_str(&d.tanque_final),
                 d.dias_calculados,
@@ -899,25 +917,8 @@ impl RentaRepository {
     }
 }
 
-fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-}
-
 fn bool_to_i(b: bool) -> i64 {
     if b { 1 } else { 0 }
-}
-
-/// Parsea fecha 'AAAA-MM-DD' a NaiveDate (el servicio ya la validó)
-fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
-    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
-        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
-}
-
-fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError> {
-    match opt_str(v) {
-        None => Ok(None),
-        Some(s) => parse_fecha(&s).map(Some),
-    }
 }
 
 /// Recorta 'HH:MM:SS.0000' (Firebird) a 'HH:MM' para la UI
@@ -934,15 +935,4 @@ fn km_limpio(v: &str) -> String {
         .unwrap_or_else(|_| v.trim().to_string())
 }
 
-/// Parsea hora 'HH:MM[:SS]' a NaiveTime (el servicio ya la validó)
-fn parse_hora(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
-    match opt_str(v) {
-        None => Ok(None),
-        Some(h) => {
-            let h = if h.len() == 5 { format!("{h}:00") } else { h };
-            NaiveTime::parse_from_str(&h, "%H:%M:%S")
-                .map(Some)
-                .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
-        }
-    }
-}
+

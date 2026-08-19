@@ -227,7 +227,7 @@ fn informe_comisiones_y_balance_neto() {
         "los costos del vehículo incluyen la comisión"
     );
 
-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
+    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
 
 /// RBAC: `informe_mensual` solo es accesible para los roles de

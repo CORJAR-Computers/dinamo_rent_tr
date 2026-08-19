@@ -5,11 +5,15 @@
 //! - DATE/TIMESTAMP → CAST a VARCHAR
 //! - JOIN con autos para mostrar marca/modelo en la UI
 
-use chrono::NaiveDate;
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
 use crate::core::error::AppError;
 use crate::core::PooledConnection;
+// Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
+// localmente en este archivo. La migración los importa de `core::repository`
+// para DRY. Se conserva un wrapper `map_fb_error` (1 línea) que delega en
+// `map_fb_error_fk` con el mensaje FK específico de mantenimiento (placa).
+use crate::core::repository::{opt_str, params, parse_fecha};
 
 use serde::Serialize;
 
@@ -45,14 +49,6 @@ pub struct MantenimientoDatos {
     pub observaciones: Option<String>,
     pub costo: String,
     pub km_proximo_cambio_aceite: Option<i64>,
-}
-
-/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
-/// limitadas a 15 elementos en rsfbclient).
-macro_rules! params {
-    ($($e:expr),+ $(,)?) => {
-        ParamsType::Positional(vec![$($e.into_param()),+])
-    };
 }
 
 /// Orden de columnas del SELECT de mantenimiento (debe coincidir con `MantenimientoRow`)
@@ -98,20 +94,16 @@ fn from_row(r: MantenimientoRow) -> Mantenimiento {
     }
 }
 
-/// Mapea errores de Firebird a AppError (FK de placa)
+/// Mapea errores de Firebird a AppError (FK de placa).
+///
+/// Wrapper que delega en `crate::core::repository::map_fb_error_fk` con el
+/// mensaje específico de mantenimiento (placa inexistente). Antes esto estaba
+/// duplicado en 5+ repositorios (Bloque 4 / TAREA 4.2).
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("foreign key")
-        || lower.contains("not a valid reference")
-        || lower.contains("referential")
-    {
-        AppError::Business(
-            "La placa seleccionada no existe. Verifica que el vehículo esté registrado.".into(),
-        )
-    } else {
-        AppError::Database(msg)
-    }
+    crate::core::repository::map_fb_error_fk(
+        e,
+        "La placa seleccionada no existe. Verifica que el vehículo esté registrado.",
+    )
 }
 
 pub struct MantenimientoRepository;
@@ -332,12 +324,4 @@ impl MantenimientoRepository {
     }
 }
 
-fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-}
 
-/// Parsea fecha 'AAAA-MM-DD' a NaiveDate (el servicio ya la validó)
-fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
-    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
-        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
-}

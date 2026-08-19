@@ -3,6 +3,7 @@
 
 pub mod commands;
 pub mod core;
+pub mod domain;
 pub mod repositories;
 pub mod services;
 
@@ -18,6 +19,31 @@ use crate::core::security::LoginAttemptTracker;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // ── Logging estructurado (Bloque 4 / TAREA 4.1) ──
+    // Inicializa `tracing_subscriber` ANTES del setup de Tauri para que los
+    // spans críticos (registrar_pago, cerrar_renta, login) y cualquier log
+    // emitido durante el setup (migraciones, pool, backups...) se capture.
+    //
+    // Coexistencia con `tauri-plugin-log`:
+    //   - `tauri-plugin-log` inicializa el crate `log` (a través de su propio
+    //     subscriber) MÁS ADELANTE en el setup (línea ~165). Hasta entonces,
+    //     los `log::*!` van al stderr default.
+    //   - `tracing_subscriber` captura los eventos de `tracing::info!`/`error!`
+    //     directamente. Para que los `log::*!` existentes también fluyan por
+    //     tracing (y aparezcan en el mismo formato compacto), se habilita el
+    //     bridge `tracing_log` con `LogTracer::init()` — sin esto, ambos
+    //     subsistemas escribirían a stderr de forma duplicada.
+    //   - En runtime: `RUST_LOG=info,dinamo_rent_lib=debug` para verbosity.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .with_target(false)
+        .compact()
+        .init();
+    tracing::info!("tracing_subscriber inicializado (Bloque 4 / TAREA 4.1)");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .setup(|app| {

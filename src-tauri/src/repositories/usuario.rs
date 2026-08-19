@@ -1,6 +1,11 @@
 //! repositories/usuario.rs — Repositorio de usuarios (puerto de usuario_repository_sa.py)
 //!
 //! Queries explícitas en dialecto Firebird, estilo rsfbclient (FromRow).
+//!
+//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
+//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
+//! > `crate::core::repository`. Migración pendiente — ver
+//! > `src/core/repository.rs` para el módulo centralizado.
 
 use rsfbclient::{Execute, Queryable};
 

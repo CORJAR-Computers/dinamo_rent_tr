@@ -6,6 +6,9 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/svelte';
+// TAREA 3.2 (Bloque 3 — Performance): reset del cache global de BusinessLists
+// entre tests para que cada test vea el `LISTS` que registra en su beforeEach.
+import { businessLists } from '$lib/stores/business.svelte';
 
 // jsdom 30 no expone localStorage en este entorno (sessionStorage sí).
 // El store de sesión usa `localStorage` como global; aportamos un shim en
@@ -69,6 +72,10 @@ interface TauriTestBridge {
 		cleanup();
 		tauriState.reset();
 		vi.clearAllMocks();
+		// Reset del cache de BusinessLists (TAREA 3.2): cada test registra su
+		// propio `get_business_lists` en el beforeEach; sin esto, un test
+		// posterior leería las listas cacheadas del anterior.
+		businessLists.clear();
 		// jsdom expone storage en el global; limpiar de forma defensiva
 		try {
 			window.localStorage?.clear();

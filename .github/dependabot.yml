@@ -1,0 +1,70 @@
+# Dependabot — actualizaciones automáticas de dependencias
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # Dependencias npm (frontend Svelte + tooling)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      svelte:
+        patterns:
+          - "@sveltejs/*"
+          - "svelte*"
+      testing:
+        patterns:
+          - "@testing-library/*"
+          - "vitest*"
+          - "jsdom"
+      eslint:
+        patterns:
+          - "eslint*"
+          - "prettier*"
+          - "typescript-eslint"
+
+  # Dependencias Cargo (backend Rust)
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - backend
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      firebird:
+        patterns:
+          - "rsfbclient"
+          - "r2d2*"
+      crypto:
+        patterns:
+          - "argon2"
+          - "aes-gcm"
+          - "pbkdf2"
+          - "sha2"
+          - "hmac"
+          - "rand"
+
+  # GitHub Actions (mantener actions actualizadas)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: chore(ci)

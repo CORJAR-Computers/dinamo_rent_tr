@@ -142,7 +142,7 @@ impl MantenimientoService {
     /// recálculo o la auditoría fallan, el soft-delete se revierte y el
     /// historial queda intacto. (Grupo D: adaptado a soft-delete — el DELETE
     /// original de Grupo B se reemplazó por UPDATE ... SET deleted_at.)
-    pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
+    pub fn eliminar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<(), AppError> {
         let actual = Self::obtener(conn, id)?;
         let es_cambio_aceite = actual.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
         let placa = actual.placa.clone();
@@ -178,7 +178,7 @@ impl MantenimientoService {
                 "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
                  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
                 (
-                    "sistema".to_string(),
+                    usuario.to_string(),
                     "ELIMINAR MANTENIMIENTO".to_string(),
                     format!("mant={id}, placa={placa}, tipo={tipo}"),
                     "local".to_string(),

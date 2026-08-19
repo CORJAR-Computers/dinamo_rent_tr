@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { autoApi, businessApi, ApiError, type Auto, type AutoDatos, type AlertaVencimiento, type BusinessLists } from '$lib/api';
+	import { autoApi, ApiError, type Auto, type AutoDatos, type AlertaVencimiento, type BusinessLists } from '$lib/api';
 	import { sid, session } from '$lib/stores/session.svelte';
+	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatDate } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
@@ -16,7 +17,9 @@
 
 	let autos = $state<Auto[]>([]);
 	let alertas = $state<AlertaVencimiento[]>([]);
-	let lists = $state<BusinessLists | null>(null);
+	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
+	// global `businessLists` (cache TTL 5 min, invalidable).
+	const lists = $derived<BusinessLists | null>(businessLists.lists);
 	let loading = $state(true);
 	let loadingAlertas = $state(true);
 
@@ -103,15 +106,16 @@
 
 	onMount(async () => {
 		if (!guardSesion()) return;
-		if (!lists) {
-			try {
-				lists = await businessApi.listas(sid());
-			} catch {
-				/* las listas son opcionales */
-			}
-		}
-		// La carga inicial de autos la dispara el $effect de filtros (una sola vez)
-		await cargarAlertas();
+		// TAREA 3.2 + 3.3 (Bloque 3 — Performance):
+		//  - `businessLists.ensure` carga las listas si no están en cache
+		//    (TTL 5 min) o reutiliza las cacheadas — evita 1 round-trip por
+		//    cada navegación a /autos.
+		//  - `Promise.all` paraleliza `cargarAlertas` con la carga de listas
+		//    (la carga inicial de autos la dispara el $effect de filtros).
+		await Promise.all([
+			businessLists.ensure(sid()).catch(() => null),
+			cargarAlertas()
+		]);
 	});
 
 	// Carga inicial + filtros (debounce solo al escribir)
@@ -218,7 +222,6 @@
 			await Promise.all([cargar(), cargarAlertas()]);
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el vehículo.');
-			eliminarPlaca = null;
 		} finally {
 			eliminando = false;
 		}

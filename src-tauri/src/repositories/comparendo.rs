@@ -3,6 +3,11 @@
 //! Queries explícitas en dialecto Firebird con rsfbclient.
 //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio/frontend)
 //! - DATE/TIME/TIMESTAMP → CAST a VARCHAR
+//!
+//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
+//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
+//! > `crate::core::repository`. Migración pendiente — ver
+//! > `src/core/repository.rs` para el módulo centralizado.
 
 use chrono::{NaiveDate, NaiveTime};
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
