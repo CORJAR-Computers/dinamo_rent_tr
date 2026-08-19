@@ -146,7 +146,7 @@
 > `--force`, y el commit único original `5457376` quedó reescrito en los 4 temáticos (recuperable
 > en el reflog local). Verificado contra el servidor con `git ls-remote` y la API de GitHub
 > (HEAD remoto = `d82de75…`, cadena de padres intacta). La suite completa validó el árbol en
-> verde antes de publicar: `cargo test` ✅ (lib 37 passed + 1 ignored) · vitest **197/197** ·
+> verde antes de publicar: `cargo test` ✅ (lib 80 passed + 1 ignored) · vitest **197/197** ·
 > `svelte-check` **0/0** · `eslint` **0**. Detalle de cada commit en `SIMIT_MIGRACION_PYTHON_RUST.md` §4/§6.
 
 > **Herramientas de monitoreo y test del Agente SIMIT (11-08):** tras la validación E2E, el
@@ -452,6 +452,10 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   (balance = pagos + abonos reservas − gastos − mantenimiento − comparendos; **utilidad por
   vehículo** = ingresos − costos por placa, ordenada desc), `commands/informe.rs`
   (`informe_mensual` con `fecha_inicio`/`fecha_fin` requeridos — ya no es por mes/año).
+  **Optimización (Bloque 1):** los 6 totales del rango se consolidan en una sola query
+  `UNION ALL` (`totales_rango`) y los 6 movimientos por placa en otra (`movimientos_por_placa`).
+  El informe mensual pasa de **13 a 5 round-trips**. El comando `informe_mensual` es `async`
+  con `spawn_blocking` para no bloquear el event loop de Tauri.
 - **Frontend:** `api.ts` (`informeApi.mensual(sessionId, fechaInicio, fechaFin)`), `+page.svelte`
   (selector de **rango de fechas** con Fecha inicio/Fecha fin, tarjetas de balance, desglose por
   categoría con barras, tabla de rentas del rango, **tabla de utilidad por vehículo** con barras
@@ -611,7 +615,25 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 7. **Tests:** integración Rust contra `data/dinamo_rent_v3.fdb` (serial, autos/clientes reales de
    solo lectura, limpieza de registros temporales). Frontend con mock de Tauri
    (`src/test/tauri.ts` + `register`), `session.setSession` en `beforeEach`.
-8. **Normalización de texto (mayúsculas automáticas):** todos los campos de texto libre se
+8. **Tracing estructurado (Bloque 1):** `tracing` + `tracing-subscriber` con `EnvFilter`
+   (`RUST_LOG=info,dinamo_rent_lib=debug`). Coexistencia con `tauri-plugin-log` via
+   `tracing_log::LogTracer`. Spans etiquetados en `login`, `cerrar_renta` y `registrar_pago`
+   para correlacionar logs con auditoría. El `tracing_subscriber` se inicializa en `lib.rs`
+   ANTES del setup de Tauri.
+9. **Repository DRY (Bloque 2):** `core::repository` centraliza helpers duplicados en 10
+   repositorios: `map_fb_error` (genérica + FK-específica + Duplicate-específica), `opt_str`,
+   `parse_fecha`, `parse_fecha_opt`, `parse_hora_opt` y macro `params!`. Los repositorios
+   migrados (renta, cliente, mantenimiento) importan de `crate::core::repository`; los
+   pendientes (auto, reserva, gasto, comparendo, usuario, empresa, auditoría) conservan
+   helpers locales con `// TODO: migrar a core::repository`.
+10. **Accesibilidad WCAG 2.1 (Bloque 4):** `Modal.svelte` implementa focus trap (Tab cicla
+    entre elementos enfocables), autofocus al primer elemento, restauración del foco al cerrar
+    y `aria-labelledby` con `id` dinámico. `FormField.svelte` genera ids estables para
+    `<label for>`, `aria-describedby` (hint/error) y `aria-invalid` en campos con error.
+    Layout incluye skip-link (`Saltar al contenido`) y `<main id="main-content">`.
+    Página de error global `+error.svelte` (404/5xx) con botones reintentar/ir-al-dashboard.
+    Navegación `<nav>` con `aria-label="Navegación principal"`.
+11. **Normalización de texto (mayúsculas automáticas):** todos los campos de texto libre se
    convierten a MAYÚSCULAS en `services/X.rs::normalizar()` con el helper `core::validators::mayusculas()`
    (trim + `to_uppercase()`). **Excepciones** (se mantienen tal cual): `email`, `rol`, `web`, fechas,
    horas, montos y códigos postales. Los `<select>` del frontend (categoría/tipo en gastos y
@@ -625,11 +647,29 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 ---
 
+### 4.1 Dependencias y tooling
+- **Dependabot** (`.github/dependabot.yml`): actualizaciones semanales (lunes) de npm (frontend),
+  Cargo (backend) y mensuales de GitHub Actions. Grupos: svelte, testing, eslint (npm);
+  firebird, crypto (cargo). Prefijos de commit: `chore(deps)`, `chore(ci)`.
+- **ts-rs** (`Cargo.toml`): genera tipos TypeScript en `src/lib/types/generated/` a partir de
+  `#[derive(TS)]` en structs Rust. Los tipos generados (`Renta`, `Pago`, `Inspeccion`,
+  `RentaDatos`) se actualizan con `cargo test`. El frontend puede importarlos con
+  `import type { Pago } from '$lib/types/generated/Pago'`.
+- **domain/ scaffold** (`src-tauri/src/domain/`): documentación de la futura migración a value
+  objects (Dinero, Placa, RangoFechas). No hay código de producción — solo guía para
+  migración incremental (Fases 1-4 documentadas en `domain/README.md`).
+- **Store BusinessLists** (`src/lib/stores/business.svelte.ts`): cachea `businessApi.listas()`
+  con TTL de 5 min. Las rutas (rentas, autos, clientes, reservas) usan `businessLists.ensure(sid())`
+  en vez de llamar a la API directamente. `invalidate()` fuerza recarga. Se resetea en logout.
+- **Async spawn_blocking** (Bloque 1): `listar_rentas` e `informe_mensual` son `async` y
+  ejecutan queries en `tauri::async_runtime::spawn_blocking` para no bloquear el event loop.
+  Patrón: `pool.clone()` → closure con `pool.get()` → `spawn_blocking` → `await`.
+
 ## 5. Migraciones de base de datos — ciclo de trabajo
 
 El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que
 aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
-`schema_migrations`. Serie actual: **0001-0024** (propósito de cada una y esquema canónico de
+`schema_migrations`. Serie actual: **0001-0025** (propósito de cada una y esquema canónico de
 índices en el README §Migraciones). La **0015** (columna `comparendos.numero_comparendo` +
 índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev. La
 **0016** (`atribucion_comparendo_renta.sql`, DML idempotente) vincula los comparendos sin
@@ -648,7 +688,12 @@ el filtro «Solo nuevos» sobreviva al reinicio). La **0023** (`renta_comision.s
 comisión por renta (`TIENE_COMISION`/`COMISION`/`VALOR_NETO`) sin tocar el total que cobra al
 cliente. Todas son idempotentes (patrón 5.2) y ya están aplicadas a la BD dev. La **0024**
 (`extensiones_renta.sql`) crea la tabla de historial de extensiones de rentas (horas o días
-extras acumulables) con índice, ambos con guards `RDB$RELATIONS`/`RDB$INDICES`.
+extras acumulables) con índice, ambos con guards `RDB$RELATIONS`/`RDB$INDICES`. La **0025**
+(`audit_inmutable.sql`) crea excepciones nombradas (`EXC_AUDIT_NO_UPDATE`, `EXC_AUDIT_NO_DELETE`)
+y triggers `BEFORE UPDATE`/`BEFORE DELETE` sobre `auditoria` que lanzan `EXCEPTION` para
+bloquear modificaciones (append-only, no-repudio). Patrón: `EXECUTE BLOCK` con guard en
+`RDB$EXCEPTIONS`/`RDB$TRIGGERS` + `EXECUTE STATEMENT` con el DDL. La tabla queda
+inmutable salvo desactivación explícita del trigger (`ALTER TRIGGER ... INACTIVE`).
 
 ### 5.1 Cómo añadir una migración nueva (000N)
 
@@ -865,7 +910,7 @@ indica correr el setup (antes se omitían silenciosamente):
    `renta_no_contrato_secuencial_independiente_del_id` asume `no_contrato != id`, lo que
    requiere historial dev previo (en BD virgen ambos arrancan en 1).
 
-Resultado: `cargo test --tests` en verde (lib 48 + integración: migraciones 11/11, rentas 8/8
+Resultado: `cargo test --tests` en verde (lib 80 + integración: migraciones 11/11, rentas 8/8
 y el resto de suites). Nota (14-08): el flake de
 `services::simit::consulta_401_clasifica_como_unauthorized` (mock HTTP bajo paralelismo) se
 arregló con agente propio por test + `#[serial]` + mock con timeouts — estresado en verde
@@ -1098,4 +1143,4 @@ abortada (os error 10053). Fix en el helper compartido `servidor_http` de `simit
 - `WouldBlock`/`Interrupted` se **reintentan** (5 ms) hasta el deadline en vez de paniquear;
   `TimedOut` sigue siendo el único panic legítimo.
 
-Validación: simit 14/14, 5 corridas consecutivas verdes, lib 48/48, y el CI del push en verde.
+Validación: simit 14/14, 5 corridas consecutivas verdes, lib 80/80, y el CI del push en verde.
