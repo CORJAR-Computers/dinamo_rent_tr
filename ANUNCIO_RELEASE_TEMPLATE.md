@@ -19,8 +19,8 @@ por CI (auto-update activo desde la v1.0.14).
 
 📦 Descarga: release v1.0.19 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.19/DinamoRent_1.0.19_x64-setup.exe
 (~22 MB, NSIS) o el .msi (~34 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.19/DinamoRent_1.0.19_x64_en-US.msi
-sha256 NSIS: 0a16a44b490192525ca129c983c3183d00b73bfc5f373353ff3e778dcb0dd74b
-sha256 MSI:  2e0c748157764c24e0933816a6ee28c8af3428ec214d0c7b3cb35c0906fbd517
+sha256 NSIS: 4880df9f935e19785a19b187656dd6947aaecdb765288e70e24f64a3d7af0b19
+sha256 MSI:  d7ff61c3360719ccdb55b47cdf9c5b14c308671e673df17e8907d4ebb9f20c8a
 Credenciales iniciales: admin / admin123 (cambio forzado al primer ingreso).
 ⚠️ No instalar versiones anteriores descontinuadas.
 
@@ -73,7 +73,7 @@ Descarga: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.1
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.0.19:** `DinamoRent_1.0.19_x64-setup.exe` (NSIS, ~22 MB, sha256 `0a16a44b490192525ca129c983c3183d00b73bfc5f373353ff3e778dcb0dd74b`) y `DinamoRent_1.0.19_x64_en-US.msi` (~34 MB, sha256 `2e0c748157764c24e0933816a6ee28c8af3428ec214d0c7b3cb35c0906fbd517`)
+- **Assets de la v1.0.19:** `DinamoRent_1.0.19_x64-setup.exe` (NSIS, ~22 MB, sha256 `4880df9f935e19785a19b187656dd6947aaecdb765288e70e24f64a3d7af0b19`) y `DinamoRent_1.0.19_x64_en-US.msi` (~34 MB, sha256 `d7ff61c3360719ccdb55b47cdf9c5b14c308671e673df17e8907d4ebb9f20c8a`)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
 - **URLs directas de assets v1.0.19:**
   - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.19/DinamoRent_1.0.19_x64-setup.exe
