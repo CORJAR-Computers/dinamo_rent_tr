@@ -122,7 +122,7 @@ chrono = { version = "0.4", features = ["serde"] }
 ureq = { version = "2.12", features = ["json", "cookies"] }
 # Store de cookies de ureq (mismo crate que ureq usa internamente); lo
 # declaramos directo para construir el jar explícitamente en services/simit.rs.
-cookie_store = "0.21"
+cookie_store = "0.22"
 
 # Criptografía y seguridad
 # - aes-gcm: cifrado PII nuevo formato `v1:` (AES-256-GCM) — ver core/crypto.rs
