@@ -34,15 +34,17 @@ pub fn run() {
     //     bridge `tracing_log` con `LogTracer::init()` — sin esto, ambos
     //     subsistemas escribirían a stderr de forma duplicada.
     //   - En runtime: `RUST_LOG=info,dinamo_rent_lib=debug` para verbosity.
-    tracing_subscriber::fmt()
+    // try_init() en vez de init(): en una app GUI de Tauri (sin consola),
+    // el subscriber puede fallar al escribir a stderr. Si falla, la app
+    // sigue funcionando sin tracing estructurado.
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info".into()),
         )
         .with_target(false)
         .compact()
-        .init();
-    tracing::info!("tracing_subscriber inicializado (Bloque 4 / TAREA 4.1)");
+        .try_init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
