@@ -1,6 +1,6 @@
-# Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.17
+# Plan de despliegue en equipos de clientes — Dinamo Rent v1.0.18
 
-> Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.17** (última
+> Procedimiento operativo para dejar los equipos de los clientes en la **v1.0.18** (última
 > versión estable, con **auto-actualización** activa desde la v1.0.14): instalación
 > silenciosa, verificación post-instalación y rollback. **Este es el último despliegue
 > manual por equipo**: desde la v1.0.14 la app detecta y ofrece las versiones nuevas al
@@ -11,7 +11,7 @@
 
 ## 0. Reglas de oro
 
-1. **Siempre la v1.0.17 (o superior)** — la v1.0.0 está descontinuada (falla en
+1. **Siempre la v1.0.18 (o superior)** — la v1.0.0 está descontinuada (falla en
    instalaciones nuevas) y la v1.0.2 no tiene updater. OJO: las v1.0.3–v1.0.13 **no
    pudieron auto-actualizarse** (faltaba el permiso ACL del plugin updater en
    capabilities; el check fallaba en silencio). La **v1.0.14 es la primera con
@@ -55,14 +55,14 @@
 
 ```powershell
 # NSIS — silenciosa total (sin atajos, sin ejecutar al final)
-& "D:\deploy\DinamoRent_1.0.17_x64-setup.exe" /S
+& "D:\deploy\DinamoRent_1.0.18_x64-setup.exe" /S
 # Esperar a que termine (NSIS /S es síncrono al esperar al proceso)
-# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.0.17_x64-setup.exe" -ArgumentList "/S"
+# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.0.18_x64-setup.exe" -ArgumentList "/S"
 ```
 
 ```powershell
 # MSI — para GPO / Intune / SCCM
-msiexec /i "D:\deploy\DinamoRent_1.0.17_x64_en-US.msi" /qn /norestart
+msiexec /i "D:\deploy\DinamoRent_1.0.18_x64_en-US.msi" /qn /norestart
 ```
 
 > **WebView2**: si el equipo no lo tiene, el instalador lo descarga e instala
@@ -78,7 +78,7 @@ equipos y ejecutar con una herramienta de gestión (Intune, SCCM, GPO `msi` + `c
 
 ```powershell
 # Ejemplo con psexec (máquina de operaciones):
-psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.17_x64-setup.exe" /S
+psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.0.18_x64-setup.exe" /S
 ```
 
 ---
@@ -107,14 +107,14 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRu
 
 | # | Comprobación | Esperado |
 |---|---|---|
-| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.17** |
+| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.0.18** |
 | 2 | Arranque: proceso vivo a los 10 s | **no** se cuelga ni muere (el bug del v1.0.0) |
 | 3 | `%APPDATA%\com.corjar.dinamorent\` | existe (la crea el **primer arranque**; por eso se comprueba después del arranque) |
 | 4 | `config.ini` | existe |
 | 5 | `dinamo_rent_v3.fdb` | existe y pesa > 0 (BD creada o migrada) |
 | 6 | Migraciones: `schema_migrations` tiene 23 versiones (0001–0023) | 23 (comprobación opcional con tooling dev) |
 | 7 | Login manual | `admin` + contraseña del cliente (primer ingreso: cambio forzado) |
-| 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.0.17 ya es la vigente) |
+| 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.0.18 ya es la vigente) |
 
 > Desde la v1.0.14 la app incluye el updater funcional: al arrancar con internet chequea la release
 > vigente y no muestra nada si ya está al día. Si apareciera el diálogo «Actualización

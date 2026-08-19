@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-18** · Estado: **todos los módulos operativos, validación verde · release v1.0.17 en preparación · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-08-19** · Estado: **todos los módulos operativos, validación verde · release v1.0.18 en preparación · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).

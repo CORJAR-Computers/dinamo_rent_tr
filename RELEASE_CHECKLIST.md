@@ -6,24 +6,24 @@
 > `INSTALACION_OPERACIONES.md` (instalación), `DEPLOYMENT_CLIENTES.md`
 > (despliegue a clientes) y `ANUNCIO_RELEASE_TEMPLATE.md` (mensajes de anuncio).
 >
-> **📋 Objetivo actual: v1.0.17 (en preparación, sin publicar aún).**
-> Incluye la versión REAL de la app (comando `app_version`), backups de la BD
-> (Fase 8: automático, cifrado AES-256-GCM, restauración con `gbak -r`),
-> **edición de rentas cerradas** (solo Admin, recálculo de totales y auditoría
-> ANTES→DESPUÉS para corregir errores de digitación), **extensiones acumulables**
-> de rentas (migración 0024, historial de horas/días extras, modal con preview)
-> y **mayúsculas automáticas** en todos los campos de texto (excepto email, rol,
-> web) con validaciones case-insensitive y selects de categoría/tipo alineados.
+> **📋 Objetivo actual: v1.0.18 (preparando).**
+> Incluye todas las features de v1.0.17 más: **tracing estructurado** (tracing
+> + tracing-subscriber), **informes optimizados** (UNION ALL 13→5 round-trips),
+> **store global BusinessLists** (TTL 5 min, invalidable), **repository DRY**
+> (core::repository centraliza helpers), **migración 0025 audit_inmutable**
+> (triggers append-only para no-repudio), **accesibilidad WCAG 2.1** (Modal
+> focus trap, FormField ARIA, skip-link, página de error 404/5xx), **ts-rs**
+> para contratos TypeScript, **dependabot** para dependencias npm/cargo/CI.
 
 ---
 
-**Estado de la v1.0.17 — publicada (18-08, tag `v1.0.17` sobre `477ab29`):**
+**Estado de la v1.0.17 — publicada (18-08, tag `v1.0.17` sobre `0e0180f`):**
 
 Ya en `main` y publicada por CI: release v1.0.17 con los 5 assets
 (NSIS 21 MB + MSI 32 MB + `.sig` ×2 + `latest.json`), firmada y
 auto-update verificado en máquina real.
 
-**Features incluidas:**
+**Features v1.0.17 (incluidas en v1.0.18):**
 - Versión REAL de la app (comando `app_version`, sin el v3.2.0 heredado)
 - Backups de la BD (Fase 8: automático en 4 horarios, rotación a 10, cifrado
   AES-256-GCM, panel `/backups` y restauración con `gbak -r`)
@@ -36,13 +36,34 @@ auto-update verificado en máquina real.
 - Fix de selects de categoría/tipo (gastos/mantenimiento) alineados con la DB
 - Verificador de despliegue -DryRun en el CI
 
-**Checklist completada:**
+**Features v1.0.18 (nuevas):**
+- **Tracing estructurado** (spans en login, cerrar_renta, registrar_pago)
+- **Informes optimizados** (UNION ALL: 13→5 round-trips en informe mensual)
+- **Store global BusinessLists** (TTL 5 min, cachea `businessApi.listas`)
+- **core::repository** (centraliza `map_fb_error`, `opt_str`, `parse_fecha/hora`, `params!`)
+- **Migración 0025 audit_inmutable** (triggers append-only para no-repudio)
+- **Accesibilidad WCAG 2.1** (Modal focus trap, FormField ARIA, skip-link, error page)
+- **ts-rs** para contratos TypeScript (genera tipos desde structs Rust)
+- **Dependabot** para actualizaciones automáticas de npm/cargo/CI
+- **domain/ scaffold** (guía para futura migración a value objects)
+
+**Checklist v1.0.17 completada:**
 
 - [x] CI verde en main (lint, svelte-check, vitest, cargo test --lib + integración)
 - [x] Bump a v1.0.17 en los 3 archivos (§2)
 - [x] Verificación local con `-DryRun` (§3)
 - [x] Commit `chore: versión 1.0.17` + tag `v1.0.17` (§4-5)
 - [x] Prueba de campo en máquina real — auto-update verificado ✅
+- [x] Anuncio en canal del equipo (§8)
+
+---
+
+## Pendiente para la v1.0.18
+
+- [ ] Bump a v1.0.18 en los 3 archivos (§2)
+- [ ] Verificación local con `-DryRun` (§3)
+- [ ] Commit `chore: versión 1.0.18` + tag `v1.0.18` (§4-5)
+- [ ] Prueba de campo en máquina real — auto-update de v1.0.17→v1.0.18 (§6)
 - [ ] Anuncio en canal del equipo (§8)
 
 ---
