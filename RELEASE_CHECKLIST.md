@@ -6,7 +6,7 @@
 > `INSTALACION_OPERACIONES.md` (instalación), `DEPLOYMENT_CLIENTES.md`
 > (despliegue a clientes) y `ANUNCIO_RELEASE_TEMPLATE.md` (mensajes de anuncio).
 >
-> **📋 Objetivo actual: v1.0.18 (preparando).**
+> **📋 Objetivo actual: v1.0.19 (preparando).**
 > Incluye todas las features de v1.0.17 más: **tracing estructurado** (tracing
 > + tracing-subscriber), **informes optimizados** (UNION ALL 13→5 round-trips),
 > **store global BusinessLists** (TTL 5 min, invalidable), **repository DRY**
@@ -23,7 +23,7 @@ Ya en `main` y publicada por CI: release v1.0.17 con los 5 assets
 (NSIS 21 MB + MSI 32 MB + `.sig` ×2 + `latest.json`), firmada y
 auto-update verificado en máquina real.
 
-**Features v1.0.17 (incluidas en v1.0.18):**
+**Features v1.0.17 (incluidas en v1.0.19):**
 - Versión REAL de la app (comando `app_version`, sin el v3.2.0 heredado)
 - Backups de la BD (Fase 8: automático en 4 horarios, rotación a 10, cifrado
   AES-256-GCM, panel `/backups` y restauración con `gbak -r`)
@@ -36,7 +36,7 @@ auto-update verificado en máquina real.
 - Fix de selects de categoría/tipo (gastos/mantenimiento) alineados con la DB
 - Verificador de despliegue -DryRun en el CI
 
-**Features v1.0.18 (nuevas):**
+**Features v1.0.19 (nuevas):**
 - **Tracing estructurado** (spans en login, cerrar_renta, registrar_pago)
 - **Informes optimizados** (UNION ALL: 13→5 round-trips en informe mensual)
 - **Store global BusinessLists** (TTL 5 min, cachea `businessApi.listas`)
@@ -58,12 +58,12 @@ auto-update verificado en máquina real.
 
 ---
 
-## Pendiente para la v1.0.18
+## Pendiente para la v1.0.19
 
-- [ ] Bump a v1.0.18 en los 3 archivos (§2)
+- [ ] Bump a v1.0.19 en los 3 archivos (§2)
 - [ ] Verificación local con `-DryRun` (§3)
-- [ ] Commit `chore: versión 1.0.18` + tag `v1.0.18` (§4-5)
-- [ ] Prueba de campo en máquina real — auto-update de v1.0.17→v1.0.18 (§6)
+- [ ] Commit `chore: versión 1.0.19` + tag `v1.0.19` (§4-5)
+- [ ] Prueba de campo en máquina real — auto-update de v1.0.17→v1.0.19 (§6)
 - [ ] Anuncio en canal del equipo (§8)
 
 ---
