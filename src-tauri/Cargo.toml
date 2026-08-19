@@ -82,10 +82,12 @@ serde_json = "1"
 log = "0.4"
 
 # ── Logging estructurado (Bloque 4 / TAREA 4.1) ──
-# `tracing` coexiste con `log` (tauri-plugin-log). El crate `tracing` expone
-# un bridge que captura los `log::info!`/`log::error!` existentes cuando se
-# inicializa `tracing_subscriber` con el layer `tracing-log`. De este modo NO
-# hace falta reescribir los `log::*!` ya cableados y se gana:
+# Híbrido tracing + log (tauri-plugin-log):
+#   - `TracingToLogLayer` re-emite tracing::*! → log::*! → tauri_plugin_log
+#   - Flujo: tracing::info!() → TracingToLogLayer → log::info!() →
+#     tauri_plugin_log → stderr (dev) / archivo (prod)
+#   - `set_global_default()` NO toca el logger de `log`, evitando el crash
+#     "attempted to set a logger after the logging system was already initialized"
 #   - spans estructurados (registrar_pago, cerrar_renta, login)
 #   - `RUST_LOG=info,dinamo_rent_lib=debug` vía EnvFilter
 #   - futuro OpenTelemetry/Jaeger sin tocar el código de servicios

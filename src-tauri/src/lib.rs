@@ -17,6 +17,62 @@ use tauri::Manager;
 use crate::core::config::AppConfig;
 use crate::core::security::LoginAttemptTracker;
 
+// ── Puente tracing → log (para que tracing::*! vaya al archivo en prod) ──
+// `tracing_subscriber` es el subscriber global. Esta capa intercepta cada
+// evento de `tracing` y lo re-emite a través de `log::*!`, que a su vez es
+// capturado por `tauri_plugin_log`. De este modo, tanto `tracing::info!`
+// como `log::info!` terminan en el mismo archivo `app.log` en producción.
+struct TracingToLogLayer;
+
+impl<S: tracing::Subscriber> tracing_subscriber::layer::Layer<S> for TracingToLogLayer {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        use tracing::field::Visit;
+
+        // Nivel de tracing → nivel de log
+        let level = match *event.metadata().level() {
+            tracing::Level::ERROR => log::Level::Error,
+            tracing::Level::WARN => log::Level::Warn,
+            tracing::Level::INFO => log::Level::Info,
+            tracing::Level::DEBUG => log::Level::Debug,
+            tracing::Level::TRACE => log::Level::Trace,
+        };
+        let target = event.metadata().target();
+
+        // Extraer el mensaje del evento
+        struct MsgVisitor(String);
+        impl Visit for MsgVisitor {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    self.0 = format!("{:?}", value);
+                } else if self.0.is_empty() {
+                    self.0 = format!("{}={:?}", field.name(), value);
+                } else {
+                    self.0.push_str(&format!(", {}={:?}", field.name(), value));
+                }
+            }
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                if field.name() == "message" {
+                    self.0 = value.to_string();
+                } else if self.0.is_empty() {
+                    self.0 = format!("{}={}", field.name(), value);
+                } else {
+                    self.0.push_str(&format!(", {}={}", field.name(), value));
+                }
+            }
+        }
+        let mut visitor = MsgVisitor(String::new());
+        event.record(&mut visitor);
+
+        if !visitor.0.is_empty() {
+            log::log!(target: target, level, "{}", visitor.0);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // ── Logging estructurado (Bloque 4 / TAREA 4.1) ──
@@ -24,27 +80,27 @@ pub fn run() {
     // spans críticos (registrar_pago, cerrar_renta, login) y cualquier log
     // emitido durante el setup (migraciones, pool, backups...) se capture.
     //
-    // Coexistencia con `tauri-plugin-log`:
-    //   - `tauri-plugin-log` inicializa el crate `log` (a través de su propio
-    //     subscriber) MÁS ADELANTE en el setup (línea ~165). Hasta entonces,
-    //     los `log::*!` van al stderr default.
-    //   - `tracing_subscriber` captura los eventos de `tracing::info!`/`error!`
-    //     directamente. Para que los `log::*!` existentes también fluyan por
-    //     tracing (y aparezcan en el mismo formato compacto), se habilita el
-    //     bridge `tracing_log` con `LogTracer::init()` — sin esto, ambos
-    //     subsistemas escribirían a stderr de forma duplicada.
+    // Híbrido tracing + log (tauri-plugin-log):
+    //   - `TracingToLogLayer` re-emite cada evento de `tracing` a través de
+    //     `log::*!`, que a su vez es capturado por `tauri_plugin_log`.
+    //   - Flujo: tracing::info!() → TracingToLogLayer → log::info!() →
+    //     tauri_plugin_log → stderr (dev) / archivo (prod).
+    //   - `set_global_default()` NO toca el logger de `log`, evitando
+    //     el crash "attempted to set a logger after already initialized".
     //   - En runtime: `RUST_LOG=info,dinamo_rent_lib=debug` para verbosity.
-    // try_init() en vez de init(): en una app GUI de Tauri (sin consola),
-    // el subscriber puede fallar al escribir a stderr. Si falla, la app
-    // sigue funcionando sin tracing estructurado.
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
+    use tracing_subscriber::prelude::*;
+    let subscriber = tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .compact(),
+        )
+        .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info".into()),
         )
-        .with_target(false)
-        .compact()
-        .try_init();
+        .with(TracingToLogLayer);
+    let _ = tracing::subscriber::set_global_default(subscriber);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
