@@ -17,7 +17,7 @@ jobs:
       # Historial completo (fetch-depth: 0): el changelog necesita los commits
       # y tags anteriores para calcular el rango entre releases.
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
