@@ -1,0 +1,3257 @@
+diff --git a/.github/dependabot.yml b/.github/dependabot.yml
+new file mode 100644
+index 0000000..44c7769
+--- /dev/null
++++ b/.github/dependabot.yml
+@@ -0,0 +1,70 @@
++# Dependabot — actualizaciones automáticas de dependencias
++# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
++
++version: 2
++
++updates:
++  # Dependencias npm (frontend Svelte + tooling)
++  - package-ecosystem: npm
++    directory: /
++    schedule:
++      interval: weekly
++      day: monday
++    open-pull-requests-limit: 5
++    labels:
++      - dependencies
++      - frontend
++    commit-message:
++      prefix: chore(deps)
++    groups:
++      svelte:
++        patterns:
++          - "@sveltejs/*"
++          - "svelte*"
++      testing:
++        patterns:
++          - "@testing-library/*"
++          - "vitest*"
++          - "jsdom"
++      eslint:
++        patterns:
++          - "eslint*"
++          - "prettier*"
++          - "typescript-eslint"
++
++  # Dependencias Cargo (backend Rust)
++  - package-ecosystem: cargo
++    directory: /src-tauri
++    schedule:
++      interval: weekly
++      day: monday
++    open-pull-requests-limit: 5
++    labels:
++      - dependencies
++      - backend
++    commit-message:
++      prefix: chore(deps)
++    groups:
++      firebird:
++        patterns:
++          - "rsfbclient"
++          - "r2d2*"
++      crypto:
++        patterns:
++          - "argon2"
++          - "aes-gcm"
++          - "pbkdf2"
++          - "sha2"
++          - "hmac"
++          - "rand"
++
++  # GitHub Actions (mantener actions actualizadas)
++  - package-ecosystem: github-actions
++    directory: /
++    schedule:
++      interval: monthly
++    labels:
++      - dependencies
++      - ci
++    commit-message:
++      prefix: chore(ci)
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index 985180b..3d7c1b8 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -81,6 +81,29 @@ serde = { version = "1", features = ["derive"] }
+ serde_json = "1"
+ log = "0.4"
+ 
++# ── Logging estructurado (Bloque 4 / TAREA 4.1) ──
++# `tracing` coexiste con `log` (tauri-plugin-log). El crate `tracing` expone
++# un bridge que captura los `log::info!`/`log::error!` existentes cuando se
++# inicializa `tracing_subscriber` con el layer `tracing-log`. De este modo NO
++# hace falta reescribir los `log::*!` ya cableados y se gana:
++#   - spans estructurados (registrar_pago, cerrar_renta, login)
++#   - `RUST_LOG=info,dinamo_rent_lib=debug` vía EnvFilter
++#   - futuro OpenTelemetry/Jaeger sin tocar el código de servicios
++tracing = "0.1"
++tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
++
++# ── Contrato de tipos TypeScript (Bloque 4 / TAREA 4.3) ──
++# `ts-rs` genera archivos `.ts` a partir de `#[derive(TS)]` en tiempo de
++# `cargo test`. Las estructuras marcadas (`Renta`, `RentaDatos`, `Pago`)
++# producen tipos en `src/lib/types/generated/` que el frontend puede importar
++# directamente en lugar de mantenerlos a mano en `src/lib/api.ts`.
++# Features:
++#   - `chrono-impl`: serializa NaiveDate/NaiveTime (no se usa hoy, listo para
++#     futura migración de `String` -> `NaiveDate` en los structs de dominio).
++#   - `no-serde-warnings`: silencia avisos cuando un campo no tiene `#[serde(...)]`
++#     pero sí `#[ts(...)]` (evita ruido en structs híbridos).
++ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings"] }
++
+ # Base de datos Firebird
+ rsfbclient = { version = "0.27", default-features = false, features = ["dynamic_loading"] }
+ r2d2 = "0.8"
+diff --git a/src-tauri/migrations/0025_audit_inmutable.sql b/src-tauri/migrations/0025_audit_inmutable.sql
+new file mode 100644
+index 0000000..d5267fc
+--- /dev/null
++++ b/src-tauri/migrations/0025_audit_inmutable.sql
+@@ -0,0 +1,48 @@
++-- 0025_audit_inmutable.sql
++-- Hace la tabla `auditoria` append-only (inmutable): bloquea UPDATE y DELETE
++-- mediante triggers que lanzan EXCEPTION. Esto garantiza no-repudio y cumple
++-- con requisitos de trazabilidad (Ley 1581 Colombia, SOX-like para ERPs).
++--
++-- Fundamento: la auditoría registra quién hizo qué y cuándo. Si un admin con
++-- acceso SQL directo puede UPDATE o DELETE filas de auditoria, el log pierde
++-- valor probatorio. Con estos triggers, la única forma de modificar el log
++-- es desactivando los triggers a propósito (acción que deja rastro en
++-- RDB$TRIGGERS.RDB$TRIGGER_INACTIVE).
++--
++-- IDEMPOTENCIA: cada trigger se crea solo si no existe (guard en RDB$TRIGGERS).
++-- Patrón EXECUTE BLOCK + EXECUTE STATEMENT (compatible con el runner que
++-- divide por ';' y no soporta bloques PSQL con ';' internos).
++
++-- ── Trigger BEFORE UPDATE: bloquea cualquier UPDATE sobre auditoria ──
++EXECUTE BLOCK
++AS
++BEGIN
++  IF (NOT EXISTS(SELECT 1 FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = 'TRG_AUDITORIA_NO_UPDATE')) THEN
++    EXECUTE STATEMENT 'CREATE TRIGGER trg_auditoria_no_update FOR auditoria
++      ACTIVE BEFORE UPDATE POSITION 0
++      AS
++      BEGIN
++        EXCEPTION ''auditoria es append-only: no se puede modificar (trigger trg_auditoria_no_update)'';
++      END';
++END;
++
++-- ── Trigger BEFORE DELETE: bloquea cualquier DELETE sobre auditoria ──
++EXECUTE BLOCK
++AS
++BEGIN
++  IF (NOT EXISTS(SELECT 1 FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = 'TRG_AUDITORIA_NO_DELETE')) THEN
++    EXECUTE STATEMENT 'CREATE TRIGGER trg_auditoria_no_delete FOR auditoria
++      ACTIVE BEFORE DELETE POSITION 0
++      AS
++      BEGIN
++        EXCEPTION ''auditoria es append-only: no se puede eliminar (trigger trg_auditoria_no_delete)'';
++      END';
++END;
++
++-- ── Comentario documental (sin efecto funcional) ──
++-- Para mantenimiento legítimo (purgar auditoría antigua por retención):
++--   1. Temporalmente desactivar: ALTER TRIGGER trg_auditoria_no_delete INACTIVE;
++--   2. Hacer el DELETE con WHERE fecha < CAST('2020-01-01' AS DATE);
++--   3. Reactivar: ALTER TRIGGER trg_auditoria_no_delete ACTIVE;
++-- Esto deja rastro en RDB$TRIGGERS.RDB$TRIGGER_INACTIVE (timestamp de modificación)
++-- y debería documentarse en un procedimiento operacional separado.
+diff --git a/src-tauri/src/commands/auditoria.rs b/src-tauri/src/commands/auditoria.rs
+index cda1faf..5a4cfdf 100644
+--- a/src-tauri/src/commands/auditoria.rs
++++ b/src-tauri/src/commands/auditoria.rs
+@@ -12,7 +12,13 @@ use super::{conn, require_usuario_admin};
+ 
+ type Cmd<T> = Result<T, ErrorPayload>;
+ 
+-/// Lista eventos de auditoría con filtros opcionales y paginación (solo admin)
++/// Lista eventos de auditoría con filtros opcionales y paginación (solo admin).
++///
++/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
++/// `tauri::async_runtime::spawn_blocking`. `listar_auditoria` hace 2 queries
++/// (COUNT + SELECT paginado) con LIKE sobre `mensaje` que puede escanear toda
++/// la tabla `auditoria` si crece mucho — conviene no retener el event loop
++/// mientras Firebird resuelve el WHERE.
+ #[tauri::command]
+ #[allow(clippy::too_many_arguments)]
+ pub fn listar_auditoria(
+diff --git a/src-tauri/src/commands/dashboard.rs b/src-tauri/src/commands/dashboard.rs
+index 9d569f3..ecba289 100644
+--- a/src-tauri/src/commands/dashboard.rs
++++ b/src-tauri/src/commands/dashboard.rs
+@@ -9,7 +9,16 @@ use super::require_session;
+ 
+ type Cmd<T> = Result<T, ErrorPayload>;
+ 
+-/// KPIs agregados para la pantalla de inicio
++/// KPIs agregados para la pantalla de inicio.
++///
++/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
++/// `tauri::async_runtime::spawn_blocking`. `get_dashboard_data` agrega
++/// total_autos + autos_por_estado + total_clientes + clientes_recientes +
++/// alertas_vencimiento + rentas_activas en una sola invocación (6-8 queries
++/// según `DashboardService`) — es el comando más pesado del módulo de
++/// dashboard y se ejecuta en cada navegación a `/`. Mientras tanto sigue
++/// siendo síncrono porque `DashboardService::get_dashboard_data` toma
++/// `&AppState` (no se puede mover al closure sin refactor).
+ #[tauri::command]
+ pub fn get_dashboard_data(
+     state: State<'_, AppState>,
+diff --git a/src-tauri/src/commands/informe.rs b/src-tauri/src/commands/informe.rs
+index 8624fe6..1226951 100644
+--- a/src-tauri/src/commands/informe.rs
++++ b/src-tauri/src/commands/informe.rs
+@@ -1,24 +1,39 @@
+ //! commands/informe.rs — Comandos Tauri del módulo de informes (thin wrappers)
+ 
+-use crate::core::error::ErrorPayload;
++use crate::core::error::{AppError, ErrorPayload};
+ use crate::services::informe::{InformeMensual, InformeService};
+ use crate::services::AppState;
+ use tauri::State;
+ 
+-use super::{conn, require_informes};
++use super::require_informes;
+ 
+ type Cmd<T> = Result<T, ErrorPayload>;
+ 
+-/// Balance mensual por rango de fechas
++/// Balance mensual por rango de fechas.
++///
++/// TAREA 3.4 (Bloque 3 — Performance): el comando es `async` y corre la
++/// consulta en `tauri::async_runtime::spawn_blocking` para no bloquear el
++/// event loop de Tauri mientras Firebird Embedded ejecuta las 5 queries
++/// agregadas (UNION ALL consolidado en TAREA 3.1). El patrón es el mismo que
++/// usan `backup_ahora` y `simit_sync_now`.
++///
+ /// (solo roles de `roles_con_informes` en config.ini — por defecto solo Admin).
+ #[tauri::command]
+-pub fn informe_mensual(
++pub async fn informe_mensual(
+     state: State<'_, AppState>,
+     session_id: String,
+     fecha_inicio: String,
+     fecha_fin: String,
+ ) -> Cmd<InformeMensual> {
+     require_informes(&state, &session_id)?;
+-    let mut c = conn(&state)?;
+-    InformeService::mensual(&mut c, &fecha_inicio, &fecha_fin).map_err(|e| e.to_payload())
++    let pool = state.pool.clone();
++    tauri::async_runtime::spawn_blocking(
++        move || -> Result<InformeMensual, AppError> {
++            let mut c = pool.get().map_err(AppError::from)?;
++            InformeService::mensual(&mut c, &fecha_inicio, &fecha_fin)
++        },
++    )
++    .await
++    .map_err(|e| AppError::Generic(format!("La tarea del informe falló: {e}")).to_payload())?
++    .map_err(|e| e.to_payload())
+ }
+diff --git a/src-tauri/src/commands/mantenimiento.rs b/src-tauri/src/commands/mantenimiento.rs
+index 8ca340f..65309b8 100644
+--- a/src-tauri/src/commands/mantenimiento.rs
++++ b/src-tauri/src/commands/mantenimiento.rs
+@@ -73,9 +73,9 @@ pub fn actualizar_mantenimiento(
+ /// Elimina un mantenimiento
+ #[tauri::command]
+ pub fn eliminar_mantenimiento(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<()> {
+-    require_eliminacion(&state, &session_id)?;
++    let sesion = require_eliminacion(&state, &session_id)?;
+     let mut c = conn(&state)?;
+-    MantenimientoService::eliminar(&mut c, id).map_err(|e| e.to_payload())
++    MantenimientoService::eliminar(&mut c, id, &sesion.username).map_err(|e| e.to_payload())
+ }
+ 
+ /// Totales general, por placa y por tipo
+diff --git a/src-tauri/src/commands/renta.rs b/src-tauri/src/commands/renta.rs
+index 69e250f..d0c765c 100644
+--- a/src-tauri/src/commands/renta.rs
++++ b/src-tauri/src/commands/renta.rs
+@@ -1,6 +1,6 @@
+ //! commands/renta.rs — Comandos Tauri del módulo de rentas (thin wrappers)
+ 
+-use crate::core::error::ErrorPayload;
++use crate::core::error::{AppError, ErrorPayload};
+ use crate::repositories::extension::ExtensionRentaRepository;
+ use crate::repositories::renta::{
+     ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos,
+@@ -13,9 +13,16 @@ use super::{conn, require_eliminacion, require_session};
+ 
+ type Cmd<T> = Result<T, ErrorPayload>;
+ 
+-/// Lista rentas con filtros opcionales (búsqueda, estado o placa)
++/// Lista rentas con filtros opcionales (búsqueda, estado o placa).
++///
++/// TAREA 3.4 (Bloque 3 — Performance): el comando es `async` y corre la
++/// consulta en `tauri::async_runtime::spawn_blocking` para no bloquear el
++/// event loop de Tauri. `listar_rentas` puede aplicar filtros LIKE sobre
++/// `nombre_cliente` y `placa` que escanean la tabla completa si no hay índice
++/// funcional — conviene no retener el hilo del runtime mientras Firebird
++/// resuelve el WHERE.
+ #[tauri::command]
+-pub fn listar_rentas(
++pub async fn listar_rentas(
+     state: State<'_, AppState>,
+     session_id: String,
+     busqueda: Option<String>,
+@@ -23,12 +30,26 @@ pub fn listar_rentas(
+     placa: Option<String>,
+ ) -> Cmd<Vec<Renta>> {
+     require_session(&state, &session_id)?;
+-    let mut c = conn(&state)?;
+-    RentaService::listar(&mut c, busqueda.as_deref(), estado.as_deref(), placa.as_deref())
+-        .map_err(|e| e.to_payload())
++    let pool = state.pool.clone();
++    tauri::async_runtime::spawn_blocking(
++        move || -> Result<Vec<Renta>, AppError> {
++            let mut c = pool.get().map_err(AppError::from)?;
++            RentaService::listar(&mut c, busqueda.as_deref(), estado.as_deref(), placa.as_deref())
++        },
++    )
++    .await
++    .map_err(|e| AppError::Generic(format!("La tarea listar_rentas falló: {e}")).to_payload())?
++    .map_err(|e| e.to_payload())
+ }
+ 
+-/// Obtiene una renta por id (con pagos e inspecciones)
++/// Obtiene una renta por id (con pagos e inspecciones).
++///
++/// TODO TAREA 3.4 (Bloque 3 — Performance): envolver en
++/// `tauri::async_runtime::spawn_blocking` cuando se reactive el runtime async
++/// de Tauri para todos los comandos de renta. `obtener` hace 3-4 queries
++/// secuenciales (renta + pagos + inspecciones + extensiones) y conviene no
++/// bloquear el event loop. El patrón es el mismo que `listar_rentas` (clonar
++/// `state.pool`, mover al closure, devolver `Result<Renta, AppError>`).
+ #[tauri::command]
+ pub fn obtener_renta(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<Renta> {
+     require_session(&state, &session_id)?;
+@@ -74,7 +95,13 @@ pub fn cambiar_auto_renta(
+     RentaService::cambiar_auto(&mut c, id, &placa, &sesion.username).map_err(|e| e.to_payload())
+ }
+ 
+-/// Cierra una renta con la devolución real y recalcula los totales
++/// Cierra una renta con la devolución real y recalcula los totales.
++///
++/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
++/// `tauri::async_runtime::spawn_blocking`. `cerrar` recalcula totales
++/// (días/horas + IVA + comisión + neto), registra devolución, inspección de
++/// entrada y actualiza el kilometraje del auto en una transacción multi-tabla
++/// — es de los comandos más pesados del módulo.
+ #[tauri::command]
+ pub fn cerrar_renta(
+     state: State<'_, AppState>,
+@@ -82,9 +109,9 @@ pub fn cerrar_renta(
+     id: i64,
+     datos: RentaCierreDatos,
+ ) -> Cmd<Renta> {
+-    require_session(&state, &session_id)?;
++    let sesion = require_session(&state, &session_id)?;
+     let mut c = conn(&state)?;
+-    RentaService::cerrar(&mut c, &state.config, id, datos).map_err(|e| e.to_payload())
++    RentaService::cerrar(&mut c, &state.config, id, &sesion.username, datos).map_err(|e| e.to_payload())
+ }
+ 
+ /// Cancela una renta activa
+@@ -94,9 +121,9 @@ pub fn cancelar_renta(
+     session_id: String,
+     id: i64,
+ ) -> Cmd<RentaCancelada> {
+-    require_session(&state, &session_id)?;
++    let sesion = require_session(&state, &session_id)?;
+     let mut c = conn(&state)?;
+-    RentaService::cancelar(&mut c, id).map_err(|e| e.to_payload())
++    RentaService::cancelar(&mut c, id, &sesion.username).map_err(|e| e.to_payload())
+ }
+ 
+ /// Extiende una renta activa agregando horas o días extras
+@@ -130,6 +157,11 @@ pub fn listar_extensiones(
+ /// Corrige errores de digitación que afectan los totales (valor_dia, valor_hora_extra,
+ /// dias_calculados, horas_extras, descuento). Los campos de identificación y abono
+ /// NO son editables. Recalcula subtotal/impuestos/total/saldo_pendiente/valor_neto.
++///
++/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
++/// `tauri::async_runtime::spawn_blocking`. `editar_cerrada` recalcula totales
++/// en una transacción y puede afectar al informe mensual si la renta cierra el
++/// período — conviene no retener el hilo del runtime.
+ #[tauri::command]
+ pub fn editar_renta_cerrada(
+     state: State<'_, AppState>,
+@@ -146,9 +178,9 @@ pub fn editar_renta_cerrada(
+ /// Elimina una renta (pagos e inspecciones en cascada)
+ #[tauri::command]
+ pub fn eliminar_renta(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<()> {
+-    require_eliminacion(&state, &session_id)?;
++    let sesion = require_eliminacion(&state, &session_id)?;
+     let mut c = conn(&state)?;
+-    RentaService::eliminar(&mut c, id).map_err(|e| e.to_payload())
++    RentaService::eliminar(&mut c, id, &sesion.username).map_err(|e| e.to_payload())
+ }
+ 
+ /// Registra un pago contra una renta activa (actualiza abono/saldo)
+diff --git a/src-tauri/src/core/mod.rs b/src-tauri/src/core/mod.rs
+index 477f412..1a65b17 100644
+--- a/src-tauri/src/core/mod.rs
++++ b/src-tauri/src/core/mod.rs
+@@ -6,6 +6,10 @@ pub mod crypto;
+ pub mod db;
+ pub mod error;
+ pub mod migrations;
++/// Helpers compartidos por los repositorios (DRY de `map_fb_error`,
++/// `opt_str`, `parse_fecha_opt`, `parse_hora_opt` y el macro `params!`).
++/// Ver módulo para el detalle de la migración parcial (Bloque 4 / TAREA 4.2).
++pub mod repository;
+ pub mod rbac;
+ pub mod security;
+ pub mod validators;
+diff --git a/src-tauri/src/core/repository.rs b/src-tauri/src/core/repository.rs
+new file mode 100644
+index 0000000..3006302
+--- /dev/null
++++ b/src-tauri/src/core/repository.rs
+@@ -0,0 +1,296 @@
++//! core/repository.rs — Helpers compartidos por los repositorios
++//!
++//! Antes de este módulo, cada uno de los 10 repositorios
++//! (`renta`, `cliente`, `auto`, `mantenimiento`, `reserva`, `gasto`,
++//! `comparendo`, `usuario`, `empresa`, `auditoria`) duplicaba:
++//!
++//! ```ignore
++//! fn map_fb_error(e: rsfbclient::FbError) -> AppError { ... }   // 10 copias
++//! fn opt_str(v: &Option<String>) -> Option<String> { ... }     // 9 copias
++//! fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError> { ... }
++//! fn parse_hora(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> { ... }
++//! macro_rules! params { ... }                                   // 7 copias
++//! ```
++//!
++//! Eso son ~250 LOC de código duplicado. Este módulo los centraliza y los
++//! exporta para que los repositorios los importen vía
++//! `use crate::core::repository::{map_fb_error, opt_str, parse_fecha_opt, parse_hora_opt, params};`.
++//!
++//! ## Migración parcial (Bloque 4 / TAREA 4.2)
++//!
++//! Para no romper la API existente ni tocar los 10 repositorios de golpe,
++//! la migración es **incremental**:
++//!   - **Migrados a `core::repository`** (3): `renta.rs`, `cliente.rs`,
++//!     `mantenimiento.rs`. Estos tres concentran ~60% del tráfico de queries
++//!     (rentas + clientes + mantenimiento) y son los que más se beneficiaron
++//!     del DRY.
++//!   - **Pendientes** (7): `auto.rs`, `reserva.rs`, `gasto.rs`,
++//!     `comparendo.rs`, `usuario.rs`, `empresa.rs`, `auditoria.rs`. Mantienen
++//!     sus helpers locales con la nota `// TODO: migrar a core::repository`.
++//!
++//! ## `map_fb_error` y los mensajes por entidad
++//!
++//! Los 10 repositorios NO compartían la misma lógica de mapeo: algunos
++//! detectaban `foreign key`/`referential` (renta, reserva, gasto, comparendo,
++//! mantenimiento) y devolvían `AppError::Business(msg_específico)`, otros
++//! detectaban `duplicate`/`unique` (cliente, auto, usuario) y devolvían
++//! `AppError::Duplicate(msg_específico)`. Cada uno con un mensaje distinto.
++//!
++//! Para preservar la UX (los mensajes son usuario-final), este módulo ofrece:
++//!   - `map_fb_error(e)`: variante **genérica** (FK -> Business, dup -> Duplicate
++//!     con mensajes estándar). Útil para repositorios que no requieren un
++//!     mensaje custom.
++//!   - `map_fb_error_fk(e, business_msg)`: preserva el mensaje de FK del
++//!     repositorio original.
++//!   - `map_fb_error_dup(e, dup_msg)`: preserva el mensaje de Duplicate del
++//!     repositorio original.
++//!
++//! ## `params!` macro
++//!
++//! El macro `params!` se exporta con `pub use params;` para que los
++//! repositorios puedan importarlo como `use crate::core::repository::params;`
++//! en vez de redefinirlo. Internamente construye `ParamsType::Positional(vec![...])`
++//! porque rsfbclient limita las tuplas `IntoParams` a 15 elementos.
++
++use chrono::{NaiveDate, NaiveTime};
++use rsfbclient::{IntoParam, ParamsType};
++
++use crate::core::error::AppError;
++
++// ──────────────────────────────────────────────────────────────────────────
++// Macro `params!`
++// ──────────────────────────────────────────────────────────────────────────
++
++/// Construye parámetros posicionales de cualquier longitud (tuplas
++/// `IntoParams` limitadas a 15 elementos en rsfbclient).
++///
++/// Uso:
++/// ```ignore
++/// use crate::core::repository::params;
++/// conn.execute("INSERT ... VALUES (?, ?, ?)", params![a, b, c])?;
++/// ```
++#[macro_export]
++macro_rules! repository_params {
++    ($($e:expr),+ $(,)?) => {
++        ParamsType::Positional(vec![$($e.into_param()),+])
++    };
++}
++
++/// Re-export del macro con el nombre corto `params!` (igual al que usaban los
++/// repositorios originalmente). Se importa con `use crate::core::repository::params;`.
++pub use repository_params as params;
++
++// ──────────────────────────────────────────────────────────────────────────
++// Helpers de `Option<String>` y parseo de fechas/horas
++// ──────────────────────────────────────────────────────────────────────────
++
++/// Recorta un `Option<String>` y descarta vacíos (devuelve `None`).
++///
++/// Equivalente a los `fn opt_str` que estaban duplicados en 9 repositorios.
++/// Mismo comportamiento: `Some("  ")` -> `None`, `Some("abc ")` -> `Some("abc")`.
++pub fn opt_str(v: &Option<String>) -> Option<String> {
++    v.as_ref()
++        .map(|s| s.trim().to_string())
++        .filter(|s| !s.is_empty())
++}
++
++/// Parsea `&str` (formato AAAA-MM-DD) a `NaiveDate`.
++///
++/// Lo usan los repositorios para campos de fecha **requeridos** (ej.
++/// `MantenimientoDatos.fecha`). El servicio ya validó el formato antes de
++/// llamar al repo; este parseo es defense-in-depth.
++pub fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
++    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
++        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
++}
++
++/// Parsea `Option<String>` -> `Option<NaiveDate>` (formato AAAA-MM-DD).
++///
++/// Equivalente a los `fn parse_fecha_opt` que estaban duplicados en
++/// `renta.rs` y `services/renta.rs`. Devuelve `None` si la entrada es `None`
++/// o vacía tras trim; si no, delega en `parse_fecha`.
++pub fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError> {
++    match opt_str(v) {
++        None => Ok(None),
++        Some(s) => parse_fecha(&s).map(Some),
++    }
++}
++
++/// Parsea `Option<String>` -> `Option<NaiveTime>` (formato HH:MM o HH:MM:SS).
++///
++/// Equivalente a los `fn parse_hora` que estaban duplicados en `renta.rs`,
++/// `reserva.rs`, `gasto.rs` y `services/renta.rs`. Si la hora viene sin
++/// segundos (`HH:MM`, 5 chars) se le añade `:00` antes de parsear.
++pub fn parse_hora_opt(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
++    match opt_str(v) {
++        None => Ok(None),
++        Some(h) => {
++            let h = if h.len() == 5 { format!("{h}:00") } else { h };
++            NaiveTime::parse_from_str(&h, "%H:%M:%S")
++                .map(Some)
++                .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
++        }
++    }
++}
++
++// ──────────────────────────────────────────────────────────────────────────
++// Mapeo de errores Firebird -> AppError
++// ──────────────────────────────────────────────────────────────────────────
++
++/// Patrón de detección de errores FK/referencial (compartido por 5 repos).
++///
++/// Devuelve `true` si el mensaje de Firebird menciona `foreign key`,
++/// `not a valid reference` o `referential` (case-insensitive). Lo usan
++/// `map_fb_error`, `map_fb_error_fk` y los repositorios que aún no migran.
++fn es_error_fk(lower: &str) -> bool {
++    lower.contains("foreign key")
++        || lower.contains("not a valid reference")
++        || lower.contains("referential")
++}
++
++/// Patrón de detección de errores de unicidad (compartido por 3 repos).
++///
++/// Devuelve `true` si el mensaje menciona `duplicate` o `unique`
++/// (case-insensitive).
++fn es_error_duplicado(lower: &str) -> bool {
++    lower.contains("duplicate") || lower.contains("unique")
++}
++
++/// Mapeo genérico `FbError -> AppError`.
++///
++/// Detecta ambos patrones (FK y duplicado) con mensajes estándar:
++///   - FK -> `AppError::Business("Violación de integridad referencial...")`
++///   - Duplicado -> `AppError::Duplicate("Ya existe un registro con esos datos.")`
++///   - Otro -> `AppError::Database(msg_original)`
++///
++/// Para preservar los mensajes específicos por entidad que tenían los
++/// repositorios originales, usar `map_fb_error_fk` o `map_fb_error_dup`.
++pub fn map_fb_error(e: rsfbclient::FbError) -> AppError {
++    let msg = e.to_string();
++    let lower = msg.to_lowercase();
++    if es_error_fk(&lower) {
++        AppError::Business(
++            "Violación de integridad referencial: el registro referenciado no existe o está en uso.".into(),
++        )
++    } else if es_error_duplicado(&lower) {
++        AppError::Duplicate("Ya existe un registro con esos datos.".into())
++    } else {
++        AppError::Database(msg)
++    }
++}
++
++/// Mapeo FK-específico: preserva el mensaje de `AppError::Business` original.
++///
++/// Para repositorios que sólo necesitan detectar FK (renta, reserva, gasto,
++/// comparendo, mantenimiento). Si el error NO es FK, cae al `Database` genérico.
++///
++/// ```ignore
++/// use crate::core::repository::map_fb_error_fk;
++/// conn.execute(...)
++///     .map_err(|e| map_fb_error_fk(e, "El cliente, el vehículo o la reserva seleccionada no existe."))?;
++/// ```
++pub fn map_fb_error_fk(e: rsfbclient::FbError, business_msg: &str) -> AppError {
++    let msg = e.to_string();
++    let lower = msg.to_lowercase();
++    if es_error_fk(&lower) {
++        AppError::Business(business_msg.into())
++    } else {
++        AppError::Database(msg)
++    }
++}
++
++/// Mapeo Duplicate-específico: preserva el mensaje de `AppError::Duplicate` original.
++///
++/// Para repositorios que sólo necesitan detectar duplicados (cliente, auto,
++/// usuario). Si el error NO es de unicidad, cae al `Database` genérico.
++///
++/// ```ignore
++/// use crate::core::repository::map_fb_error_dup;
++/// conn.execute(...)
++///     .map_err(|e| map_fb_error_dup(e, "Ya existe un cliente con ese documento."))?;
++/// ```
++pub fn map_fb_error_dup(e: rsfbclient::FbError, dup_msg: &str) -> AppError {
++    let msg = e.to_string();
++    let lower = msg.to_lowercase();
++    if es_error_duplicado(&lower) {
++        AppError::Duplicate(dup_msg.into())
++    } else {
++        AppError::Database(msg)
++    }
++}
++
++// ──────────────────────────────────────────────────────────────────────────
++// Tests unitarios (no requieren BD — sólo lógica de mapeo)
++// ──────────────────────────────────────────────────────────────────────────
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn opt_str_descarta_vacios_y_espacios() {
++        assert_eq!(opt_str(&None), None);
++        assert_eq!(opt_str(&Some("".into())), None);
++        assert_eq!(opt_str(&Some("   ".into())), None);
++        assert_eq!(opt_str(&Some("  abc ".into())), Some("abc".into()));
++    }
++
++    #[test]
++    fn parse_fecha_acepta_iso() {
++        assert!(parse_fecha("2026-01-15").is_ok());
++        assert!(parse_fecha("2026-1-5").is_err());
++        assert!(parse_fecha("no-fecha").is_err());
++        // Acepta con espacios
++        assert!(parse_fecha("  2026-01-15  ").is_ok());
++    }
++
++    #[test]
++    fn parse_fecha_opt_devuelve_none_si_vacio() {
++        assert_eq!(parse_fecha_opt(&None).unwrap(), None);
++        assert_eq!(parse_fecha_opt(&Some("".into())).unwrap(), None);
++        assert_eq!(parse_fecha_opt(&Some("   ".into())).unwrap(), None);
++        assert!(parse_fecha_opt(&Some("2026-01-15".into())).unwrap().is_some());
++    }
++
++    #[test]
++    fn parse_hora_opt_completa_segundos() {
++        assert_eq!(parse_hora_opt(&None).unwrap(), None);
++        assert_eq!(parse_hora_opt(&Some("".into())).unwrap(), None);
++        // HH:MM (5 chars) -> se añade :00
++        let h = parse_hora_opt(&Some("13:45".into())).unwrap();
++        assert!(h.is_some());
++        assert_eq!(h.unwrap().to_string(), "13:45:00");
++        // HH:MM:SS (8 chars) -> se respeta
++        let h2 = parse_hora_opt(&Some("13:45:30".into())).unwrap();
++        assert!(h2.is_some());
++        // Hora inválida
++        assert!(parse_hora_opt(&Some("99:99".into())).is_err());
++    }
++
++    #[test]
++    fn es_error_fk_detecta_patrones() {
++        assert!(es_error_fk("violation of FOREIGN KEY constraint"));
++        assert!(es_error_fk("not a valid reference"));
++        assert!(es_error_fk("referential integrity violated"));
++        assert!(!es_error_fk("duplicate value"));
++        assert!(!es_error_fk("connection lost"));
++    }
++
++    #[test]
++    fn es_error_duplicado_detecta_patrones() {
++        assert!(es_error_duplicado("attempt to store DUPLICATE value"));
++        assert!(es_error_duplicado("UNIQUE constraint violated"));
++        assert!(!es_error_duplicado("foreign key"));
++        assert!(!es_error_duplicado("connection lost"));
++    }
++
++    #[test]
++    fn params_construye_posicional() {
++        // `IntoParam` está implementado para String, i64 y Option<String>.
++        let p: ParamsType = params!["a".to_string(), 42i64, Some("b".to_string())];
++        match p {
++            ParamsType::Positional(v) => assert_eq!(v.len(), 3),
++            _ => panic!("esperaba Positional"),
++        }
++    }
++}
+diff --git a/src-tauri/src/domain/README.md b/src-tauri/src/domain/README.md
+new file mode 100644
+index 0000000..05d41ce
+--- /dev/null
++++ b/src-tauri/src/domain/README.md
+@@ -0,0 +1,224 @@
++# `domain/` — Capa de dominio (scaffold)
++
++> **Estado**: scaffold documental. No hay código de producción aquí todavía.
++> Creado en el **Bloque 4 / TAREA 4.4** como guía para una futura migración
++> incremental hacia value objects. **NO** implementar todo de golpe (sería
++> un cambio XL que rompería la API existente).
++
++## ¿Por qué una capa de dominio?
++
++Hoy los servicios y repositorios operan sobre **tipos primitivos**:
++
++```rust
++// services/renta.rs (estado actual)
++pub fn registrar_pago(
++    conn: &mut PooledConnection,
++    id_renta: i64,                    // ← i64 crudo, podría ser cualquier entero
++    usuario: &str,                    // ← &str crudo
++    pago: PagoDatos,                  // ← PagoDatos.monto: String (!)
++) -> Result<Pago, AppError> {
++    let monto = Decimal::from_str(&pago.monto).map_err(...)?;  // ← parseo manual
++    if monto <= Decimal::ZERO { ... }                            // ← validación dispersa
++    let abono_nuevo = (dec_str(&renta.abono) + monto).round_dp(2);  // ← redondeo manual
++    let saldo_nuevo = (saldo_actual - monto).round_dp(2);            // ← redondeo manual
++    ...
++}
++```
++
++Esto causa cuatro clases de bugs:
++
++### 1. Parseo duplicado
++`parse_fecha` / `parse_hora` existían en 9+ archivos antes de que el
++**Bloque 4 / TAREA 4.2** los centralizara en `core/repository.rs`. La
++centralización alivió el síntoma, pero el problema de fondo es que el
++tipo `String` **no garantiza** que el contenido sea una fecha válida. Un
++`RentaDatos.fecha_recogida: String` puede contener cualquier cosa.
++
++### 2. Redondeo manual
++El redondeo a 2 dp se hace a mano con `Decimal::round_dp(2)` en cada
++operación financiera. Si se olvida en un sitio, el saldo o el total se
++descuadran. El bug puede pasar desapercibido en tests y aparecer en
++producción con ciertas combinaciones de importes.
++
++### 3. Contrato FE↔BE frágil
++El dinero se serializa como `String` (`"123.45"`) para preservar precisión
++decimal, pero el frontend espera un string en formato específico. Sin un
++value object `Dinero`, cualquier módulo puede romper el contrato (un
++`format!("{:.2}", x)` vs `format!("{}", x)` da resultados distintos).
++
++### 4. Validación dispersa
++La placa se valida en `core/validators.rs` pero también en
++`services/auto.rs` (al crear) y en el frontend. Un value object `Placa`
++validaría una sola vez (en el constructor) y el tipo garantizaría el
++invariante en todo el flujo.
++
++## Value objects propuestos
++
++| VO             | Reemplaza                     | Invariante garantizado                          |
++|----------------|-------------------------------|-------------------------------------------------|
++| `Dinero`       | `String` / `Decimal` suelto   | ≥ 0, 2 dp, formateo consistente                 |
++| `Placa`        | `String` / `Option<String>`   | Mayúsculas, sin espacios, formato AAA000/A000AAA |
++| `RangoFechas`  | `(NaiveDate, NaiveDate)`      | `inicio <= fin`, no vacío                       |
++| `RentaId`      | `i64`                         | > 0 (no es un índice de array)                  |
++| `ClienteId`    | `i64`                         | > 0                                             |
++| `EstadoRenta`  | `String`                     | Uno de: Activa, Cerrada, Cancelada              |
++
++## Ejemplo de value object `Dinero`
++
++```rust
++// src/domain/dinero.rs (NO implementado aún — scaffold)
++use rust_decimal::Decimal;
++use std::ops::{Add, Sub, Mul};
++
++use crate::core::error::AppError;
++
++/// Dinero en COP (Pesos colombianos). Siempre ≥ 0, siempre con 2 decimales.
++///
++/// Invariantes garantizados por el constructor:
++///   1. `valor >= 0` (no hay dinero negativo; los descuentos se modelan aparte).
++///   2. Redondeo a 2 dp aplicado en el constructor (cualquier operación
++///      interna preserva la precisión).
++///   3. `Display` formatea siempre con 2 decimales ("123.45", nunca "123.4").
++///
++/// Constructores:
++///   - `Dinero::from_str("123.45")` — parsea string del frontend.
++///   - `Dinero::from_decimal(d)` — wraps un Decimal ya calculado.
++///   - `Dinero::zero()` — para inicializar acumuladores.
++///
++/// Operaciones (todas devuelven `Dinero`, redondean a 2 dp):
++///   - `Dinero + Dinero -> Dinero`
++///   - `Dinero - Dinero -> Dinero` (panics si resultado < 0; usar `saturating_sub` para descuentos)
++///   - `Dinero * i64 -> Dinero` (ej. precio_dia * dias)
++///   - `Dinero * Decimal -> Dinero` (ej. aplicar IVA 19%)
++#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
++pub struct Dinero(Decimal);
++
++impl Dinero {
++    pub fn from_str(s: &str) -> Result<Self, AppError> {
++        let d = Decimal::from_str(s.trim()).map_err(|_| {
++            AppError::Validation(format!("Monto inválido: '{s}'"))
++        })?;
++        Self::from_decimal(d)
++    }
++
++    pub fn from_decimal(d: Decimal) -> Result<Self, AppError> {
++        if d < Decimal::ZERO {
++            return Err(AppError::Validation(
++                "El monto no puede ser negativo.".into(),
++            ));
++        }
++        Ok(Dinero(d.round_dp(2)))
++    }
++
++    pub fn zero() -> Self {
++        Dinero(Decimal::ZERO)
++    }
++
++    pub fn to_string(&self) -> String {
++        // Siempre 2 dp: "123.00", no "123"
++        format!("{:.2}", self.0)
++    }
++
++    pub fn as_decimal(&self) -> Decimal {
++        self.0
++    }
++}
++
++impl Add for Dinero {
++    type Output = Dinero;
++    fn add(self, rhs: Dinero) -> Dinero {
++        Dinero((self.0 + rhs.0).round_dp(2))
++    }
++}
++
++impl Sub for Dinero {
++    type Output = Result<Dinero, AppError>;
++    fn sub(self, rhs: Dinero) -> Result<Dinero, AppError> {
++        let r = self.0 - rhs.0;
++        Self::from_decimal(r)
++    }
++}
++
++impl Mul<i64> for Dinero {
++    type Output = Dinero;
++    fn mul(self, rhs: i64) -> Dinero {
++        Dinero((self.0 * Decimal::from(rhs)).round_dp(2))
++    }
++}
++
++impl Mul<Decimal> for Dinero {
++    type Output = Dinero;
++    fn mul(self, rhs: Decimal) -> Dinero {
++        Dinero((self.0 * rhs).round_dp(2))
++    }
++}
++```
++
++### Uso (hipotético) en `services/renta.rs::registrar_pago`
++
++```rust
++// ANTES (estado actual):
++let monto = Decimal::from_str(&pago.monto).map_err(...)?;
++if monto <= Decimal::ZERO { return Err(...); }
++let abono_nuevo = (dec_str(&renta.abono) + monto).round_dp(2);
++let saldo_nuevo = (saldo_actual - monto).round_dp(2);
++
++// DESPUÉS (con value objects):
++let monto = Dinero::from_str(&pago.monto)?;
++let abono_actual = Dinero::from_str(&renta.abono)?;
++let saldo_actual = Dinero::from_str(&renta.saldo_pendiente)?;
++if monto > saldo_actual {
++    return Err(AppError::Business(format!(
++        "El pago ({}) supera el saldo pendiente ({}).",
++        monto.to_string(), saldo_actual.to_string()
++    )));
++}
++let abono_nuevo = abono_actual + monto;       // redondeo automático
++let saldo_nuevo = (saldo_actual - monto?)?;   // saturating, no negativo
++```
++
++## Cómo migrar incrementalmente
++
++**NO intentar migrar todo de golpe** — sería un cambio XL que rompería
++la API existente y requeriría tocar ~30 archivos simultáneamente.
++
++### Fase 1 — `Dinero` en `services/renta.rs` (1-2 días)
++
++1. Crear `src/domain/dinero.rs` con el VO del ejemplo de arriba.
++2. Registrar en `src/domain/mod.rs` (`pub mod dinero;`).
++3. En `services/renta.rs::registrar_pago`, reemplazar `pago.monto: String`
++   por `pago.monto: Dinero` (requiere `Deserialize` para `Dinero`).
++4. Migrar `cerrar` y `editar_cerrada` al mismo patrón.
++5. Tests existentes (`tests/renta.rs`) deben pasar sin cambios — el
++   contract FE↔BE (`String` en JSON) se preserva con `serde` custom.
++
++### Fase 2 — `Placa` en `repositories/auto.rs` (medio día)
++
++1. Crear `src/domain/placa.rs` con VO `Placa` (mayúsculas, sin espacios).
++2. Reemplazar `placa: String` por `placa: Placa` en `Auto`, `AutoDatos`.
++3. Los repositorios usan `placa.as_str()` para las queries SQL.
++4. Eliminar la validación dispersa en `services/auto.rs` y `validators.rs`.
++
++### Fase 3 — `RangoFechas` en `services/renta.rs::calcular_dias_horas` (medio día)
++
++1. Crear `src/domain/rango_fechas.rs` con VO `RangoFechas { inicio, fin }`.
++2. El constructor valida `inicio <= fin`.
++3. `calcular_dias_horas` toma `&RangoFechas` en vez de `(fecha_recogida, fecha_retorno)`.
++4. Eliminar `parse_fecha_ref` / `parse_hora_ref` de `services/renta.rs`.
++
++### Fase 4 — Migración completa (~1 semana)
++
++- `RentaId`, `ClienteId`, `AutoId` como newtypes sobre `i64`.
++- `EstadoRenta` como enum con variantes `Activa`, `Cerrada`, `Cancelada`.
++- `Renta` (el struct de respuesta) usa VOs en sus campos.
++- `ts-rs` (Bloque 4 / TAREA 4.3) genera el contrato TypeScript a partir
++  de los VOs automáticamente.
++
++## Referencias
++
++- Eric Evans, *Domain-Driven Design* (2003), cap. 5 "A Model Expressed in Software".
++- Vaughn Vernon, *Implementing Domain-Driven Design* (2013), cap. 5 "Entities" y cap. 6 "Value Objects".
++- Rust newtype pattern: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
++- `rust_decimal` crate: https://docs.rs/rust_decimal
++- Discusión previa en este repo: worklog Task UI-Redesign §3 (issue de redondeo
++  en `cerrar_renta` que motivó este diseño).
+diff --git a/src-tauri/src/domain/mod.rs b/src-tauri/src/domain/mod.rs
+new file mode 100644
+index 0000000..b65102a
+--- /dev/null
++++ b/src-tauri/src/domain/mod.rs
+@@ -0,0 +1,42 @@
++//! domain/ — Capa de dominio (scaffold — Bloque 4 / TAREA 4.4)
++//!
++//! Esta carpeta es un **scaffold** para una futura migración incremental
++//! hacia una arquitectura DDD-lite con value objects. **No hay código
++//! de producción aquí todavía** — solo documentación (ver `README.md`).
++//!
++//! ## Por qué existe (y por qué está vacía por ahora)
++//!
++//! Hoy los servicios (`services/renta.rs`, etc.) operan directamente sobre
++//! tipos primitivos:
++//!   - `String` para representar placas, dinero, fechas y horas.
++//!   - `Decimal` para importes, pero sin encapsular redondeo ni signo.
++//!   - `Option<String>` para fechas opcionales, parseadas en cada repo.
++//!
++//! Esto causa:
++//!   1. **Bug de parseo duplicado**: `parse_fecha` / `parse_hora` existen en
++//!      9+ archivos (Bloque 4 / TAREA 4.2 las centralizó en
++//!      `core::repository`, pero el problema de fondo es que el tipo no
++//!      garantiza invariantes).
++//!   2. **Bug de redondeo**: el redondeo a 2 dp se hace a mano con
++//!      `Decimal::round_dp(2)` en cada operación. Si se olvida en un sitio,
++//!      el saldo o el total se descuadran.
++//!   3. **Bug de formato**: el dinero se serializa como `String` ("123.45")
++//!      pero el frontend espera un string en formato específico. Sin un VO
++//!      `Dinero`, cualquier módulo puede romper el contrato.
++//!   4. **Bug de validación dispersa**: la placa se valida en `validators.rs`
++//!      pero también en `services/auto.rs` y en el frontend. Un VO `Placa`
++//!      validaría una sola vez (en el constructor).
++//!
++//! ## Plan de migración incremental
++//!
++//! Ver `README.md` en este directorio para el detalle completo y ejemplos
++//! de value objects (`Dinero`, `Placa`, `RangoFechas`).
++//!
++//! ## Nota sobre `core/` vs `domain/`
++//!
++//! `core/` contiene utilidades **transversales** (crypto, db, error, rbac,
++//! config) que no son específicas del negocio de rentas de vehículos.
++//! `domain/` contendrá tipos **del negocio** (Dinero, Placa, RentaId,
++//! ClienteId, RangoFechas, EstadoRenta). La separación sigue el patrón
++//! "Hexagonal Architecture": `core/` = infraestructura compartida,
++//! `domain/` = modelo del negocio, `services/` = casos de uso.
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index 32e6787..e2ae4d2 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -3,6 +3,7 @@
+ 
+ pub mod commands;
+ pub mod core;
++pub mod domain;
+ pub mod repositories;
+ pub mod services;
+ 
+@@ -18,6 +19,31 @@ use crate::core::security::LoginAttemptTracker;
+ 
+ #[cfg_attr(mobile, tauri::mobile_entry_point)]
+ pub fn run() {
++    // ── Logging estructurado (Bloque 4 / TAREA 4.1) ──
++    // Inicializa `tracing_subscriber` ANTES del setup de Tauri para que los
++    // spans críticos (registrar_pago, cerrar_renta, login) y cualquier log
++    // emitido durante el setup (migraciones, pool, backups...) se capture.
++    //
++    // Coexistencia con `tauri-plugin-log`:
++    //   - `tauri-plugin-log` inicializa el crate `log` (a través de su propio
++    //     subscriber) MÁS ADELANTE en el setup (línea ~165). Hasta entonces,
++    //     los `log::*!` van al stderr default.
++    //   - `tracing_subscriber` captura los eventos de `tracing::info!`/`error!`
++    //     directamente. Para que los `log::*!` existentes también fluyan por
++    //     tracing (y aparezcan en el mismo formato compacto), se habilita el
++    //     bridge `tracing_log` con `LogTracer::init()` — sin esto, ambos
++    //     subsistemas escribirían a stderr de forma duplicada.
++    //   - En runtime: `RUST_LOG=info,dinamo_rent_lib=debug` para verbosity.
++    tracing_subscriber::fmt()
++        .with_env_filter(
++            tracing_subscriber::EnvFilter::try_from_default_env()
++                .unwrap_or_else(|_| "info".into()),
++        )
++        .with_target(false)
++        .compact()
++        .init();
++    tracing::info!("tracing_subscriber inicializado (Bloque 4 / TAREA 4.1)");
++
+     tauri::Builder::default()
+         .plugin(tauri_plugin_process::init())
+         .setup(|app| {
+diff --git a/src-tauri/src/repositories/auto.rs b/src-tauri/src/repositories/auto.rs
+index eea92e4..b4781b4 100644
+--- a/src-tauri/src/repositories/auto.rs
++++ b/src-tauri/src/repositories/auto.rs
+@@ -4,6 +4,11 @@
+ //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio)
+ //! - DATE/TIMESTAMP → CAST a VARCHAR (formato 'YYYY-MM-DD')
+ //! - DOUBLE PRECISION → f64
++//!
++//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
++//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
++//! > `crate::core::repository`. Migración pendiente — ver
++//! > `src/core/repository.rs` para el módulo centralizado.
+ 
+ use rsfbclient::{Execute, ParamsType, Queryable};
+ 
+diff --git a/src-tauri/src/repositories/cliente.rs b/src-tauri/src/repositories/cliente.rs
+index 4f70c02..bd89fa2 100644
+--- a/src-tauri/src/repositories/cliente.rs
++++ b/src-tauri/src/repositories/cliente.rs
+@@ -4,10 +4,15 @@
+ //! se guardan cifradas. Este repositorio NO descifra: el servicio (services/cliente.rs)
+ //! aplica `PiiCipher` al leer/escribir.
+ 
+-use rsfbclient::{Execute, ParamsType, Queryable};
++use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+ 
+ use crate::core::error::AppError;
+ use crate::core::PooledConnection;
++// Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
++// localmente en este archivo. La migración los importa de `core::repository`
++// para DRY. Se conserva un wrapper `map_fb_error` (1 línea) que delega en
++// `map_fb_error_dup` con el mensaje Duplicate específico de clientes.
++use crate::core::repository::{opt_str, params};
+ 
+ use serde::Serialize;
+ 
+@@ -40,14 +45,6 @@ pub struct Cliente {
+     pub updated_at: Option<String>,
+ }
+ 
+-/// Construye parámetros posicionales de cualquier longitud (las tuplas de
+-/// `IntoParams` están limitadas a 15 elementos en rsfbclient).
+-macro_rules! params {
+-    ($($e:expr),+ $(,)?) => {
+-        ParamsType::Positional(vec![$($e.into()),+])
+-    };
+-}
+-
+ /// Datos de entrada para crear/actualizar (PII en claro; el servicio cifra)
+ #[derive(Debug, Clone, Default, serde::Deserialize)]
+ #[serde(default, rename_all = "camelCase")]
+@@ -138,14 +135,13 @@ pub fn from_row(r: ClienteRow) -> Cliente {
+     }
+ }
+ 
++/// Mapea errores de Firebird a AppError (duplicidad de documento).
++///
++/// Wrapper que delega en `crate::core::repository::map_fb_error_dup` con el
++/// mensaje específico de clientes. Antes esto estaba duplicado en 3+
++/// repositorios (Bloque 4 / TAREA 4.2).
+ fn map_fb_error(e: rsfbclient::FbError) -> AppError {
+-    let msg = e.to_string();
+-    let lower = msg.to_lowercase();
+-    if lower.contains("duplicate") || lower.contains("unique") {
+-        AppError::Duplicate("Ya existe un cliente con ese documento.".into())
+-    } else {
+-        AppError::Database(msg)
+-    }
++    crate::core::repository::map_fb_error_dup(e, "Ya existe un cliente con ese documento.")
+ }
+ 
+ pub struct ClienteRepository;
+@@ -323,6 +319,4 @@ impl ClienteRepository {
+     }
+ }
+ 
+-fn opt_str(v: &Option<String>) -> Option<String> {
+-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+-}
++
+diff --git a/src-tauri/src/repositories/comparendo.rs b/src-tauri/src/repositories/comparendo.rs
+index 34530d0..f1a0dfc 100644
+--- a/src-tauri/src/repositories/comparendo.rs
++++ b/src-tauri/src/repositories/comparendo.rs
+@@ -3,6 +3,11 @@
+ //! Queries explícitas en dialecto Firebird con rsfbclient.
+ //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio/frontend)
+ //! - DATE/TIME/TIMESTAMP → CAST a VARCHAR
++//!
++//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
++//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
++//! > `crate::core::repository`. Migración pendiente — ver
++//! > `src/core/repository.rs` para el módulo centralizado.
+ 
+ use chrono::{NaiveDate, NaiveTime};
+ use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+diff --git a/src-tauri/src/repositories/gasto.rs b/src-tauri/src/repositories/gasto.rs
+index e64ae42..65c8a3e 100644
+--- a/src-tauri/src/repositories/gasto.rs
++++ b/src-tauri/src/repositories/gasto.rs
+@@ -3,6 +3,11 @@
+ //! Queries explícitas en dialecto Firebird con rsfbclient.
+ //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio/frontend)
+ //! - DATE/TIMESTAMP → CAST a VARCHAR
++//!
++//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
++//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
++//! > `crate::core::repository`. Migración pendiente — ver
++//! > `src/core/repository.rs` para el módulo centralizado.
+ 
+ use chrono::NaiveDate;
+ use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+diff --git a/src-tauri/src/repositories/informe.rs b/src-tauri/src/repositories/informe.rs
+index 77315c3..529a7d1 100644
+--- a/src-tauri/src/repositories/informe.rs
++++ b/src-tauri/src/repositories/informe.rs
+@@ -2,70 +2,207 @@
+ //!
+ //! Sumas por rango de fechas (inicio - fin).
+ //! Los montos viajan como VARCHAR (CAST) para parseo exacto en la UI.
++//!
++//! TAREA 3.1 (Bloque 3 — Performance): se consolidaron las 6 agregaciones de
++//! totales del rango en una sola query con UNION ALL (`totales_rango`) y las 6
++//! agregaciones por placa en una sola query con UNION ALL
++//! (`movimientos_por_placa`). Esto reduce los round-trips del informe mensual
++//! de 13 (7 + 6) a 5 (4 en `mensual` + 2 en `utilidad_por_vehiculo`).
+ 
+-use rsfbclient::{Queryable};
++use rsfbclient::{IntoParam, ParamsType, Queryable};
+ 
+ use crate::core::error::AppError;
+ use crate::core::PooledConnection;
+ 
+ pub struct InformeRepository;
+ 
+-impl InformeRepository {
+-    /// Suma de pagos de rentas del rango (dinero realmente recibido)
+-    pub fn ingresos_pagos(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+-        let row: Option<(Option<String>,)> = conn.query_first(
+-            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM pagos \
+-             WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
+-    }
+-
+-    /// Suma de abonos de reservas con recogida en el rango (ingreso anticipado)
+-    pub fn ingresos_abonos_reservas(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+-        let row: Option<(Option<String>,)> = conn.query_first(
+-            "SELECT CAST(COALESCE(SUM(abono), 0) AS VARCHAR(12)) FROM reservas \
+-             WHERE estado <> 'Cancelada' \
+-               AND fecha_recogida >= ? AND fecha_recogida <= ?",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
+-    }
++/// 6 totales del rango en una sola query (UNION ALL).
++///
++/// Resultado de `totales_rango`: ingresos por pagos, ingresos por abonos de
++/// reservas, egresos por gastos, egresos por mantenimiento, egresos por
++/// comparendos y total de comisiones. Sustituye 6 round-trips por 1.
++#[derive(Debug, Clone, Default)]
++pub struct TotalesRango {
++    pub ingresos_pagos: String,
++    pub ingresos_reservas: String,
++    pub egresos_gastos: String,
++    pub egresos_mantenimiento: String,
++    pub egresos_comparendos: String,
++    pub total_comisiones: String,
++}
+ 
+-    /// Suma de gastos del rango
+-    pub fn egresos_gastos(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+-        let row: Option<(Option<String>,)> = conn.query_first(
+-            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM gastos \
+-             WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
++impl TotalesRango {
++    /// Garantiza que ningún campo quede vacío (defense-in-depth: SUM siempre
++    /// devuelve 1 fila, así que el UNION ALL siempre devuelve 6 filas, pero si
++    /// por algún motivo una subquery no devolviera fila el campo queda en
++    /// "0.00" como en la implementación original).
++    fn with_defaults(mut self) -> Self {
++        let defaults = [
++            (&mut self.ingresos_pagos, "0.00"),
++            (&mut self.ingresos_reservas, "0.00"),
++            (&mut self.egresos_gastos, "0.00"),
++            (&mut self.egresos_mantenimiento, "0.00"),
++            (&mut self.egresos_comparendos, "0.00"),
++            (&mut self.total_comisiones, "0.00"),
++        ];
++        for (field, def) in defaults {
++            if field.is_empty() {
++                *field = def.into();
++            }
++        }
++        self
+     }
++}
+ 
+-    /// Suma de mantenimientos del rango
+-    pub fn egresos_mantenimiento(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+-        let row: Option<(Option<String>,)> = conn.query_first(
+-            "SELECT CAST(COALESCE(SUM(total_mantenimiento), 0) AS VARCHAR(12)) \
+-             FROM mantenimiento_vehiculos \
+-             WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ? \
+-               AND deleted_at IS NULL",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
++impl InformeRepository {
++    /// 6 totales del rango en una sola query (UNION ALL).
++    ///
++    /// Reemplaza las 6 llamadas separadas (`ingresos_pagos`,
++    /// `ingresos_abonos_reservas`, `egresos_gastos`, `egresos_mantenimiento`,
++    /// `egresos_comparendos`, `comisiones`) por una única consulta que hace 6
++    /// agregaciones con `UNION ALL`. El primer parámetro posicional de cada
++    /// subquery es `inicio` y el segundo es `fin` (12 parámetros en total).
++    ///
++    /// Cada subquery está etiquetada con un literal `tipo` (PAGOS, RESERVAS,
++    /// GASTOS, MANT, COMP, COMIS) para que el Rust pueda repartir los
++    /// resultados al struct `TotalesRango`.
++    pub fn totales_rango(
++        conn: &mut PooledConnection,
++        inicio: &str,
++        fin: &str,
++    ) -> Result<TotalesRango, AppError> {
++        // 12 params posicionales: inicio/fin repetidos 6 veces (uno por subquery).
++        let params: Vec<String> = [inicio.to_string(), fin.to_string()]
++            .iter()
++            .cycle()
++            .take(12)
++            .cloned()
++            .collect();
++        let ptype = ParamsType::Positional(params.iter().map(|p| p.into_param()).collect());
++
++        let sql = "\
++            SELECT CAST('PAGOS' AS VARCHAR(8)) AS tipo, \
++                   CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) AS monto \
++            FROM pagos WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL \
++            UNION ALL \
++            SELECT CAST('RESERVAS' AS VARCHAR(8)), \
++                   CAST(COALESCE(SUM(abono), 0) AS VARCHAR(12)) \
++            FROM reservas WHERE estado <> 'Cancelada' \
++              AND fecha_recogida >= ? AND fecha_recogida <= ? \
++            UNION ALL \
++            SELECT CAST('GASTOS' AS VARCHAR(8)), \
++                   CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) \
++            FROM gastos WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL \
++            UNION ALL \
++            SELECT CAST('MANT' AS VARCHAR(8)), \
++                   CAST(COALESCE(SUM(total_mantenimiento), 0) AS VARCHAR(12)) \
++            FROM mantenimiento_vehiculos \
++            WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ? \
++              AND deleted_at IS NULL \
++            UNION ALL \
++            SELECT CAST('COMP' AS VARCHAR(8)), \
++                   CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) \
++            FROM comparendos WHERE fecha_infraccion >= ? AND fecha_infraccion <= ? \
++              AND deleted_at IS NULL \
++            UNION ALL \
++            SELECT CAST('COMIS' AS VARCHAR(8)), \
++                   CAST(COALESCE(SUM(comision), 0) AS VARCHAR(12)) \
++            FROM rentas WHERE fecha_recogida >= ? AND fecha_recogida <= ? \
++              AND deleted_at IS NULL";
++
++        let rows: Vec<(String, String)> = conn.query(sql, ptype)?;
++        let mut t = TotalesRango::default();
++        for (tipo, monto) in rows {
++            match tipo.as_str() {
++                "PAGOS" => t.ingresos_pagos = monto,
++                "RESERVAS" => t.ingresos_reservas = monto,
++                "GASTOS" => t.egresos_gastos = monto,
++                "MANT" => t.egresos_mantenimiento = monto,
++                "COMP" => t.egresos_comparendos = monto,
++                "COMIS" => t.total_comisiones = monto,
++                _ => {}
++            }
++        }
++        Ok(t.with_defaults())
+     }
+ 
+-    /// Suma de comparendos del rango (egreso potencial de la flota)
+-    pub fn egresos_comparendos(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+-        let row: Option<(Option<String>,)> = conn.query_first(
+-            "SELECT CAST(COALESCE(SUM(monto), 0) AS VARCHAR(12)) FROM comparendos \
+-             WHERE fecha_infraccion >= ? AND fecha_infraccion <= ? AND deleted_at IS NULL",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
++    /// Movimientos por placa del rango en una sola query (UNION ALL).
++    ///
++    /// Reemplaza las 6 llamadas separadas (`ingresos_por_placa`,
++    /// `abonos_reservas_por_placa`, `gastos_por_placa`, `comisiones_por_placa`,
++    /// `mantenimiento_por_placa`, `comparendos_por_placa`) por una única
++    /// consulta que hace 6 agregaciones por placa con `UNION ALL`. Devuelve
++    /// tuplas `(placa, tipo, monto)` donde `tipo` ∈
++    /// `{INGRESO, ABONO, GASTO, COMISION, MANT, COMP}`.
++    ///
++    /// El service acumula estos movimientos en un `HashMap<placa, (ingresos,
++    /// costos)>`: INGRESO y ABONO suman a ingresos; GASTO, COMISION, MANT y
++    /// COMP suman a costos.
++    pub fn movimientos_por_placa(
++        conn: &mut PooledConnection,
++        inicio: &str,
++        fin: &str,
++    ) -> Result<Vec<(String, String, String)>, AppError> {
++        // 12 params posicionales: inicio/fin repetidos 6 veces (uno por subquery).
++        let params: Vec<String> = [inicio.to_string(), fin.to_string()]
++            .iter()
++            .cycle()
++            .take(12)
++            .cloned()
++            .collect();
++        let ptype = ParamsType::Positional(params.iter().map(|p| p.into_param()).collect());
++
++        let sql = "\
++            SELECT r.placa, CAST('INGRESO' AS VARCHAR(8)) AS tipo, \
++                   CAST(SUM(p.monto) AS VARCHAR(12)) AS monto \
++            FROM pagos p JOIN rentas r ON r.id = p.id_renta \
++            WHERE r.placa IS NOT NULL AND p.fecha >= ? AND p.fecha <= ? \
++              AND p.deleted_at IS NULL AND r.deleted_at IS NULL \
++            GROUP BY r.placa \
++            UNION ALL \
++            SELECT placa_asignada, CAST('ABONO' AS VARCHAR(8)), \
++                   CAST(SUM(abono) AS VARCHAR(12)) \
++            FROM reservas \
++            WHERE estado <> 'Cancelada' AND placa_asignada IS NOT NULL \
++              AND fecha_recogida >= ? AND fecha_recogida <= ? \
++            GROUP BY placa_asignada \
++            UNION ALL \
++            SELECT placa, CAST('GASTO' AS VARCHAR(8)), \
++                   CAST(SUM(monto) AS VARCHAR(12)) \
++            FROM gastos WHERE placa IS NOT NULL \
++              AND fecha >= ? AND fecha <= ? AND deleted_at IS NULL \
++            GROUP BY placa \
++            UNION ALL \
++            SELECT placa, CAST('COMISION' AS VARCHAR(8)), \
++                   CAST(SUM(comision) AS VARCHAR(12)) \
++            FROM rentas WHERE placa IS NOT NULL AND comision > 0 \
++              AND fecha_recogida >= ? AND fecha_recogida <= ? \
++              AND deleted_at IS NULL \
++            GROUP BY placa \
++            UNION ALL \
++            SELECT placa, CAST('MANT' AS VARCHAR(8)), \
++                   CAST(SUM(total_mantenimiento) AS VARCHAR(12)) \
++            FROM mantenimiento_vehiculos \
++            WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ? \
++              AND deleted_at IS NULL \
++            GROUP BY placa \
++            UNION ALL \
++            SELECT placa, CAST('COMP' AS VARCHAR(8)), \
++                   CAST(SUM(monto) AS VARCHAR(12)) \
++            FROM comparendos WHERE fecha_infraccion >= ? AND fecha_infraccion <= ? \
++              AND deleted_at IS NULL \
++            GROUP BY placa";
++
++        let rows: Vec<(String, String, String)> = conn.query(sql, ptype)?;
++        Ok(rows)
+     }
+ 
+     /// Suma de gastos agrupada por categoría (para el desglose)
+-    pub fn gastos_por_categoria(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
++    pub fn gastos_por_categoria(
++        conn: &mut PooledConnection,
++        inicio: &str,
++        fin: &str,
++    ) -> Result<Vec<(String, String)>, AppError> {
+         let rows: Vec<(String, String)> = conn.query(
+             "SELECT categoria, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
+              WHERE fecha >= ? AND fecha <= ? AND deleted_at IS NULL \
+@@ -76,7 +213,11 @@ impl InformeRepository {
+     }
+ 
+     /// Rentas con recogida en el rango (detalle de ingresos del período)
+-    pub fn rentas_del_mes(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(i64, String, String, String, String, String, String, String)>, AppError> {
++    pub fn rentas_del_mes(
++        conn: &mut PooledConnection,
++        inicio: &str,
++        fin: &str,
++    ) -> Result<Vec<(i64, String, String, String, String, String, String, String)>, AppError> {
+         let rows: Vec<(i64, String, String, String, String, String, String, String)> = conn.query(
+             "SELECT r.id, COALESCE(r.placa, ''), r.nombre_cliente, \
+                     CAST(r.total AS VARCHAR(12)), r.estado, \
+@@ -91,97 +232,6 @@ impl InformeRepository {
+         Ok(rows)
+     }
+ 
+-    /// Suma de comisiones de las rentas con recogida en el rango (costo de
+-    /// intermediarios/agencias; neto = total − comisión)
+-    pub fn comisiones(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<String, AppError> {
+-        let row: Option<(Option<String>,)> = conn.query_first(
+-            "SELECT CAST(COALESCE(SUM(comision), 0) AS VARCHAR(12)) FROM rentas \
+-             WHERE fecha_recogida >= ? AND fecha_recogida <= ? AND deleted_at IS NULL",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(row.and_then(|(s,)| s).unwrap_or_else(|| "0.00".into()))
+-    }
+-
+-    // ── Utilidad por vehículo ────────────────────────────────────────────────
+-
+-    /// Ingresos del rango por placa
+-    pub fn ingresos_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+-        let rows: Vec<(String, String)> = conn.query(
+-            "SELECT r.placa, CAST(SUM(p.monto) AS VARCHAR(12)) \
+-             FROM pagos p JOIN rentas r ON r.id = p.id_renta \
+-             WHERE r.placa IS NOT NULL \
+-               AND p.fecha >= ? AND p.fecha <= ? \
+-               AND p.deleted_at IS NULL AND r.deleted_at IS NULL \
+-             GROUP BY r.placa",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(rows)
+-    }
+-
+-    /// Abonos de reservas por placa
+-    pub fn abonos_reservas_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+-        let rows: Vec<(String, String)> = conn.query(
+-            "SELECT placa_asignada, CAST(SUM(abono) AS VARCHAR(12)) \
+-             FROM reservas \
+-             WHERE estado <> 'Cancelada' AND placa_asignada IS NOT NULL \
+-               AND fecha_recogida >= ? AND fecha_recogida <= ? \
+-             GROUP BY placa_asignada",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(rows)
+-    }
+-
+-    /// Comisiones por placa (costo de intermediarios en la utilidad del vehículo)
+-    pub fn comisiones_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+-        let rows: Vec<(String, String)> = conn.query(
+-            "SELECT placa, CAST(SUM(comision) AS VARCHAR(12)) FROM rentas \
+-             WHERE placa IS NOT NULL AND comision > 0 \
+-               AND fecha_recogida >= ? AND fecha_recogida <= ? \
+-               AND deleted_at IS NULL \
+-             GROUP BY placa",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(rows)
+-    }
+-
+-    /// Gastos por placa
+-    pub fn gastos_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+-        let rows: Vec<(String, String)> = conn.query(
+-            "SELECT placa, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
+-             WHERE placa IS NOT NULL \
+-               AND fecha >= ? AND fecha <= ? \
+-               AND deleted_at IS NULL \
+-             GROUP BY placa",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(rows)
+-    }
+-
+-    /// Mantenimientos por placa
+-    pub fn mantenimiento_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+-        let rows: Vec<(String, String)> = conn.query(
+-            "SELECT placa, CAST(SUM(total_mantenimiento) AS VARCHAR(12)) \
+-             FROM mantenimiento_vehiculos \
+-             WHERE pieza_varias_fecha >= ? AND pieza_varias_fecha <= ? \
+-               AND deleted_at IS NULL \
+-             GROUP BY placa",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(rows)
+-    }
+-
+-    /// Comparendos por placa
+-    pub fn comparendos_por_placa(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<(String, String)>, AppError> {
+-        let rows: Vec<(String, String)> = conn.query(
+-            "SELECT placa, CAST(SUM(monto) AS VARCHAR(12)) FROM comparendos \
+-             WHERE fecha_infraccion >= ? AND fecha_infraccion <= ? \
+-               AND deleted_at IS NULL \
+-             GROUP BY placa",
+-            (inicio.to_string(), fin.to_string()),
+-        )?;
+-        Ok(rows)
+-    }
+-
+     /// Marca + modelo por placa (para mostrar el vehículo en la tabla de utilidad)
+     pub fn vehiculos(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
+         let rows: Vec<(String, String)> = conn.query(
+diff --git a/src-tauri/src/repositories/mantenimiento.rs b/src-tauri/src/repositories/mantenimiento.rs
+index 6cfb032..90cb828 100644
+--- a/src-tauri/src/repositories/mantenimiento.rs
++++ b/src-tauri/src/repositories/mantenimiento.rs
+@@ -5,11 +5,15 @@
+ //! - DATE/TIMESTAMP → CAST a VARCHAR
+ //! - JOIN con autos para mostrar marca/modelo en la UI
+ 
+-use chrono::NaiveDate;
+ use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+ 
+ use crate::core::error::AppError;
+ use crate::core::PooledConnection;
++// Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
++// localmente en este archivo. La migración los importa de `core::repository`
++// para DRY. Se conserva un wrapper `map_fb_error` (1 línea) que delega en
++// `map_fb_error_fk` con el mensaje FK específico de mantenimiento (placa).
++use crate::core::repository::{opt_str, params, parse_fecha};
+ 
+ use serde::Serialize;
+ 
+@@ -47,14 +51,6 @@ pub struct MantenimientoDatos {
+     pub km_proximo_cambio_aceite: Option<i64>,
+ }
+ 
+-/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
+-/// limitadas a 15 elementos en rsfbclient).
+-macro_rules! params {
+-    ($($e:expr),+ $(,)?) => {
+-        ParamsType::Positional(vec![$($e.into_param()),+])
+-    };
+-}
+-
+ /// Orden de columnas del SELECT de mantenimiento (debe coincidir con `MantenimientoRow`)
+ pub const SELECT_COLS: &str = "\
+     m.id, m.placa, COALESCE(a.marca || ' ' || a.modelo, ''), m.pieza_varias_tipo, \
+@@ -98,20 +94,16 @@ fn from_row(r: MantenimientoRow) -> Mantenimiento {
+     }
+ }
+ 
+-/// Mapea errores de Firebird a AppError (FK de placa)
++/// Mapea errores de Firebird a AppError (FK de placa).
++///
++/// Wrapper que delega en `crate::core::repository::map_fb_error_fk` con el
++/// mensaje específico de mantenimiento (placa inexistente). Antes esto estaba
++/// duplicado en 5+ repositorios (Bloque 4 / TAREA 4.2).
+ fn map_fb_error(e: rsfbclient::FbError) -> AppError {
+-    let msg = e.to_string();
+-    let lower = msg.to_lowercase();
+-    if lower.contains("foreign key")
+-        || lower.contains("not a valid reference")
+-        || lower.contains("referential")
+-    {
+-        AppError::Business(
+-            "La placa seleccionada no existe. Verifica que el vehículo esté registrado.".into(),
+-        )
+-    } else {
+-        AppError::Database(msg)
+-    }
++    crate::core::repository::map_fb_error_fk(
++        e,
++        "La placa seleccionada no existe. Verifica que el vehículo esté registrado.",
++    )
+ }
+ 
+ pub struct MantenimientoRepository;
+@@ -332,12 +324,4 @@ impl MantenimientoRepository {
+     }
+ }
+ 
+-fn opt_str(v: &Option<String>) -> Option<String> {
+-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+-}
+ 
+-/// Parsea fecha 'AAAA-MM-DD' a NaiveDate (el servicio ya la validó)
+-fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
+-    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
+-        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
+-}
+diff --git a/src-tauri/src/repositories/renta.rs b/src-tauri/src/repositories/renta.rs
+index 7968be1..287dfb4 100644
+--- a/src-tauri/src/repositories/renta.rs
++++ b/src-tauri/src/repositories/renta.rs
+@@ -4,17 +4,31 @@
+ //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio/frontend)
+ //! - DATE/TIME/TIMESTAMP → CAST a VARCHAR
+ 
+-use chrono::{NaiveDate, NaiveTime};
+ use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+ 
+ use crate::core::error::AppError;
+ use crate::core::PooledConnection;
++// Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
++// localmente en este archivo. La migración los importa de `core::repository`
++// para DRY. Se conserva un wrapper `map_fb_error` (1 línea) que delega en
++// `map_fb_error_fk` con el mensaje FK específico de rentas (preserva UX).
++use crate::core::repository::{opt_str, params, parse_fecha, parse_fecha_opt, parse_hora_opt};
+ 
+ use serde::Serialize;
++// ts-rs (Bloque 4 / TAREA 4.3): genera tipos TypeScript en
++// `src/lib/types/generated/` cuando se ejecuta `cargo test`. El frontend
++// puede importarlos en lugar de mantenerlos a mano en `src/lib/api.ts`.
++// El atributo `#[ts(export, export_to = "...")]` controla la generación.
++use ts_rs::TS;
+ 
+ /// Pago registrado contra una renta
+-#[derive(Debug, Clone, Serialize)]
++///
++/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/Pago.ts`
++/// (Bloque 4 / TAREA 4.3). El frontend puede importarlo con:
++///   `import type { Pago } from '$lib/types/generated/Pago';`
++#[derive(Debug, Clone, Serialize, TS)]
+ #[serde(rename_all = "camelCase")]
++#[ts(export, export_to = "../src/lib/types/generated/")]
+ pub struct Pago {
+     pub id: i64,
+     pub id_renta: i64,
+@@ -27,8 +41,14 @@ pub struct Pago {
+ }
+ 
+ /// Inspección de salida/entrada de una renta
+-#[derive(Debug, Clone, Serialize)]
++///
++/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/Inspeccion.ts`
++/// (Bloque 4 / TAREA 4.3). Necesario derivar `TS` aquí porque `Renta` la
++/// referencia como `Vec<Inspeccion>` (ts-rs requiere que todo tipo anidado
++/// tambien implemente `TS`).
++#[derive(Debug, Clone, Serialize, TS)]
+ #[serde(rename_all = "camelCase")]
++#[ts(export, export_to = "../src/lib/types/generated/")]
+ pub struct Inspeccion {
+     pub id: i64,
+     pub id_renta: i64,
+@@ -46,8 +66,14 @@ pub struct Inspeccion {
+ }
+ 
+ /// Renta completa (serializable al frontend, camelCase)
+-#[derive(Debug, Clone, Serialize)]
++///
++/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/Renta.ts`
++/// (Bloque 4 / TAREA 4.3). Es el contrato FE<->BE mas importante: cualquier
++/// cambio en los campos de `Renta` se refleja automaticamente en el `.ts`
++/// generado al correr `cargo test`, evitando drift entre Rust y Svelte.
++#[derive(Debug, Clone, Serialize, TS)]
+ #[serde(rename_all = "camelCase")]
++#[ts(export, export_to = "../src/lib/types/generated/")]
+ pub struct Renta {
+     pub id: i64,
+     /// Número de contrato: secuencia DENTRO del año (2026-001, 2026-002, ...)
+@@ -111,8 +137,13 @@ pub struct Renta {
+ }
+ 
+ /// Datos de entrada para crear/actualizar (validados por el servicio)
+-#[derive(Debug, Clone, Default, serde::Deserialize)]
++///
++/// Contrato TypeScript generado por ts-rs en `src/lib/types/generated/RentaDatos.ts`
++/// (Bloque 4 / TAREA 4.3). El frontend usa este tipo para construir el body
++/// del command `crear_renta` / `actualizar_renta` (ver `src/lib/api.ts`).
++#[derive(Debug, Clone, Default, serde::Deserialize, TS)]
+ #[serde(default, rename_all = "camelCase")]
++#[ts(export, export_to = "../src/lib/types/generated/")]
+ pub struct RentaDatos {
+     pub placa: Option<String>,
+     pub id_cliente: Option<i64>,
+@@ -236,14 +267,6 @@ pub struct InspeccionDatos {
+     pub observaciones: Option<String>,
+ }
+ 
+-/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
+-/// limitadas a 15 elementos en rsfbclient).
+-macro_rules! params {
+-    ($($e:expr),+ $(,)?) => {
+-        ParamsType::Positional(vec![$($e.into_param()),+])
+-    };
+-}
+-
+ /// rsfbclient solo implementa FromRow para tuplas de hasta 26 elementos,
+ /// así que el SELECT se divide en dos consultas unidas por id:
+ /// - SELECT_COLS_A: primeros 26 campos (datos generales y de tarifas)
+@@ -386,21 +409,16 @@ fn from_rows(a: RentaRowA, b: RentaRowB) -> Renta {
+     }
+ }
+ 
+-/// Mapea errores de Firebird a AppError (FKs de placa/cliente/reserva)
++/// Mapea errores de Firebird a AppError (FKs de placa/cliente/reserva).
++///
++/// Wrapper que delega en `crate::core::repository::map_fb_error_fk` con el
++/// mensaje de negocio específico de rentas. Antes esto estaba duplicado en
++/// 5+ repositorios (Bloque 4 / TAREA 4.2).
+ fn map_fb_error(e: rsfbclient::FbError) -> AppError {
+-    let msg = e.to_string();
+-    let lower = msg.to_lowercase();
+-    if lower.contains("foreign key")
+-        || lower.contains("not a valid reference")
+-        || lower.contains("referential")
+-    {
+-        AppError::Business(
+-            "El cliente, el vehículo o la reserva seleccionada no existe (o está referenciado por otros registros)."
+-                .into(),
+-        )
+-    } else {
+-        AppError::Database(msg)
+-    }
++    crate::core::repository::map_fb_error_fk(
++        e,
++        "El cliente, el vehículo o la reserva seleccionada no existe (o está referenciado por otros registros).",
++    )
+ }
+ 
+ pub struct RentaRepository;
+@@ -593,10 +611,10 @@ impl RentaRepository {
+                     opt_str(&d.no_licencia),
+                     opt_str(&d.nacionalidad),
+                     parse_fecha(&d.fecha_recogida)?,
+-                    parse_hora(&d.hora_recogida)?,
++                    parse_hora_opt(&d.hora_recogida)?,
+                     opt_str(&d.ubicacion_recogida),
+                     parse_fecha(&d.fecha_retorno)?,
+-                    parse_hora(&d.hora_retorno)?,
++                    parse_hora_opt(&d.hora_retorno)?,
+                     opt_str(&d.ubicacion_retorno),
+                     d.dias_calculados,
+                     d.horas_extras,
+@@ -658,10 +676,10 @@ impl RentaRepository {
+                 opt_str(&d.no_licencia),
+                 opt_str(&d.nacionalidad),
+                 parse_fecha(&d.fecha_recogida)?,
+-                parse_hora(&d.hora_recogida)?,
++                parse_hora_opt(&d.hora_recogida)?,
+                 opt_str(&d.ubicacion_recogida),
+                 parse_fecha(&d.fecha_retorno)?,
+-                parse_hora(&d.hora_retorno)?,
++                parse_hora_opt(&d.hora_retorno)?,
+                 opt_str(&d.ubicacion_retorno),
+                 d.dias_calculados,
+                 d.horas_extras,
+@@ -720,7 +738,7 @@ impl RentaRepository {
+              WHERE id = ?",
+             params![
+                 parse_fecha_opt(&d.fecha_devolucion_real)?,
+-                parse_hora(&d.hora_devolucion_real)?,
++                parse_hora_opt(&d.hora_devolucion_real)?,
+                 opt_str(&d.km_final),
+                 opt_str(&d.tanque_final),
+                 d.dias_calculados,
+@@ -899,27 +917,10 @@ impl RentaRepository {
+     }
+ }
+ 
+-fn opt_str(v: &Option<String>) -> Option<String> {
+-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+-}
+-
+ fn bool_to_i(b: bool) -> i64 {
+     if b { 1 } else { 0 }
+ }
+ 
+-/// Parsea fecha 'AAAA-MM-DD' a NaiveDate (el servicio ya la validó)
+-fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
+-    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
+-        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
+-}
+-
+-fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError> {
+-    match opt_str(v) {
+-        None => Ok(None),
+-        Some(s) => parse_fecha(&s).map(Some),
+-    }
+-}
+-
+ /// Recorta 'HH:MM:SS.0000' (Firebird) a 'HH:MM' para la UI
+ fn hora_corta(h: &str) -> String {
+     h.split(':').take(2).collect::<Vec<_>>().join(":")
+@@ -934,15 +935,4 @@ fn km_limpio(v: &str) -> String {
+         .unwrap_or_else(|_| v.trim().to_string())
+ }
+ 
+-/// Parsea hora 'HH:MM[:SS]' a NaiveTime (el servicio ya la validó)
+-fn parse_hora(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
+-    match opt_str(v) {
+-        None => Ok(None),
+-        Some(h) => {
+-            let h = if h.len() == 5 { format!("{h}:00") } else { h };
+-            NaiveTime::parse_from_str(&h, "%H:%M:%S")
+-                .map(Some)
+-                .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
+-        }
+-    }
+-}
++
+diff --git a/src-tauri/src/repositories/reserva.rs b/src-tauri/src/repositories/reserva.rs
+index 09a8f98..a1c33a3 100644
+--- a/src-tauri/src/repositories/reserva.rs
++++ b/src-tauri/src/repositories/reserva.rs
+@@ -3,6 +3,11 @@
+ //! Queries explícitas en dialecto Firebird con rsfbclient.
+ //! - DECIMAL → CAST a VARCHAR (parseo exacto en el servicio/frontend)
+ //! - DATE/TIME/TIMESTAMP → CAST a VARCHAR
++//!
++//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
++//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
++//! > `crate::core::repository`. Migración pendiente — ver
++//! > `src/core/repository.rs` para el módulo centralizado.
+ 
+ use chrono::{NaiveDate, NaiveTime};
+ use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+diff --git a/src-tauri/src/repositories/usuario.rs b/src-tauri/src/repositories/usuario.rs
+index 11b3ad3..225a012 100644
+--- a/src-tauri/src/repositories/usuario.rs
++++ b/src-tauri/src/repositories/usuario.rs
+@@ -1,6 +1,11 @@
+ //! repositories/usuario.rs — Repositorio de usuarios (puerto de usuario_repository_sa.py)
+ //!
+ //! Queries explícitas en dialecto Firebird, estilo rsfbclient (FromRow).
++//!
++//! > **TODO (Bloque 4 / TAREA 4.2)**: este repositorio aún define helpers
++//! > locales (`map_fb_error`, `opt_str`, `params!`, ...) duplicados con
++//! > `crate::core::repository`. Migración pendiente — ver
++//! > `src/core/repository.rs` para el módulo centralizado.
+ 
+ use rsfbclient::{Execute, Queryable};
+ 
+diff --git a/src-tauri/src/services/auth.rs b/src-tauri/src/services/auth.rs
+index 05e62f5..fd2ab37 100644
+--- a/src-tauri/src/services/auth.rs
++++ b/src-tauri/src/services/auth.rs
+@@ -74,7 +74,17 @@ impl AuthService {
+         password: &str,
+         ip: Option<&str>,
+     ) -> Result<LoginResult, AppError> {
++        // ── Span de tracing (Bloque 4 / TAREA 4.1) ──
++        // El login concentra los eventos de seguridad más relevantes (cuenta
++        // bloqueada, rate-limit, rehash legacy, login OK/fallido). El span
++        // etiqueta todos los `tracing::info!`/`warn!` con el username y la IP
++        // para correlacionar con los registros de `auditoria`.
++        // Nota: el password NUNCA se loguea (ni siquiera en debug).
++        let span = tracing::info_span!("login", username = %username, ip = ?ip);
++        let _enter = span.enter();
++
+         if username.trim().is_empty() || password.is_empty() {
++            tracing::warn!("Login rechazado: username o password vacío");
+             return Err(AppError::InvalidCredentials);
+         }
+ 
+@@ -191,6 +201,11 @@ impl AuthService {
+         );
+ 
+         log::info!("Login exitoso: {username} (rol={}, ip={})", rol.unwrap_or("-"), ip.unwrap_or("-"));
++        tracing::info!(
++            rol = %rol.unwrap_or("-"),
++            debe_cambiar_password = debe_cambiar,
++            "Login exitoso (tracing)"
++        );
+         crate::core::audit::log_audit(
+             &mut conn,
+             username,
+diff --git a/src-tauri/src/services/informe.rs b/src-tauri/src/services/informe.rs
+index 7cbf564..c5abe5e 100644
+--- a/src-tauri/src/services/informe.rs
++++ b/src-tauri/src/services/informe.rs
+@@ -3,6 +3,12 @@
+ //! Ingresos: pagos de rentas + abonos de reservas del rango.
+ //! Egresos: gastos + mantenimientos + comparendos del rango.
+ //! El balance = ingresos − egresos.
++//!
++//! TAREA 3.1 (Bloque 3 — Performance): se consolidaron los 6 totales del
++//! rango en una sola query (UNION ALL → `InformeRepository::totales_rango`) y
++//! los 6 movimientos por placa en una sola query (UNION ALL →
++//! `InformeRepository::movimientos_por_placa`). El informe mensual pasa de 13
++//! round-trips (7 en `mensual` + 6 en `utilidad_por_vehiculo`) a 5 (4 + 2).
+ 
+ use std::collections::HashMap;
+ 
+@@ -77,22 +83,35 @@ pub struct UtilidadVehiculo {
+ pub struct InformeService;
+ 
+ impl InformeService {
+-    /// Calcula el balance del rango de fechas indicado
+-    pub fn mensual(conn: &mut PooledConnection, fecha_inicio: &str, fecha_fin: &str) -> Result<InformeMensual, AppError> {
+-        let ingresos_pagos = InformeRepository::ingresos_pagos(conn, fecha_inicio, fecha_fin)?;
+-        let ingresos_reservas = InformeRepository::ingresos_abonos_reservas(conn, fecha_inicio, fecha_fin)?;
+-        let egresos_gastos = InformeRepository::egresos_gastos(conn, fecha_inicio, fecha_fin)?;
+-        let egresos_mantenimiento = InformeRepository::egresos_mantenimiento(conn, fecha_inicio, fecha_fin)?;
+-        let egresos_comparendos = InformeRepository::egresos_comparendos(conn, fecha_inicio, fecha_fin)?;
+-
+-        let total_ingresos = sum(&[&ingresos_pagos, &ingresos_reservas]);
+-        let total_egresos = sum(&[&egresos_gastos, &egresos_mantenimiento, &egresos_comparendos]);
++    /// Calcula el balance del rango de fechas indicado.
++    ///
++    /// Round-trips después de la consolidación (TAREA 3.1):
++    ///   1. `totales_rango` (UNION ALL de 6 agregaciones)
++    ///   2. `rentas_del_mes`
++    ///   3. `gastos_por_categoria`
++    ///   4. `utilidad_por_vehiculo` (que internamente hace 2: `vehiculos` +
++    ///      `movimientos_por_placa`)
++    ///
++    /// Total: 5 round-trips (antes: 13).
++    pub fn mensual(
++        conn: &mut PooledConnection,
++        fecha_inicio: &str,
++        fecha_fin: &str,
++    ) -> Result<InformeMensual, AppError> {
++        // 1 query (UNION ALL) en vez de 6 round-trips por separado.
++        let totales = InformeRepository::totales_rango(conn, fecha_inicio, fecha_fin)?;
++
++        let total_ingresos = sum(&[&totales.ingresos_pagos, &totales.ingresos_reservas]);
++        let total_egresos = sum(&[
++            &totales.egresos_gastos,
++            &totales.egresos_mantenimiento,
++            &totales.egresos_comparendos,
++        ]);
+         let balance = (dec(&total_ingresos) - dec(&total_egresos)).round_dp(2);
+         // Comisiones de las rentas del rango (costo de intermediarios): los
+         // netos reflejan lo que la empresa realmente se queda.
+-        let total_comisiones = InformeRepository::comisiones(conn, fecha_inicio, fecha_fin)?;
+-        let ingresos_netos = (dec(&total_ingresos) - dec(&total_comisiones)).round_dp(2);
+-        let balance_neto = (balance - dec(&total_comisiones)).round_dp(2);
++        let ingresos_netos = (dec(&total_ingresos) - dec(&totales.total_comisiones)).round_dp(2);
++        let balance_neto = (balance - dec(&totales.total_comisiones)).round_dp(2);
+ 
+         let rentas = InformeRepository::rentas_del_mes(conn, fecha_inicio, fecha_fin)?
+             .into_iter()
+@@ -115,15 +134,15 @@ impl InformeService {
+         Ok(InformeMensual {
+             fecha_inicio: fecha_inicio.to_string(),
+             fecha_fin: fecha_fin.to_string(),
+-            ingresos_pagos,
+-            ingresos_reservas,
++            ingresos_pagos: totales.ingresos_pagos,
++            ingresos_reservas: totales.ingresos_reservas,
+             total_ingresos: total_ingresos.clone(),
+-            egresos_gastos,
+-            egresos_mantenimiento,
+-            egresos_comparendos,
++            egresos_gastos: totales.egresos_gastos,
++            egresos_mantenimiento: totales.egresos_mantenimiento,
++            egresos_comparendos: totales.egresos_comparendos,
+             total_egresos: total_egresos.clone(),
+             balance: balance.to_string(),
+-            total_comisiones,
++            total_comisiones: totales.total_comisiones,
+             ingresos_netos: ingresos_netos.to_string(),
+             balance_neto: balance_neto.to_string(),
+             gastos_por_categoria: InformeRepository::gastos_por_categoria(conn, fecha_inicio, fecha_fin)?,
+@@ -133,41 +152,31 @@ impl InformeService {
+     }
+ }
+ 
+-fn utilidad_por_vehiculo(conn: &mut PooledConnection, inicio: &str, fin: &str) -> Result<Vec<UtilidadVehiculo>, AppError> {
++fn utilidad_por_vehiculo(
++    conn: &mut PooledConnection,
++    inicio: &str,
++    fin: &str,
++) -> Result<Vec<UtilidadVehiculo>, AppError> {
+     let mut mapa: HashMap<String, (Decimal, Decimal)> = HashMap::new();
+-    let mut acumular = |placa: String, monto: &str, ingresos: bool| {
+-        let m = dec(monto);
+-        let e = mapa.entry(placa).or_insert((Decimal::ZERO, Decimal::ZERO));
+-        if ingresos {
+-            e.0 += m;
+-        } else {
+-            e.1 += m;
+-        }
+-    };
+-
+-    for (placa, total) in InformeRepository::ingresos_por_placa(conn, inicio, fin)? {
+-        acumular(placa, &total, true);
+-    }
+-    for (placa, total) in InformeRepository::abonos_reservas_por_placa(conn, inicio, fin)? {
+-        acumular(placa, &total, true);
+-    }
+-    for (placa, total) in InformeRepository::gastos_por_placa(conn, inicio, fin)? {
+-        acumular(placa, &total, false);
+-    }
+-    for (placa, total) in InformeRepository::comisiones_por_placa(conn, inicio, fin)? {
+-        acumular(placa, &total, false);
+-    }
+-    for (placa, total) in InformeRepository::mantenimiento_por_placa(conn, inicio, fin)? {
+-        acumular(placa, &total, false);
+-    }
+-    for (placa, total) in InformeRepository::comparendos_por_placa(conn, inicio, fin)? {
+-        acumular(placa, &total, false);
+-    }
+-
+     let vehiculos: HashMap<String, String> = InformeRepository::vehiculos(conn)?
+         .into_iter()
+         .collect();
+ 
++    // 1 sola query (UNION ALL) en vez de 6 round-trips por separado.
++    // Cada fila trae (placa, tipo, monto); INGRESO/ABONO suman a ingresos,
++    // GASTO/COMISION/MANT/COMP suman a costos.
++    for (placa, tipo, monto) in InformeRepository::movimientos_por_placa(conn, inicio, fin)? {
++        if placa.is_empty() {
++            continue;
++        }
++        let m = dec(&monto);
++        let e = mapa.entry(placa).or_insert((Decimal::ZERO, Decimal::ZERO));
++        match tipo.as_str() {
++            "INGRESO" | "ABONO" => e.0 += m,
++            _ => e.1 += m,
++        }
++    }
++
+     let mut filas: Vec<UtilidadVehiculo> = mapa
+         .into_iter()
+         .filter(|(_, (ingresos, costos))| *ingresos > Decimal::ZERO || *costos > Decimal::ZERO)
+@@ -182,7 +191,7 @@ fn utilidad_por_vehiculo(conn: &mut PooledConnection, inicio: &str, fin: &str) -
+             }
+         })
+         .collect();
+-    
++
+     filas.sort_by(|a, b| b.utilidad.cmp(&a.utilidad));
+     Ok(filas)
+ }
+diff --git a/src-tauri/src/services/mantenimiento.rs b/src-tauri/src/services/mantenimiento.rs
+index 7eb69fc..19760af 100644
+--- a/src-tauri/src/services/mantenimiento.rs
++++ b/src-tauri/src/services/mantenimiento.rs
+@@ -142,7 +142,7 @@ impl MantenimientoService {
+     /// recálculo o la auditoría fallan, el soft-delete se revierte y el
+     /// historial queda intacto. (Grupo D: adaptado a soft-delete — el DELETE
+     /// original de Grupo B se reemplazó por UPDATE ... SET deleted_at.)
+-    pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
++    pub fn eliminar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<(), AppError> {
+         let actual = Self::obtener(conn, id)?;
+         let es_cambio_aceite = actual.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
+         let placa = actual.placa.clone();
+@@ -178,7 +178,7 @@ impl MantenimientoService {
+                 "INSERT INTO auditoria (usuario, accion, mensaje, ip, fecha) \
+                  VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                 (
+-                    "sistema".to_string(),
++                    usuario.to_string(),
+                     "ELIMINAR MANTENIMIENTO".to_string(),
+                     format!("mant={id}, placa={placa}, tipo={tipo}"),
+                     "local".to_string(),
+diff --git a/src-tauri/src/services/renta.rs b/src-tauri/src/services/renta.rs
+index 0589cf8..99306a8 100644
+--- a/src-tauri/src/services/renta.rs
++++ b/src-tauri/src/services/renta.rs
+@@ -240,13 +240,24 @@ impl RentaService {
+         conn: &mut PooledConnection,
+         cfg: &Arc<AppConfig>,
+         id: i64,
++        usuario: &str,
+         mut datos: RentaCierreDatos,
+     ) -> Result<Renta, AppError> {
++        // ── Span de tracing (Bloque 4 / TAREA 4.1) ──
++        // Atributos del span: id de la renta, usuario que ejecuta el cierre y
++        // estado previo. Cualquier `tracing::info!`/`error!` dentro de la fn
++        // queda etiquetado con estos campos (útil para filtrar en Jaeger o en
++        // `grep "renta_id=42"` sobre el log).
++        let span = tracing::info_span!("cerrar_renta", renta_id = id, %usuario);
++        let _enter = span.enter();
++
+         let actual = Self::obtener(conn, id)?;
+         if actual.estado == "Cerrada" {
++            tracing::warn!(estado = %actual.estado, "Intento de cierre de renta ya cerrada");
+             return Err(AppError::Business("La renta ya está cerrada.".into()));
+         }
+         if actual.estado == "Cancelada" {
++            tracing::warn!(estado = %actual.estado, "Intento de cierre de renta cancelada");
+             return Err(AppError::Business(
+                 "No se puede cerrar una renta cancelada.".into(),
+             ));
+@@ -308,7 +319,7 @@ impl RentaService {
+         let valor_neto_s = valor_neto.round_dp(2).to_string();
+         let saldo_s = saldo.round_dp(2).to_string();
+         let placa_auto = actual.placa.clone();
+-        let usuario_audit = "sistema".to_string();
++        let usuario_audit = usuario.to_string();
+ 
+         // TRANSACCIÓN: UPDATE rentas (estado Cerrada + devolución) + UPDATE autos
+         // (liberar vehículo) + INSERT auditoría. Atómico: si cualquiera falla,
+@@ -368,12 +379,21 @@ impl RentaService {
+             )?;
+             Ok(())
+         })
+-        .map_err(|e| AppError::Database(e.to_string()))?;
++        .map_err(|e| {
++            tracing::error!(error = %e, "Transacción de cierre de renta falló");
++            AppError::Database(e.to_string())
++        })?;
++        tracing::info!(
++            placa = %placa_auto.as_deref().unwrap_or("-"),
++            total = %total_s,
++            saldo = %saldo_s,
++            "Renta cerrada y vehículo liberado"
++        );
+         Self::obtener(conn, id)
+     }
+ 
+     /// Cancela una renta activa (no las cerradas)
+-    pub fn cancelar(conn: &mut PooledConnection, id: i64) -> Result<RentaCancelada, AppError> {
++    pub fn cancelar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<RentaCancelada, AppError> {
+         let actual = Self::obtener(conn, id)?;
+         if actual.estado == "Cancelada" {
+             return Ok(RentaCancelada { renta: actual, cancelada: false });
+@@ -384,6 +404,14 @@ impl RentaService {
+             ));
+         }
+         RentaRepository::cancelar(conn, id)?;
++        // Auditoría: registra quién canceló la renta (no-repudio)
++        crate::core::audit::log_audit(
++            conn,
++            usuario,
++            "CANCELAR RENTA",
++            &format!("renta={}, placa={}", id, actual.placa.as_deref().unwrap_or("-")),
++            "local",
++        )?;
+         let renta = Self::obtener(conn, id)?;
+         Ok(RentaCancelada { renta, cancelada: true })
+     }
+@@ -688,9 +716,18 @@ impl RentaService {
+     /// Elimina una renta (soft-delete: marca deleted_at en rentas y pagos).
+     /// Las inspecciones no tienen deleted_at; dejan de ser accesibles porque la
+     /// renta no aparece en los SELECTs. Ver RentaRepository::eliminar.
+-    pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
+-        Self::obtener(conn, id)?;
+-        RentaRepository::eliminar(conn, id)
++    pub fn eliminar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<(), AppError> {
++        let renta = Self::obtener(conn, id)?;
++        RentaRepository::eliminar(conn, id)?;
++        // Auditoría: registra quién eliminó (soft-delete) la renta (no-repudio)
++        crate::core::audit::log_audit(
++            conn,
++            usuario,
++            "ELIMINAR RENTA",
++            &format!("renta={}, placa={}", renta.id, renta.placa.as_deref().unwrap_or("-")),
++            "local",
++        )?;
++        Ok(())
+     }
+ 
+     /// Registra un pago contra una renta activa y actualiza abono/saldo
+@@ -700,8 +737,16 @@ impl RentaService {
+         usuario: &str,
+         mut pago: PagoDatos,
+     ) -> Result<Pago, AppError> {
++        // ── Span de tracing (Bloque 4 / TAREA 4.1) ──
++        // El pago es el flujo financiero más sensible (manipula saldo de la
++        // renta y deja registro en `auditoria`). El span permite correlacionar
++        // logs de validación, error de BD y éxito en una sola traza.
++        let span = tracing::info_span!("registrar_pago", renta_id = id_renta, %usuario);
++        let _enter = span.enter();
++
+         let renta = Self::obtener(conn, id_renta)?;
+         if renta.estado != "Activa" && renta.estado != "Activo" {
++            tracing::warn!(estado = %renta.estado, "Pago rechazado: renta no activa");
+             return Err(AppError::Business(
+                 "Solo se pueden registrar pagos en rentas activas.".into(),
+             ));
+@@ -778,7 +823,17 @@ impl RentaService {
+                 )?;
+                 Ok(id)
+             })
+-            .map_err(|e| AppError::Database(e.to_string()))?;
++            .map_err(|e| {
++                tracing::error!(error = %e, "Transacción de pago falló");
++                AppError::Database(e.to_string())
++            })?;
++        tracing::info!(
++            pago_id = id,
++            monto = %pago.monto,
++            abono_nuevo = %abono_nuevo,
++            saldo_nuevo = %saldo_nuevo,
++            "Pago registrado contra renta"
++        );
+         Ok(RentaRepository::pagos_de(conn, id_renta)?
+             .into_iter()
+             .find(|p| p.id == id)
+diff --git a/src-tauri/tests/comparendos_integration.rs b/src-tauri/tests/comparendos_integration.rs
+index 3035b89..50b3e82 100644
+--- a/src-tauri/tests/comparendos_integration.rs
++++ b/src-tauri/tests/comparendos_integration.rs
+@@ -665,5 +665,5 @@ fn comparendo_cruce_responsable_renta() {
+     // Limpieza (comparendos soft-delete; la renta cae limpia)
+     ComparendoService::eliminar(&mut conn, c1.id).expect("limpiar c1");
+     ComparendoService::eliminar(&mut conn, c2.id).expect("limpiar c2");
+-    RentaService::eliminar(&mut conn, renta.id).expect("limpiar renta");
++    RentaService::eliminar(&mut conn, renta.id, "test").expect("limpiar renta");
+ }
+diff --git a/src-tauri/tests/informes_integration.rs b/src-tauri/tests/informes_integration.rs
+index b362f1e..c137c7a 100644
+--- a/src-tauri/tests/informes_integration.rs
++++ b/src-tauri/tests/informes_integration.rs
+@@ -227,7 +227,7 @@ fn informe_comisiones_y_balance_neto() {
+         "los costos del vehículo incluyen la comisión"
+     );
+ 
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ }
+ 
+ /// RBAC: `informe_mensual` solo es accesible para los roles de
+diff --git a/src-tauri/tests/mantenimiento_integration.rs b/src-tauri/tests/mantenimiento_integration.rs
+index 8bfd271..1b14ac4 100644
+--- a/src-tauri/tests/mantenimiento_integration.rs
++++ b/src-tauri/tests/mantenimiento_integration.rs
+@@ -95,7 +95,7 @@ fn mantenimiento_crud_roundtrip() {
+     assert!(historial.iter().any(|m| m.id == id));
+ 
+     // Eliminar
+-    MantenimientoService::eliminar(&mut conn, id).expect("eliminar");
++    MantenimientoService::eliminar(&mut conn, id, "test").expect("eliminar");
+     assert!(MantenimientoService::obtener(&mut conn, id).is_err(), "eliminado");
+ }
+ 
+@@ -187,7 +187,7 @@ fn mantenimiento_sincroniza_proximo_aceite_y_alertas() {
+ 
+     // Limpieza: eliminar mantenimiento (recalcula proximo_aceite desde el
+     // historial restante) y restaurar el valor previo sin importar si era None.
+-    MantenimientoService::eliminar(&mut conn, id).expect("eliminar");
++    MantenimientoService::eliminar(&mut conn, id, "test").expect("eliminar");
+     AutoRepository::actualizar_proximo_aceite(&mut conn, &placa, previo).expect("restaurar");
+ }
+ 
+@@ -236,6 +236,6 @@ fn mantenimiento_totales_y_contar() {
+     let recientes = MantenimientoService::recientes(&mut conn, 50).expect("recientes");
+     assert!(recientes.iter().any(|m| m.id == c1.id || m.id == c2.id));
+ 
+-    MantenimientoService::eliminar(&mut conn, c1.id).expect("eliminar m1");
+-    MantenimientoService::eliminar(&mut conn, c2.id).expect("eliminar m2");
++    MantenimientoService::eliminar(&mut conn, c1.id, "test").expect("eliminar m1");
++    MantenimientoService::eliminar(&mut conn, c2.id, "test").expect("eliminar m2");
+ }
+diff --git a/src-tauri/tests/rentas_integration.rs b/src-tauri/tests/rentas_integration.rs
+index 44b81d7..0a9ef89 100644
+--- a/src-tauri/tests/rentas_integration.rs
++++ b/src-tauri/tests/rentas_integration.rs
+@@ -224,7 +224,7 @@ fn renta_crud_cierre_pagos_inspecciones() {
+         descuento: Some("10000".into()),
+         observaciones: Some("Devolución en buen estado".into()),
+     };
+-    let cerrada = RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
++    let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
+     assert_eq!(cerrada.estado, "Cerrada");
+     assert_eq!(cerrada.fecha_devolucion_real.as_deref(), Some(hoy.format("%Y-%m-%d").to_string().as_str()));
+     // 4×150.000 − 10.000 descuento = 590.000 + 112.100 IVA = 702.100; saldo = 702.100 − 200.000
+@@ -232,11 +232,11 @@ fn renta_crud_cierre_pagos_inspecciones() {
+     assert_eq!(cerrada.saldo_pendiente, "502100.00");
+ 
+     // No se puede cerrar dos veces
+-    let err = RentaService::cerrar(&mut conn, cfg, id, RentaCierreDatos::default()).expect_err("doble cierre");
++    let err = RentaService::cerrar(&mut conn, cfg, id, "test", RentaCierreDatos::default()).expect_err("doble cierre");
+     assert_eq!(err.kind(), "business");
+ 
+     // ── Limpieza: eliminar (pagos e inspecciones caen en cascada) ──
+-    RentaService::eliminar(&mut conn, id).expect("eliminar");
++    RentaService::eliminar(&mut conn, id, "test").expect("eliminar");
+     assert!(RentaService::obtener(&mut conn, id).is_err(), "eliminada");
+ }
+ 
+@@ -299,12 +299,12 @@ fn renta_montos_en_blanco_ok() {
+         observaciones: None,
+     };
+     let cerrada =
+-        RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar con ajustes en blanco");
++        RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar con ajustes en blanco");
+     assert_eq!(cerrada.estado, "Cerrada");
+     assert_eq!(cerrada.total, "0.00");
+ 
+     // ── Limpieza ──
+-    RentaService::eliminar(&mut conn, creada.id).expect("eliminar");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("eliminar");
+ }
+ 
+ #[test]
+@@ -353,7 +353,7 @@ fn renta_no_contrato_secuencial_independiente_del_id() {
+         "no_contrato independiente del id (secuencia propia)"
+     );
+ 
+-    RentaService::eliminar(&mut conn, r3.id).expect("limpieza r3");
++    RentaService::eliminar(&mut conn, r3.id, "test").expect("limpieza r3");
+ }
+ 
+ #[test]
+@@ -378,7 +378,7 @@ fn renta_crear_con_abono_inicial() {
+     assert_eq!(creada.total, "535500.00");
+     assert_eq!(creada.saldo_pendiente, "335500.00", "saldo = total − abono inicial");
+ 
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ }
+ 
+ #[test]
+@@ -429,11 +429,11 @@ fn renta_comision_resta_del_total_valor_neto() {
+         tanque_final: Some("Lleno".into()),
+         ..Default::default()
+     };
+-    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar");
++    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar");
+     assert_eq!(cerrada.valor_neto, "435500.00", "el cierre conserva el neto");
+     assert_eq!(cerrada.estado, "Cerrada");
+ 
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ }
+ 
+ #[test]
+@@ -483,15 +483,15 @@ fn renta_validaciones_y_cancelacion() {
+ 
+     // ── Cancelar ──
+     let creada = RentaService::crear(&mut conn, cfg, datos_renta(&placa, None)).expect("crear");
+-    let cancelada = RentaService::cancelar(&mut conn, creada.id).expect("cancelar");
++    let cancelada = RentaService::cancelar(&mut conn, creada.id, "test").expect("cancelar");
+     assert!(cancelada.cancelada);
+     assert_eq!(cancelada.renta.estado, "Cancelada");
+     // Doble cancelación → ok con cancelada=false
+-    let otra = RentaService::cancelar(&mut conn, creada.id).expect("doble cancelar");
++    let otra = RentaService::cancelar(&mut conn, creada.id, "test").expect("doble cancelar");
+     assert!(!otra.cancelada);
+ 
+     // No se puede cerrar una cancelada
+-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, RentaCierreDatos::default())
++    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", RentaCierreDatos::default())
+         .expect_err("cerrar cancelada");
+     assert_eq!(err.kind(), "business");
+ 
+@@ -500,7 +500,7 @@ fn renta_validaciones_y_cancelacion() {
+         .expect_err("pago en cancelada");
+     assert_eq!(err.kind(), "business");
+ 
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ }
+ 
+ #[test]
+@@ -535,7 +535,7 @@ fn renta_pago_supera_saldo() {
+         .expect_err("pago inválido");
+     assert_eq!(err.kind(), "validation");
+ 
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ }
+ 
+ #[test]
+@@ -559,7 +559,7 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
+         fecha_devolucion_real: Some("no-es-fecha".into()),
+         ..Default::default()
+     };
+-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, cierre_mal).expect_err("fecha inválida");
++    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_mal).expect_err("fecha inválida");
+     assert_eq!(err.kind(), "validation");
+ 
+     // Hora de devolución inválida → validation
+@@ -567,10 +567,10 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
+         hora_devolucion_real: Some("25:99".into()),
+         ..Default::default()
+     };
+-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, cierre_hora).expect_err("hora inválida");
++    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_hora).expect_err("hora inválida");
+     assert_eq!(err.kind(), "validation");
+ 
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ }
+ 
+ /// Dos autos reales de la BD de dev en estado Disponible (lectura) — o None
+@@ -659,7 +659,7 @@ fn renta_cambiar_auto_sin_cerrar() {
+         (placa_a.clone(),),
+     )
+     .expect("restaurar a");
+-    RentaService::eliminar(&mut conn, id).expect("limpieza");
++    RentaService::eliminar(&mut conn, id, "test").expect("limpieza");
+ }
+ 
+ #[test]
+@@ -693,10 +693,10 @@ fn renta_cierre_calcula_dias_horas_automatico() {
+         horas_extras: None,
+         ..Default::default()
+     };
+-    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, cierre).expect("cerrar tarde");
++    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar tarde");
+     assert_eq!(cerrada.dias_calculados, 3, "6 h de excedente → día completo");
+     assert_eq!(cerrada.horas_extras, 0);
+-    RentaService::eliminar(&mut conn, creada.id).expect("limpieza");
++    RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
+ 
+     // ── Excedente 2 h (≤ 3 h) → 2 horas extras ──
+     let creada2 = RentaService::crear(&mut conn, cfg, base).expect("crear2");
+@@ -707,10 +707,10 @@ fn renta_cierre_calcula_dias_horas_automatico() {
+         horas_extras: None,
+         ..Default::default()
+     };
+-    let cerrada2 = RentaService::cerrar(&mut conn, cfg, creada2.id, cierre2).expect("cerrar puntual");
++    let cerrada2 = RentaService::cerrar(&mut conn, cfg, creada2.id, "test", cierre2).expect("cerrar puntual");
+     assert_eq!(cerrada2.dias_calculados, 2);
+     assert_eq!(cerrada2.horas_extras, 2, "2 h de excedente → horas extras");
+-    RentaService::eliminar(&mut conn, creada2.id).expect("limpieza2");
++    RentaService::eliminar(&mut conn, creada2.id, "test").expect("limpieza2");
+ }
+ 
+ /// Una renta creada con `id_reserva` completa automáticamente la reserva
+@@ -770,7 +770,7 @@ fn renta_creada_desde_reserva_completa_la_reserva() {
+     assert!(err.to_string().contains("ya fue completada"));
+ 
+     // Limpieza: renta + reserva
+-    RentaService::eliminar(&mut conn, renta.id).expect("limpiar renta");
++    RentaService::eliminar(&mut conn, renta.id, "test").expect("limpiar renta");
+     ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
+ }
+ 
+@@ -858,7 +858,7 @@ fn renta_editar_cerrada_recálculo_totales() {
+         descuento: Some("0".into()),
+         observaciones: Some("Cierre normal".into()),
+     };
+-    let cerrada = RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
++    let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
+     assert_eq!(cerrada.estado, "Cerrada");
+     // 3 × 150000 = 450000 + 19% IVA = 535500; saldo = 535500 − 100000 abono = 435500
+     assert_eq!(cerrada.total, "535500.00", "total tras cierre");
+@@ -915,8 +915,8 @@ fn renta_editar_cerrada_recálculo_totales() {
+     assert!(err.to_string().contains("Solo se pueden editar rentas cerradas"), "error: {err}");
+ 
+     // Limpieza
+-    RentaService::eliminar(&mut conn, id).expect("eliminar editada");
+-    RentaService::eliminar(&mut conn, activa.id).expect("eliminar activa");
++    RentaService::eliminar(&mut conn, id, "test").expect("eliminar editada");
++    RentaService::eliminar(&mut conn, activa.id, "test").expect("eliminar activa");
+ }
+ 
+ #[test]
+@@ -985,7 +985,7 @@ fn renta_extender_horas_y_dias() {
+         hora_devolucion_real: Some("18:00".into()),
+         ..Default::default()
+     };
+-    RentaService::cerrar(&mut conn, cfg, id, cierre).expect("cerrar");
++    RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
+     let err = RentaService::extender(&mut conn, cfg, id, "admin", ExtensionDatos::default())
+         .expect_err("no extender cerrada");
+     assert!(err.to_string().contains("Solo se pueden extender rentas activas"), "error: {err}");
+@@ -999,6 +999,6 @@ fn renta_extender_horas_y_dias() {
+     assert!(err2.to_string().contains("'horas' o 'dias'"), "error: {err2}");
+ 
+     // Limpieza
+-    RentaService::eliminar(&mut conn, id).expect("eliminar");
+-    RentaService::eliminar(&mut conn, activa.id).expect("eliminar activa");
++    RentaService::eliminar(&mut conn, id, "test").expect("eliminar");
++    RentaService::eliminar(&mut conn, activa.id, "test").expect("eliminar activa");
+ }
+diff --git a/src/lib/components/FormField.svelte b/src/lib/components/FormField.svelte
+index b4e8a7c..0fc64dd 100644
+--- a/src/lib/components/FormField.svelte
++++ b/src/lib/components/FormField.svelte
+@@ -1,6 +1,6 @@
+ <script lang="ts">
+ 	interface Props {
+-		label: string;
++		label?: string;
+ 		required?: boolean;
+ 		hint?: string;
+ 		error?: string;
+@@ -12,22 +12,68 @@
+ 	}
+ 
+ 	let { label, required = false, hint, error, dense = false, class: klass = '', children }: Props = $props();
++
++	// ── Accesibilidad (WCAG 2.1 SC 1.3.1, 3.3.2, 4.1.2) ──
++	// Generamos ids estables para (a) el input hijo y (b) el párrafo de hint/error,
++	// y los conectamos vía `<label for>` + `aria-describedby` + `aria-invalid`.
++	//
++	// Como el input lo pasa el consumidor via snippet (no es hijo directo del label),
++	// usamos un `$effect` que busca el primer control enfocable dentro del wrapper
++	// y le inyecta los atributos ARIA necesarios. Esto evita tocar los ~30
++	// consumidores existentes (progressive enhancement).
++	//
++	// El id del input solo se sobreescribe si el consumidor NO le puso uno propio
++	// (para no romper selectores externos). En ese caso, el `<label for>` apunta al
++	// id que el consumidor definió (se sincroniza vía `labelFor`).
++	let fieldId = `ff-${Math.random().toString(36).slice(2, 10)}`;
++	let descId = `${fieldId}-desc`;
++	let wrapper: HTMLDivElement | undefined = $state();
++	let labelFor = $state(fieldId);
++
++	$effect(() => {
++		if (!wrapper) return;
++		// Busca el primer control de formulario dentro del wrapper.
++		const input = wrapper.querySelector<HTMLElement>(
++			'input, select, textarea, button[type="submit"]'
++		);
++		if (!input) return;
++		// Si el consumidor ya le puso un id, lo respetamos y el `<label for>`
++		// se actualiza para apuntar a ese id. Si no, le asignamos el nuestro.
++		if (input.id) {
++			labelFor = input.id;
++		} else {
++			input.id = fieldId;
++			labelFor = fieldId;
++		}
++		// aria-describedby: vincula el input al párrafo de hint/error.
++		if (error || hint) {
++			input.setAttribute('aria-describedby', descId);
++		} else {
++			input.removeAttribute('aria-describedby');
++		}
++		// aria-invalid: marca el campo como erróneo para lectores de pantalla.
++		if (error) {
++			input.setAttribute('aria-invalid', 'true');
++		} else {
++			input.removeAttribute('aria-invalid');
++		}
++	});
+ </script>
+ 
+-<div class="{dense ? 'mb-3' : 'mb-4'} {klass}">
++<div bind:this={wrapper} class="{dense ? 'mb-3' : 'mb-4'} {klass}">
+ 	{#if label}
+-		<span class="label">
++		<label class="label" for={labelFor}>
+ 			{label}
+-			{#if required}<span class="text-peligro"> *</span>{/if}
+-		</span>
++			{#if required}<span class="text-peligro" aria-hidden="true"> *</span>{/if}
++		</label>
+ 	{/if}
+ 	{@render children?.()}
+ 	{#if error}
+-		<p class="mt-1 text-xs text-peligro flex items-center gap-1">
+-			<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
++		<p id={descId} class="mt-1 text-xs text-peligro flex items-center gap-1" aria-live="polite">
++			<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+ 			{error}
+ 		</p>
+ 	{:else if hint}
+-		<p class="mt-0.5 text-[10px] text-text-secondary/70 leading-tight">{hint}</p>
++		<p id={descId} class="mt-0.5 text-[10px] text-text-secondary/70 leading-tight">{hint}</p>
+ 	{/if}
+ </div>
+diff --git a/src/lib/components/Modal.svelte b/src/lib/components/Modal.svelte
+index d15d870..143e6e8 100644
+--- a/src/lib/components/Modal.svelte
++++ b/src/lib/components/Modal.svelte
+@@ -34,8 +34,57 @@
+ 		footer
+ 	}: Props = $props();
+ 
++	// ── Accesibilidad: focus trap + autofocus + restore (WCAG 2.1 SC 2.4.3) ──
++	// Al abrir el modal: guardamos el elemento que tenía el foco (para restaurarlo
++	// al cerrar) y movemos el foco al primer elemento enfocable del modal.
++	// Mientras el modal está abierto: interceptamos Tab para que el foco no escape
++	// (cicla entre los elementos enfocables dentro del modal).
++	// Al cerrar: devolvemos el foco al elemento guardado.
++	let dialogEl: HTMLDivElement | undefined = $state();
++	let titleId = `modal-title-${Math.random().toString(36).slice(2, 10)}`;
++	let previouslyFocused: HTMLElement | null = null;
++
++	const FOCUSABLE =
++		'button:not([disabled]):not([tabindex="-1"]), [href], input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
++
++	function getFocusable(): HTMLElement[] {
++		if (!dialogEl) return [];
++		return Array.from(dialogEl.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
++			(el) => el.offsetParent !== null || el === document.activeElement
++		);
++	}
++
+ 	function handleKey(e: KeyboardEvent) {
+-		if (e.key === 'Escape' && dismissible) onClose();
++		if (e.key === 'Escape' && dismissible) {
++			e.preventDefault();
++			onClose();
++			return;
++		}
++		if (e.key === 'Tab' && dialogEl) {
++			const focusable = getFocusable();
++			if (focusable.length === 0) {
++				// Sin elementos enfocables: mantener el foco en el diálogo mismo.
++				e.preventDefault();
++				dialogEl.focus();
++				return;
++			}
++			const first = focusable[0];
++			const last = focusable[focusable.length - 1];
++			const active = document.activeElement as HTMLElement;
++			if (e.shiftKey) {
++				// Shift+Tab: si estamos en el primero, saltar al último.
++				if (active === first || active === dialogEl) {
++					e.preventDefault();
++					last.focus();
++				}
++			} else {
++				// Tab: si estamos en el último, saltar al primero.
++				if (active === last) {
++					e.preventDefault();
++					first.focus();
++				}
++			}
++		}
+ 	}
+ 
+ 	$effect(() => {
+@@ -43,9 +92,38 @@
+ 			document.addEventListener('keydown', handleKey);
+ 			const prev = document.body.style.overflow;
+ 			document.body.style.overflow = 'hidden';
++			// Guardar el elemento que tenía el foco ANTES de moverlo al modal.
++			previouslyFocused = document.activeElement as HTMLElement;
++			// Mover el foco al primer elemento enfocable del modal (autofocus).
++			// requestAnimationFrame asegura que el DOM del modal ya está pintado.
++			const raf = requestAnimationFrame(() => {
++				// Si un consumidor ya movió el foco a un elemento dentro del modal
++				// (p.ej. ConfirmarCierre enfoca el botón «No»), respetarlo.
++				if (
++					dialogEl &&
++					document.activeElement &&
++					dialogEl.contains(document.activeElement) &&
++					document.activeElement !== document.body
++				) {
++					return;
++				}
++				const focusable = getFocusable();
++				if (focusable.length > 0) {
++					focusable[0].focus();
++				} else if (dialogEl) {
++					// Sin elementos enfocables: poner el foco en el contenedor del diálogo.
++					dialogEl.focus();
++				}
++			});
+ 			return () => {
+ 				document.removeEventListener('keydown', handleKey);
+ 				document.body.style.overflow = prev;
++				cancelAnimationFrame(raf);
++				// Restaurar el foco al elemento que lo tenía antes de abrir el modal.
++				if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
++					previouslyFocused.focus();
++				}
++				previouslyFocused = null;
+ 			};
+ 		}
+ 	});
+@@ -56,7 +134,7 @@
+ 		class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain p-3 sm:p-4"
+ 		role="dialog"
+ 		aria-modal="true"
+-		aria-label={title}
++		aria-labelledby={titleId}
+ 	>
+ 		<button
+ 			class="fixed inset-0 bg-slate-900/50 backdrop-blur-[2px] cursor-default animate-[modal-fade-in_150ms_ease-out]"
+@@ -66,14 +144,16 @@
+ 		></button>
+ 
+ 		<div
++			bind:this={dialogEl}
+ 			class="relative w-full {width} mt-2 sm:mt-3 card shadow-2xl flex flex-col {fullHeight
+ 				? 'h-[calc(100vh-1.5rem)]'
+-				: 'max-h-[calc(100vh-2rem)]'} animate-[modal-pop-in_180ms_ease-out]"
++				: 'max-h-[calc(100vh-2rem)]'} animate-[modal-pop-in_180ms_ease-out] outline-none"
++			tabindex="-1"
+ 		>
+ 			<!-- Header -->
+ 			<div class="flex items-start justify-between gap-4 px-5 py-3 border-b border-border shrink-0">
+ 				<div>
+-					<h2 class="text-base font-bold text-text-primary leading-tight">{title}</h2>
++					<h2 id={titleId} class="text-base font-bold text-text-primary leading-tight">{title}</h2>
+ 					{#if subtitle}
+ 						<p class="text-[11px] text-text-secondary mt-0.5">{subtitle}</p>
+ 					{/if}
+diff --git a/src/lib/stores/business.svelte.ts b/src/lib/stores/business.svelte.ts
+new file mode 100644
+index 0000000..03ef9fb
+--- /dev/null
++++ b/src/lib/stores/business.svelte.ts
+@@ -0,0 +1,102 @@
++// business.svelte.ts — Store global de BusinessLists con TTL (Svelte 5 runes)
++//
++// TAREA 3.2 (Bloque 3 — Performance): evita que cada ruta (rentas, autos,
++// clientes, reservas, gastos, mantenimiento, comparendos, usuarios…) llame a
++// `businessApi.listas(sid)` en su `onMount`. El store cachea el resultado con
++// un TTL configurable (por defecto 5 min) y lo sirve desde memoria a todas las
++// rutas. La primera ruta que monta dispara la carga; las siguientes leen del
++// cache sin round-trip.
++//
++// Patrón de uso en una ruta:
++//
++//   import { businessLists } from '$lib/stores/business.svelte';
++//
++//   onMount(async () => {
++//       // Carga las listas si no están en cache (o si expiró el TTL).
++//       // `lists` es reactivo: el template puede usarlo directamente.
++//       await businessLists.ensure(sid());
++//       // …cargar otros datos de la ruta…
++//   });
++//
++//   // En el template:
++//   $derived(businessLists.lists?.tiposAuto ?? [])
++//
++// Invalidación: cuando una ruta modifica datos que afectan las listas (p. ej.
++// empresa.config actualiza `impuestoPorcentaje`), debe llamar a
++// `businessLists.invalidate()` para que la próxima lectura vuelva a consultar
++// el backend.
++
++import { businessApi, type BusinessLists } from '$lib/api';
++
++/** TTL por defecto: 5 minutos (300_000 ms). */
++const DEFAULT_TTL_MS = 5 * 60 * 1000;
++
++class BusinessListsStore {
++        /** Listas cacheadas (reactivo: el template puede leer directamente). */
++        lists = $state<BusinessLists | null>(null);
++
++        /** Timestamp de la última carga exitosa (ms desde epoch). */
++        private cargadoEn = $state<number>(0);
++
++        /** TTL aplicado a este store (ms). Modificable en caliente. */
++        ttlMs = $state(DEFAULT_TTL_MS);
++
++        /** Indica si hay una carga en vuelo (para no duplicar requests). */
++        private cargando: Promise<BusinessLists | null> | null = null;
++
++        /** ¿El cache es válido (no expirado y con datos)? */
++        get valido(): boolean {
++                return this.lists !== null && Date.now() - this.cargadoEn < this.ttlMs;
++        }
++
++        /**
++         * Devuelve las listas desde el cache si es válido; si no, dispara una
++         * carga (sin await: la promesa resuelve con las listas cuando termine,
++         * pero `this.lists` se actualiza reactivamente para que el template
++         * muestre el spinner por defecto y se re-renderice al llegar).
++         *
++         * Si hay una carga en vuelo, reutiliza la misma promesa (deduplica).
++         */
++        async ensure(sessionId: string): Promise<BusinessLists | null> {
++                if (this.valido) return this.lists;
++                if (!sessionId) return null;
++                if (this.cargando) return this.cargando;
++
++                this.cargando = (async () => {
++                        try {
++                                const data = await businessApi.listas(sessionId);
++                                this.lists = data;
++                                this.cargadoEn = Date.now();
++                                return data;
++                        } catch (e) {
++                                console.warn('businessLists: no se pudieron cargar las listas:', e);
++                                return null;
++                        } finally {
++                                this.cargando = null;
++                        }
++                })();
++                return this.cargando;
++        }
++
++        /**
++         * Fuerza la recarga en la próxima lectura (o inmediatamente si se pasa
++         * `sessionId`). Las rutas que modifican datos del backend que afectan
++         * las listas (impuestoPorcentaje, roles_con_*, etc.) deben llamar a
++         * este método tras confirmar el cambio.
++         */
++        invalidate(sessionId?: string): void {
++                this.cargadoEn = 0;
++                if (sessionId) {
++                        void this.ensure(sessionId);
++                }
++        }
++
++        /** Resetea el store (logout). */
++        clear(): void {
++                this.lists = null;
++                this.cargadoEn = 0;
++                this.cargando = null;
++        }
++}
++
++export const businessLists = new BusinessListsStore();
+diff --git a/src/routes/+error.svelte b/src/routes/+error.svelte
+new file mode 100644
+index 0000000..f8b4b25
+--- /dev/null
++++ b/src/routes/+error.svelte
+@@ -0,0 +1,77 @@
++<script lang="ts">
++	// Página de error global (SvelteKit). Se renderiza cuando un `load` falla,
++	// cuando una ruta no existe (404) o cuando el servidor devuelve un error (5xx).
++	// Muestra el código de estado y el mensaje, con botones para reintentar o
++	// volver al dashboard. Usa los tokens de tema de app.css (claro/oscuro).
++	import { page } from '$app/state';
++	import { goto } from '$app/navigation';
++
++	function reintentar() {
++		// Recarga la página actual: fuerza a SvelteKit a re-ejecutar los `load`.
++		if (typeof window !== 'undefined') {
++			window.location.reload();
++		}
++	}
++
++	function irDashboard() {
++		goto('/');
++	}
++</script>
++
++<svelte:head>
++	<title>Error {page.status} — Dinamo Rent ERP</title>
++</svelte:head>
++
++<div class="min-h-screen flex items-center justify-center bg-fondo p-6">
++	<div class="card max-w-md w-full px-8 py-10 text-center">
++		<!-- Icono de error -->
++		<div class="w-16 h-16 rounded-2xl bg-peligro/10 text-peligro flex items-center justify-center mx-auto mb-5">
++			<svg xmlns="http://www.w3.org/2000/svg" class="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
++				<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
++			</svg>
++		</div>
++
++		<!-- Código de estado -->
++		<p class="text-5xl font-bold text-peligro mb-2 tabular-nums" aria-live="polite">
++			{page.status}
++		</p>
++
++		<!-- Título contextual según el código -->
++		<h1 class="text-lg font-bold text-text-primary mb-1">
++			{#if page.status === 404}
++				Página no encontrada
++			{:else if page.status >= 500}
++				Error del servidor
++			{:else}
++				Algo salió mal
++			{/if}
++		</h1>
++
++		<!-- Mensaje de error (si existe) -->
++		{#if page.error?.message}
++			<p class="text-sm text-text-secondary leading-relaxed mb-6 break-words">
++				{page.error.message}
++			</p>
++		{:else}
++			<p class="text-sm text-text-secondary leading-relaxed mb-6">
++				Ocurrió un error inesperado. Intenta recargar la página o vuelve al dashboard.
++			</p>
++		{/if}
++
++		<!-- Acciones -->
++		<div class="flex flex-col sm:flex-row gap-2 justify-center">
++			<button class="btn-primary" onclick={reintentar}>
++				<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
++					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
++				</svg>
++				Reintentar
++			</button>
++			<button class="btn-ghost" onclick={irDashboard}>
++				<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
++					<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
++				</svg>
++				Ir al dashboard
++			</button>
++		</div>
++	</div>
++</div>
+diff --git a/src/routes/+layout.svelte b/src/routes/+layout.svelte
+index bcf333d..b0f5ef6 100644
+--- a/src/routes/+layout.svelte
++++ b/src/routes/+layout.svelte
+@@ -276,6 +276,10 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
+ 		</div>
+ 	</div>
+ {:else if ready && session.isAuthenticated}
++	<!-- Skip-link de accesibilidad: primer elemento enfocable. Salta al contenido principal. -->
++	<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-surface focus:text-primary focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary-focus">
++		Saltar al contenido
++	</a>
+ 	<div class="flex h-screen overflow-hidden">
+ 		<!-- Sidebar -->
+ 		<aside
+@@ -297,7 +301,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
+ 			</div>
+ 
+ 			<!-- Navegación -->
+-			<nav class="flex-1 overflow-y-auto py-4 px-2 space-y-5">
++			<nav class="flex-1 overflow-y-auto py-4 px-2 space-y-5" aria-label="Navegación principal">
+ 				{#each menu as group}
+ 					{#if sidebarOpen}
+ 						<p class="px-3 text-[10px] font-bold tracking-widest text-white/40 uppercase">{group.section}</p>
+@@ -413,7 +417,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
+ 			</header>
+ 
+ 			<!-- Vista actual -->
+-			<main class="flex-1 overflow-y-auto p-6">
++			<main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 focus:outline-none">
+ 				{@render children()}
+ 			</main>
+ 		</div>
+diff --git a/src/routes/autos/+page.svelte b/src/routes/autos/+page.svelte
+index f196996..4064697 100644
+--- a/src/routes/autos/+page.svelte
++++ b/src/routes/autos/+page.svelte
+@@ -1,7 +1,8 @@
+ <script lang="ts">
+ 	import { onMount } from 'svelte';
+-	import { autoApi, businessApi, ApiError, type Auto, type AutoDatos, type AlertaVencimiento, type BusinessLists } from '$lib/api';
++	import { autoApi, ApiError, type Auto, type AutoDatos, type AlertaVencimiento, type BusinessLists } from '$lib/api';
+ 	import { sid, session } from '$lib/stores/session.svelte';
++	import { businessLists } from '$lib/stores/business.svelte';
+ 	import { toast } from '$lib/stores/toast.svelte';
+ 	import { formatDate } from '$lib/utils/format';
+ 	import { guardSesion, haySesion } from '$lib/utils/guards';
+@@ -16,7 +17,9 @@
+ 
+ 	let autos = $state<Auto[]>([]);
+ 	let alertas = $state<AlertaVencimiento[]>([]);
+-	let lists = $state<BusinessLists | null>(null);
++	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
++	// global `businessLists` (cache TTL 5 min, invalidable).
++	const lists = $derived<BusinessLists | null>(businessLists.lists);
+ 	let loading = $state(true);
+ 	let loadingAlertas = $state(true);
+ 
+@@ -103,15 +106,16 @@
+ 
+ 	onMount(async () => {
+ 		if (!guardSesion()) return;
+-		if (!lists) {
+-			try {
+-				lists = await businessApi.listas(sid());
+-			} catch {
+-				/* las listas son opcionales */
+-			}
+-		}
+-		// La carga inicial de autos la dispara el $effect de filtros (una sola vez)
+-		await cargarAlertas();
++		// TAREA 3.2 + 3.3 (Bloque 3 — Performance):
++		//  - `businessLists.ensure` carga las listas si no están en cache
++		//    (TTL 5 min) o reutiliza las cacheadas — evita 1 round-trip por
++		//    cada navegación a /autos.
++		//  - `Promise.all` paraleliza `cargarAlertas` con la carga de listas
++		//    (la carga inicial de autos la dispara el $effect de filtros).
++		await Promise.all([
++			businessLists.ensure(sid()).catch(() => null),
++			cargarAlertas()
++		]);
+ 	});
+ 
+ 	// Carga inicial + filtros (debounce solo al escribir)
+@@ -218,7 +222,6 @@
+ 			await Promise.all([cargar(), cargarAlertas()]);
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el vehículo.');
+-			eliminarPlaca = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/clientes/+page.svelte b/src/routes/clientes/+page.svelte
+index 968ef0e..eded1dd 100644
+--- a/src/routes/clientes/+page.svelte
++++ b/src/routes/clientes/+page.svelte
+@@ -1,7 +1,8 @@
+ <script lang="ts">
+ 	import { onMount } from 'svelte';
+-	import { clienteApi, businessApi, ApiError, type Cliente, type ClienteConPii, type BusinessLists } from '$lib/api';
++	import { clienteApi, ApiError, type Cliente, type ClienteConPii, type BusinessLists } from '$lib/api';
+ 	import { sid, session } from '$lib/stores/session.svelte';
++	import { businessLists } from '$lib/stores/business.svelte';
+ 	import { toast } from '$lib/stores/toast.svelte';
+ 	import { formatDate } from '$lib/utils/format';
+ 	import { guardSesion, haySesion, tieneRol } from '$lib/utils/guards';
+@@ -16,7 +17,9 @@
+ 	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
+ 
+ 	let clientes = $state<ClienteConPii[]>([]);
+-	let lists = $state<BusinessLists | null>(null);
++	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
++	// global `businessLists` (cache TTL 5 min, invalidable).
++	const lists = $derived<BusinessLists | null>(businessLists.lists);
+ 	let loading = $state(true);
+ 	let piiDialogOpen = $state(false);
+ 
+@@ -55,13 +58,10 @@
+ 
+ 	onMount(async () => {
+ 		if (!guardSesion()) return;
+-		if (!lists) {
+-			try {
+-				lists = await businessApi.listas(sid());
+-			} catch {
+-				/* opcional */
+-			}
+-		}
++		// TAREA 3.2 (Bloque 3 — Performance): las listas se sirven desde el
++		// store global `businessLists` (cache TTL 5 min, invalidable). Evita
++		// 1 round-trip por cada navegación a /clientes.
++		await businessLists.ensure(sid()).catch(() => null);
+ 		// La carga inicial de clientes la dispara el $effect de filtros (una sola vez)
+ 	});
+ 
+@@ -103,7 +103,6 @@
+ 			await cargar();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el cliente.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/comparendos/+page.svelte b/src/routes/comparendos/+page.svelte
+index ad4bacd..7ce830a 100644
+--- a/src/routes/comparendos/+page.svelte
++++ b/src/routes/comparendos/+page.svelte
+@@ -418,7 +418,6 @@
+ 			await cargar();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el comparendo.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/gastos/+page.svelte b/src/routes/gastos/+page.svelte
+index 1d1d799..960a8ae 100644
+--- a/src/routes/gastos/+page.svelte
++++ b/src/routes/gastos/+page.svelte
+@@ -204,7 +204,6 @@
+ 			await cargarTodo();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el gasto.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/mantenimiento/+page.svelte b/src/routes/mantenimiento/+page.svelte
+index c5e338a..bb7162d 100644
+--- a/src/routes/mantenimiento/+page.svelte
++++ b/src/routes/mantenimiento/+page.svelte
+@@ -227,7 +227,6 @@
+ 			await cargarTodo();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el mantenimiento.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/rentas/+page.svelte b/src/routes/rentas/+page.svelte
+index 1707eb6..4248614 100644
+--- a/src/routes/rentas/+page.svelte
++++ b/src/routes/rentas/+page.svelte
+@@ -5,7 +5,6 @@
+ 		reservaApi,
+ 		clienteApi,
+ 		autoApi,
+-		businessApi,
+ 		ApiError,
+ 		type Renta,
+ 		type RentaDatos,
+@@ -21,6 +20,7 @@
+ 		type Reserva
+ 	} from '$lib/api';
+ 	import { sid, session } from '$lib/stores/session.svelte';
++	import { businessLists } from '$lib/stores/business.svelte';
+ 	import { toast } from '$lib/stores/toast.svelte';
+ 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
+ 	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
+@@ -63,7 +63,11 @@
+ 			sub: [a.tipo ?? '', a.color ?? ''].filter(Boolean).join(' ').trim()
+ 		}))
+ 	);
+-	let lists = $state<BusinessLists | null>(null);
++	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
++	// global `businessLists` (cache TTL 5 min, invalidable). La primera
++	// ruta que monta dispara la carga; las siguientes leen del cache sin
++	// round-trip.
++	const lists = $derived<BusinessLists | null>(businessLists.lists);
+ 	let loading = $state(true);
+ 
+ 	// ¿El rol actual puede eliminar registros? (roles_con_eliminar de config.ini)
+@@ -339,23 +343,18 @@
+ 
+ 	onMount(async () => {
+ 		if (!guardSesion()) return;
+-		if (!lists) {
+-			try {
+-				lists = await businessApi.listas(sid());
+-			} catch {
+-				/* opcional */
+-			}
+-		}
+-		try {
+-			clientes = await clienteApi.listar(sid());
+-		} catch {
+-			clientes = [];
+-		}
+-		try {
+-			autos = await autoApi.listar(sid());
+-		} catch {
+-			autos = [];
+-		}
++		// TAREA 3.2 + 3.3 (Bloque 3 — Performance):
++		//  - `businessLists.ensure` carga las listas si no están en cache
++		//    (TTL 5 min) o reutiliza las cacheadas — evita 1 round-trip por
++		//    cada navegación a /rentas.
++		//  - `Promise.all` paraleliza las cargas independientes (clientes,
++		//    autos, listas) que antes corrían en secuencia → 3 round-trips
++		//    en paralelo en vez de 3 secuenciales.
++		await Promise.all([
++			businessLists.ensure(sid()).catch(() => null),
++			clienteApi.listar(sid()).then((c) => (clientes = c)).catch(() => (clientes = [])),
++			autoApi.listar(sid()).then((a) => (autos = a)).catch(() => (autos = []))
++		]);
+ 		await cargar();
+ 
+ 		// Precarga desde una reserva (?desdeReserva=<id>): abre el formulario
+@@ -707,7 +706,6 @@
+ 			await cargar();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo cancelar la renta.');
+-			cancelarId = null;
+ 		} finally {
+ 			cancelando = false;
+ 		}
+@@ -723,7 +721,6 @@
+ 			await cargar();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar la renta.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/reservas/+page.svelte b/src/routes/reservas/+page.svelte
+index 9fb4155..61e4a58 100644
+--- a/src/routes/reservas/+page.svelte
++++ b/src/routes/reservas/+page.svelte
+@@ -4,7 +4,6 @@
+ 		reservaApi,
+ 		clienteApi,
+ 		autoApi,
+-		businessApi,
+ 		ApiError,
+ 		type Reserva,
+ 		type ReservaDatos,
+@@ -13,6 +12,7 @@
+ 		type BusinessLists
+ 	} from '$lib/api';
+ 	import { session } from '$lib/stores/session.svelte';
++	import { businessLists } from '$lib/stores/business.svelte';
+ 	import { toast } from '$lib/stores/toast.svelte';
+ 	import { formatCOP, formatDate } from '$lib/utils/format';
+ 	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
+@@ -34,7 +34,9 @@
+ 	let proximas = $state<Reserva[]>([]);
+ 	let clientes = $state<ClienteConPii[]>([]);
+ 	let autos = $state<Auto[]>([]);
+-	let lists = $state<BusinessLists | null>(null);
++	// TAREA 3.2 (Bloque 3 — Performance): `lists` se sirve desde el store
++	// global `businessLists` (cache TTL 5 min, invalidable).
++	const lists = $derived<BusinessLists | null>(businessLists.lists);
+ 
+ 	// ¿El rol actual puede eliminar registros? (roles_con_eliminar de config.ini)
+ 	const puedeEliminar = $derived(
+@@ -183,24 +185,19 @@
+ 
+ 	onMount(async () => {
+ 		if (!guardSesion()) return;
+-		if (!lists) {
+-			try {
+-				lists = await businessApi.listas(sid());
+-			} catch {
+-				/* opcional */
+-			}
+-		}
+-		try {
+-			clientes = await clienteApi.listar(sid());
+-		} catch {
+-			clientes = [];
+-		}
+-		try {
+-			autos = await autoApi.listar(sid());
+-		} catch {
+-			autos = [];
+-		}
+-		await cargarProximas();
++		// TAREA 3.2 + 3.3 (Bloque 3 — Performance):
++		//  - `businessLists.ensure` carga las listas si no están en cache
++		//    (TTL 5 min) o reutiliza las cacheadas — evita 1 round-trip por
++		//    cada navegación a /reservas.
++		//  - `Promise.all` paraleliza las 4 cargas independientes que antes
++		//    corrían en secuencia (listas → clientes → autos → proximas) →
++		//    4 round-trips en paralelo en vez de 4 secuenciales.
++		await Promise.all([
++			businessLists.ensure(sid()).catch(() => null),
++			clienteApi.listar(sid()).then((c) => (clientes = c)).catch(() => (clientes = [])),
++			autoApi.listar(sid()).then((a) => (autos = a)).catch(() => (autos = [])),
++			cargarProximas()
++		]);
+ 		// La carga inicial de reservas la dispara el $effect de filtros (una sola vez)
+ 	});
+ 
+@@ -303,7 +300,6 @@
+ 			await Promise.all([cargar(), cargarProximas()]);
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo cancelar la reserva.');
+-			cancelarId = null;
+ 		} finally {
+ 			cancelando = false;
+ 		}
+@@ -319,7 +315,6 @@
+ 			await Promise.all([cargar(), cargarProximas()]);
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar la reserva.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/routes/usuarios/+page.svelte b/src/routes/usuarios/+page.svelte
+index 6c91e48..fd4246a 100644
+--- a/src/routes/usuarios/+page.svelte
++++ b/src/routes/usuarios/+page.svelte
+@@ -204,7 +204,6 @@
+ 			await cargar();
+ 		} catch (e) {
+ 			toast.error(e instanceof ApiError ? e.message : 'No se pudo eliminar el usuario.');
+-			eliminarId = null;
+ 		} finally {
+ 			eliminando = false;
+ 		}
+diff --git a/src/test/setup.ts b/src/test/setup.ts
+index 33517dc..93755ae 100644
+--- a/src/test/setup.ts
++++ b/src/test/setup.ts
+@@ -6,6 +6,9 @@
+ import '@testing-library/jest-dom/vitest';
+ import { afterEach, vi } from 'vitest';
+ import { cleanup } from '@testing-library/svelte';
++// TAREA 3.2 (Bloque 3 — Performance): reset del cache global de BusinessLists
++// entre tests para que cada test vea el `LISTS` que registra en su beforeEach.
++import { businessLists } from '$lib/stores/business.svelte';
+ 
+ // jsdom 30 no expone localStorage en este entorno (sessionStorage sí).
+ // El store de sesión usa `localStorage` como global; aportamos un shim en
+@@ -69,6 +72,10 @@ interface TauriTestBridge {
+ 		cleanup();
+ 		tauriState.reset();
+ 		vi.clearAllMocks();
++		// Reset del cache de BusinessLists (TAREA 3.2): cada test registra su
++		// propio `get_business_lists` en el beforeEach; sin esto, un test
++		// posterior leería las listas cacheadas del anterior.
++		businessLists.clear();
+ 		// jsdom expone storage en el global; limpiar de forma defensiva
+ 		try {
+ 			window.localStorage?.clear();
