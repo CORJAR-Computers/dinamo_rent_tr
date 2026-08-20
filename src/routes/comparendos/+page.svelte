@@ -148,7 +148,7 @@
 			const ws = wb.addWorksheet('Comparendos SIMIT');
 			ws.columns = Array.from({ length: 10 }, () => ({ width: 16 }));
 			ws.mergeCells(1, 1, 1, 10);
-			ws.getCell('A1').value = 'DINAMO RENT — REPORTE SIMIT';
+			ws.getCell('A1').value = 'DINAMO RENT A CAR — REPORTE SIMIT';
 			ws.getCell('A1').font = { bold: true, size: 14 };
 			ws.mergeCells(2, 1, 2, 10);
 			ws.getCell('A2').value = `Sincronización: ${new Date(resultado.sincronizadoEn).toLocaleString('es-CO')}`;

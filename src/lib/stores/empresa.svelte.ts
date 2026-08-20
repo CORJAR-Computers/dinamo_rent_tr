@@ -10,7 +10,7 @@
 import { empresaApi, type EmpresaConfig } from '$lib/api';
 
 /** Branding por defecto cuando la empresa aún no configuró nada. */
-export const FALLBACK_NOMBRE = 'Dinamo Rent';
+export const FALLBACK_NOMBRE = 'Dinamo Rent A Car';
 export const FALLBACK_LOGO = '/LogoDinamo.png';
 export const FALLBACK_NIT = '900694866-3';
 export const FALLBACK_TELEFONO = '301 613 85 30 • 321 839 44 22';
