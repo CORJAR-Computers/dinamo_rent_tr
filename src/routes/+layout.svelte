@@ -169,7 +169,7 @@
 			items: [
 				{ label: 'Usuarios', href: '/usuarios', icon: 'usuarios', adminOnly: true },
 				{ label: 'Auditoría', href: '/auditoria', icon: 'auditoria', adminOnly: true },
-				{ label: 'Empresa', href: '/empresa', icon: 'empresa', adminOnly: true },					{ label: 'Backups', href: '/backups', icon: 'backups', adminOnly: true },
+				{ label: 'Backups', href: '/backups', icon: 'backups', adminOnly: true },
 					{ label: 'Logs', href: '/logs', icon: 'logs', adminOnly: true },
 					{ label: 'Comparendos', href: '/comparendos', icon: 'comparendos' },
 				{ label: 'Alertas', href: '/alertas', icon: 'alertas' }
@@ -240,7 +240,7 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			'/mantenimiento': 'Mantenimiento',
 			'/usuarios': 'Usuarios',
 			'/auditoria': 'Auditoría',
-			'/empresa': 'Empresa',				'/backups': 'Backups',
+				'/backups': 'Backups',
 				'/logs': 'Logs',
 				'/comparendos': 'Comparendos',
 			'/alertas': 'Alertas',
