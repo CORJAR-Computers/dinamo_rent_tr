@@ -25,6 +25,10 @@ cobraIva: boolean,
  */
 tieneComision: boolean, 
 /**
+ * ¿Cobra horas extras al cierre? (checkbox del formulario; false = cortesía)
+ */
+cobrarHorasExtra: boolean, 
+/**
  * Valor de la comisión a restar del total (neto = total − comisión)
  */
 comision: string, 
