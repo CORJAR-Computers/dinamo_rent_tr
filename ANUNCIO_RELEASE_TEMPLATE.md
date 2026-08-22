@@ -2,7 +2,7 @@
 
 Mensaje listo para pegar en un canal del equipo al publicar una versión nueva.
 Las secciones «Versión larga» y «Versión corta» están **completadas con los
-datos reales de la v1.0.23** (enlaces, sha256, conteos de tests) — copiar el
+datos reales de la v1.0.24** (enlaces, sha256, conteos de tests) — copiar el
 bloque elegido tal cual. Para una versión futura, actualizar los valores de
 la «Referencia rápida» (versión, URLs de assets, sha256 y conteos de tests)
 y reemplazarlos en el texto de las dos secciones.
@@ -12,15 +12,15 @@ y reemplazarlos en el texto de las dos secciones.
 ## Versión larga (una pantalla)
 
 ```text
-🚀 Dinamo Rent ERP — v1.0.23 publicada (checkbox Cobrar Horas Extra + fix edición renta cerrada)
+🚀 Dinamo Rent ERP — v1.0.24 publicada (fix hora real de cierre en tabla de rentas + tipos generados)
 
-La versión v1.0.23 ya está publicada en GitHub, construida y firmada
+La versión v1.0.24 ya está publicada en GitHub, construida y firmada
 por CI (auto-update activo desde la v1.0.14).
 
-📦 Descarga: release v1.0.23 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.23/DinamoRent_1.0.23_x64-setup.exe
-(~22 MB, NSIS) o el .msi (~34 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.23/DinamoRent_1.0.23_x64_en-US.msi
-sha256 NSIS: 5ed4577aed71fbfa16c2e58a9eafd0f58e1f23c3155a2ec53ef42a189261d46b
-sha256 MSI:  1dc6977d36d4422a6ee84b538992d4165013c2ec9a5584bbb85259ee444f2fa4
+📦 Descarga: release v1.0.24 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.24/DinamoRent_1.0.24_x64-setup.exe
+(~22 MB, NSIS) o el .msi (~34 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.24/DinamoRent_1.0.24_x64_en-US.msi
+sha256 NSIS: a3b1567b7d3442a61d9bf2851035504a3a1892eb13153c3955bdd9a67c29700f
+sha256 MSI:  4bbe2619c5bfa0bd57c298b8ad12bb957cfcaec7ad071b3004803753dc6d5ab2
 Credenciales iniciales: admin / admin123 (cambio forzado al primer ingreso).
 ⚠️ No instalar versiones anteriores descontinuadas.
 
@@ -61,28 +61,28 @@ https://github.com/CORJAR-Computers/dinamo_rent_tr/blob/main/RESUMEN_EJECUTIVO.m
 ## Versión corta (anuncio rápido, 2-3 líneas)
 
 ```text
-🚀 Dinamo Rent ERP v1.0.23 publicada y firmada por CI. Fix: edición de renta cerrada (campos numéricos convertidos a string para el backend). Auto-update desde v1.0.14.
+🚀 Dinamo Rent ERP v1.0.24 publicada y firmada por CI. Fix: edición de renta cerrada (campos numéricos convertidos a string para el backend). Auto-update desde v1.0.14.
 optimizados (13→5 queries), store global BusinessLists (TTL 5 min), tracing
 estructurado, auditoría inmutable (triggers append-only), accesibilidad
 WCAG 2.1 (Modal focus trap, ARIA, skip-link), ts-rs para contratos
 TypeScript y dependabot para dependencias. Auto-update desde v1.0.14.
-Descarga: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.23
+Descarga: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.24
 ```
 
 ## Referencia rápida para rellenar
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.0.23:** `DinamoRent_1.0.23_x64-setup.exe` (NSIS, ~22 MB, sha256 `5ed4577aed71fbfa16c2e58a9eafd0f58e1f23c3155a2ec53ef42a189261d46b`) y `DinamoRent_1.0.23_x64_en-US.msi` (~34 MB, sha256 `1dc6977d36d4422a6ee84b538992d4165013c2ec9a5584bbb85259ee444f2fa4`)
+- **Assets de la v1.0.24:** `DinamoRent_1.0.24_x64-setup.exe` (NSIS, ~22 MB, sha256 `a3b1567b7d3442a61d9bf2851035504a3a1892eb13153c3955bdd9a67c29700f`) y `DinamoRent_1.0.24_x64_en-US.msi` (~34 MB, sha256 `4bbe2619c5bfa0bd57c298b8ad12bb957cfcaec7ad071b3004803753dc6d5ab2`)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
-- **URLs directas de assets v1.0.23:**
-  - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.23/DinamoRent_1.0.23_x64-setup.exe
-  - MSI: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.23/DinamoRent_1.0.23_x64_en-US.msi
-  - Release (con changelog automático de commits): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.23
-  - Firmas del updater: `DinamoRent_1.0.23_x64-setup.exe.sig` / `DinamoRent_1.0.23_x64_en-US.msi.sig`
+- **URLs directas de assets v1.0.24:**
+  - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.24/DinamoRent_1.0.24_x64-setup.exe
+  - MSI: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.24/DinamoRent_1.0.24_x64_en-US.msi
+  - Release (con changelog automático de commits): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.24
+  - Firmas del updater: `DinamoRent_1.0.24_x64-setup.exe.sig` / `DinamoRent_1.0.24_x64_en-US.msi.sig`
   - Endpoint del auto-update (latest.json): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/latest/download/latest.json
 - **Conteos de tests** (actualizarlos si cambian): vitest · svelte-check · cargo 69 lib + integración completa (seed_ci) · importador · paginación
 - **Pasos al publicar:** crear tag `vX.Y.Z` → `release.yml` (CI) construye y publica → calcular sha256 de los instaladores y completar aquí → pegar el anuncio.
 - **Changelog automático:** `release.yml` genera el body de la release con los commits entre el tag anterior y el nuevo.
 - **Auto-actualización (v1.0.14+):** la app chequea GitHub Releases al arrancar (`latest.json`), verifica firma minisign. Las instalaciones **≤v1.0.13 se actualizan UNA vez a mano**.
-- **Assets de la v1.0.23 (al publicar):** los 2 instaladores, sus firmas del updater y `latest.json`. El sha256 se calcula al publicar y se pega en esta sección.
+- **Assets de la v1.0.24 (al publicar):** los 2 instaladores, sus firmas del updater y `latest.json`. El sha256 se calcula al publicar y se pega en esta sección.
