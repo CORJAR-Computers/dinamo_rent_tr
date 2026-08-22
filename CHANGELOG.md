@@ -6,6 +6,13 @@ Las versiones se publican como [releases en GitHub](https://github.com/CORJAR-Co
 
 ---
 
+## [v1.0.22] — 2026-08-22
+
+### Corregido
+- **Edición de renta cerrada** — los inputs numéricos (`type="number"`) enviaban JSON number pero el backend esperaba `Option<String>` para `valorDia`, `valorHoraExtra` y `descuento`; ahora se convierten explícitamente antes de invocar el comando Tauri
+
+---
+
 ## [v1.0.21] — 2026-08-20
 
 ### Corregido
@@ -280,6 +287,7 @@ Primera release estable. Migración completa de Python a Tauri V2 + Rust + Fireb
 
 ---
 
+[v1.0.22]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.22
 [v1.0.21]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.21
 [v1.0.20]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.20
 [v1.0.19]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.19
