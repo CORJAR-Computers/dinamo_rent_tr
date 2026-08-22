@@ -882,8 +882,7 @@
 					</div>
 				{:else if col.key === 'itinerario'}
 					<div class="whitespace-nowrap">
-						<p class="text-text-primary tabular-nums text-xs">{formatDate(r.fechaRecogida)} <span class="text-text-secondary">{fmtHora(r.horaRecogida)}</span></p>
-						<p class="text-xs text-text-secondary tabular-nums">→ {formatDate(r.fechaRetorno)} <span class="text-text-secondary">{fmtHora(r.horaRetorno)}</span></p>
+						<p class="text-text-primary tabular-nums text-xs">{formatDate(r.fechaRecogida)} <span class="text-text-secondary">{fmtHora(r.horaRecogida)}</span></p>							<p class="text-xs text-text-secondary tabular-nums">→ {formatDate(r.estado === 'Cerrada' && r.fechaDevolucionReal ? r.fechaDevolucionReal : r.fechaRetorno)} <span class="text-text-secondary">{fmtHora(r.estado === 'Cerrada' && r.horaDevolucionReal ? r.horaDevolucionReal : r.horaRetorno)}</span></p>
 						<p class="text-xs text-text-secondary">
 							{r.diasCalculados} día{r.diasCalculados === 1 ? '' : 's'}{r.horasExtras > 0 ? ` + ${r.horasExtras}h` : ''}
 						</p>
