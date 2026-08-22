@@ -104,7 +104,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 #     futura migración de `String` -> `NaiveDate` en los structs de dominio).
 #   - `no-serde-warnings`: silencia avisos cuando un campo no tiene `#[serde(...)]`
 #     pero sí `#[ts(...)]` (evita ruido en structs híbridos).
-ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings"] }
+ts-rs = { version = "12", features = ["chrono-impl", "no-serde-warnings"] }
 
 # Base de datos Firebird
 rsfbclient = { version = "0.27", default-features = false, features = ["dynamic_loading"] }
