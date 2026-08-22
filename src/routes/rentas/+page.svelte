@@ -172,6 +172,7 @@
 			descuento: '0',
 			cobraIva: false,
 			tieneComision: false,
+			cobrarHorasExtra: true,
 			comision: '0',
 			abono: '0',
 			observaciones: '',
@@ -269,7 +270,8 @@
 			form.horaRetorno ?? ''
 		);
 		form.diasCalculados = dias;
-		form.horasExtras = horas;
+		// Solo cobrar horas extras si el checkbox está activado
+		form.horasExtras = form.cobrarHorasExtra ? horas : 0;
 	}
 
 	// ── Auto-cálculo de días/horas en el cierre (espejo del backend) ──
@@ -290,7 +292,8 @@
 			cierre.horaDevolucionReal ?? ''
 		);
 		cierre.diasCalculados = dias;
-		cierre.horasExtras = horas;
+		// Solo cobrar horas extras si la renta tiene cobrarHorasExtra activado
+		cierre.horasExtras = r.cobrarHorasExtra ? horas : 0;
 	}
 
 	function onClienteChange(v: string) {
@@ -1137,6 +1140,10 @@
 				<label class="flex items-center gap-2 text-sm text-text-primary cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-alt-row/60 transition-colors mb-3 w-fit">
 					<input type="checkbox" class="accent-primary" bind:checked={form.cobraIva} />
 					Cobrar IVA <span class="text-xs text-text-secondary">({tasaIva}% — solo si se marca)</span>
+				</label>
+				<label class="flex items-center gap-2 text-sm text-text-primary cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-alt-row/60 transition-colors mb-3 w-fit">
+					<input type="checkbox" class="accent-primary" bind:checked={form.cobrarHorasExtra} />
+					Cobrar Horas Extra <span class="text-xs text-text-secondary">(si el cliente llega tarde)</span>
 				</label>
 
 				<!-- ── 5. Costos adicionales (colapsable) ── -->

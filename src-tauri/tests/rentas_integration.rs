@@ -118,6 +118,7 @@ fn datos_renta(placa: &str, id_cliente: Option<i64>) -> RentaDatos {
         impuestos: String::new(),
         cobra_iva: true,
         tiene_comision: false,
+        cobrar_horas_extra: true,
         comision: "0".into(),
         valor_neto: String::new(),
         total: String::new(),

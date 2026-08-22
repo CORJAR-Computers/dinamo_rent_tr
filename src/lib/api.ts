@@ -691,6 +691,8 @@ export interface Renta {
 	cobraIva: boolean;
 	/** ¿Tiene comisión esta renta? (checkbox del formulario; false = sin comisión) */
 	tieneComision: boolean;
+	/** ¿Cobra horas extras al cierre? (checkbox del formulario; false = cortesía) */
+	cobrarHorasExtra: boolean;
 	/** Valor de la comisión (se resta del total → valor neto) */
 	comision: string;
 	/** Valor neto = total − comisión (información financiera) */
@@ -748,6 +750,8 @@ export interface RentaDatos {
 	cobraIva: boolean;
 	/** ¿Tiene comisión? (checkbox del formulario) */
 	tieneComision: boolean;
+	/** ¿Cobra horas extras al cierre? (checkbox del formulario; false = cortesía) */
+	cobrarHorasExtra?: boolean;
 	/** Valor de la comisión a restar del total */
 	comision: string;
 	/** Valor neto (calculado por el backend: total − comisión) */

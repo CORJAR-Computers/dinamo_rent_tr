@@ -277,7 +277,12 @@ impl RentaService {
         )
         .unwrap_or((actual.dias_calculados, actual.horas_extras));
         let dias = datos.dias_calculados.unwrap_or(dias_auto).max(0);
-        let horas = datos.horas_extras.unwrap_or(horas_auto).max(0);
+        // Si cobrar_horas_extra está desactivado en la renta, las horas extras no se cobran
+        let horas = if actual.cobrar_horas_extra {
+            datos.horas_extras.unwrap_or(horas_auto).max(0)
+        } else {
+            0
+        };
         let vdia = dec(datos.valor_dia.as_deref().unwrap_or(""), &actual.valor_dia);
         let vhe = dec(datos.valor_hora_extra.as_deref().unwrap_or(""), &actual.valor_hora_extra);
         let desc = dec(datos.descuento.as_deref().unwrap_or(""), &actual.descuento);
@@ -635,6 +640,7 @@ impl RentaService {
             impuestos: actual.impuestos.clone(),
             cobra_iva: actual.cobra_iva,
             tiene_comision: actual.tiene_comision,
+            cobrar_horas_extra: actual.cobrar_horas_extra,
             comision: actual.comision.clone(),
             valor_neto: actual.valor_neto.clone(),
             total: actual.total.clone(),
@@ -983,7 +989,8 @@ fn completar_cliente(conn: &mut PooledConnection, d: &mut RentaDatos) {
 /// (el backend es la fuente de verdad). El abono se conserva.
 fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
     let dias = d.dias_calculados.max(0);
-    let horas = d.horas_extras.max(0);
+    // Si cobrar_horas_extra está desactivado, las horas extras no se cobran
+    let horas = if d.cobrar_horas_extra { d.horas_extras.max(0) } else { 0 };
     let vdia = dec(&d.valor_dia, "");
     let vhe = dec(&d.valor_hora_extra, "");
     let vde = dec(&d.valor_dia_extra, "");
