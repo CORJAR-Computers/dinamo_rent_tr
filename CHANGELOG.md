@@ -10,6 +10,7 @@ Las versiones se publican como [releases en GitHub](https://github.com/CORJAR-Co
 
 ### Corregido
 - **Hora real de cierre en tabla de rentas** — la columna itinerario mostraba siempre la `horaRetorno` (pactada al inicio) incluso para rentas cerradas; ahora si el estado es "Cerrada" se muestra la `horaDevolucionReal` (la hora en que realmente se devolvió el vehículo)
+- **Tipos TypeScript generados desincronizados** — `Renta.ts` y `RentaDatos.ts` faltaban el campo `cobrarHorasExtra` introducido en la migración 0026 / v1.0.23
 
 ---
 
