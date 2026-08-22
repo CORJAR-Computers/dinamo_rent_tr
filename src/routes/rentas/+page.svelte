@@ -667,7 +667,16 @@
 		}
 		editandoCerrada = true;
 		try {
-			await rentaApi.editarCerrada(sid(), editandoCerradaId, editCerrada);
+			// Convertir campos numéricos a string (el backend los espera como Option<String>)
+			const datos: RentaCierreEditDatos = {
+				valorDia: editCerrada.valorDia !== '' && editCerrada.valorDia != null ? String(editCerrada.valorDia) : undefined,
+				valorHoraExtra: editCerrada.valorHoraExtra !== '' && editCerrada.valorHoraExtra != null ? String(editCerrada.valorHoraExtra) : undefined,
+				diasCalculados: editCerrada.diasCalculados,
+				horasExtras: editCerrada.horasExtras,
+				descuento: editCerrada.descuento !== '' && editCerrada.descuento != null ? String(editCerrada.descuento) : undefined,
+				observaciones: editCerrada.observaciones,
+			};
+			await rentaApi.editarCerrada(sid(), editandoCerradaId, datos);
 			toast.success('Renta cerrada actualizada. Valores recalculados.');
 			editandoCerradaId = null;
 			await cargar();
