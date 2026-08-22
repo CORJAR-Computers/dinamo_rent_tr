@@ -6,6 +6,22 @@ Las versiones se publican como [releases en GitHub](https://github.com/CORJAR-Co
 
 ---
 
+## [v1.0.23] — 2026-08-22
+
+### Añadido
+- **Checkbox «Cobrar Horas Extra»** en el formulario de creación de renta:
+  - Controla si las horas extras se cobran al cierre o se otorgan como cortesía al cliente
+  - **Activado por defecto** (las horas extras se cobran como antes)
+  - Si se desactiva, las horas extras no se suman al total aunque haya excedente de tiempo
+  - Nuevo campo `cobrar_horas_extra` en la tabla `rentas` (migración 0026)
+- **Migración 0026**: columna `COBRAR_HORAS_EXTRA` (default 1, compatibilidad con rentas existentes)
+
+### Corregido
+- **Horas extras se cobraban en la creación** — el valor de hora extra se sumaba al total desde la creación aunque no hubiera horas a cobrar; ahora solo se cobran al cierre si el checkbox está activo
+- **Cierre respeta el flag** — el backend `cerrar()` fuerza `horas_extras = 0` cuando `cobrar_horas_extra` está desactivado
+
+---
+
 ## [v1.0.22] — 2026-08-22
 
 ### Corregido
@@ -287,6 +303,7 @@ Primera release estable. Migración completa de Python a Tauri V2 + Rust + Fireb
 
 ---
 
+[v1.0.23]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.23
 [v1.0.22]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.22
 [v1.0.21]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.21
 [v1.0.20]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.20

@@ -355,11 +355,17 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   usuario, created_at). `RentaService::extender()` valida renta Activa, calcula nuevo retorno,
   acumula `horas_extras`/`dias_calculados` y `valor_dia_extra`, recalcula totales y registra
   auditoría `EXTENSION RENTA`. Múltiples extensiones son acumulables y cada una se persiste
-  en el historial. Comando `extender_renta` + `listar_extensiones_renta`. Frontend: botón «Extender»
+  en el historial. Comando `extender_renta` + `listar_extensiones_renta`.  Frontend: botón «Extender»
   (+) en rentas activas, modal con selector de tipo, cantidad, valor unitario, preview del
   nuevo retorno y tabla de historial de extensiones previas.
-- **Tests:** `tests/rentas_integration.rs` (8 incl. `renta_editar_cerrada_recalculo_totales` y
-  `renta_extender_horas_y_dias`) · `src/routes/rentas/rentas.test.ts` (11).
+- **Checkbox «Cobrar Horas Extra»** (migración `0026_cobrar_horas_extra.sql`): campo `cobrar_horas_extra`
+  (default 1) en tabla `rentas`. Controla si las horas extras se cobran al cierre o se otorgan
+  como cortesía al cliente. Cuando está desactivado, `horas_extras = 0` en el cálculo del
+  `subtotal` (tanto en `calcular_totales` al crear/editar como en `cerrar` al devolver).
+  Frontend: checkbox en formulario de creación (default activo); `recalcularDias` y `calcularCierre`
+  respetan el flag. Resuelve el bug donde `valor_hora_extra` se sumaba al total desde la creación.
+- **Tests:** `tests/rentas_integration.rs` (14, incl. `renta_editar_cerrada_recalculo_totales`,
+  `renta_extender_horas_y_dias` y cobrar_horas_extra) · `src/routes/rentas/rentas.test.ts` (16).
 
 ### ✅ Comparendos (`/comparendos`)
 - **Backend:** `repositories/comparendo.rs`, `services/comparendo.rs` (valida placa existente en
