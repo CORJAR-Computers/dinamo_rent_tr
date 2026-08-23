@@ -113,8 +113,22 @@ impl MantenimientoService {
     ) -> Result<Mantenimiento, AppError> {
         normalizar(&mut datos);
         validar(conn, &datos, cfg)?;
-        let id = MantenimientoRepository::insertar(conn, &datos)?;
-        sincronizar_proximo_aceite(conn, &datos)?;
+        // Pre-calcular antes de la tx
+        let es_cambio_aceite = datos.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
+        let placa_tx = datos.placa.clone();
+        let km_tx = if es_cambio_aceite { datos.km_proximo_cambio_aceite.filter(|&k| k > 0) } else { None };
+
+        let id = conn.with_transaction(|tx| -> Result<i64, rsfbclient::FbError> {
+            let id = MantenimientoRepository::insertar(tx, &datos)
+                .map_err(|e| rsfbclient::FbError::from(e.to_string()))?;
+            if es_cambio_aceite {
+                tx.execute(
+                    "UPDATE autos SET proximo_aceite = ?, updated_at = CURRENT_TIMESTAMP WHERE placa = ?",
+                    (km_tx, placa_tx.clone()),
+                )?;
+            }
+            Ok(id)
+        }).map_err(|e| AppError::Database(e.to_string()))?;
         Self::obtener(conn, id)
     }
 
@@ -128,8 +142,22 @@ impl MantenimientoService {
         Self::obtener(conn, id)?;
         normalizar(&mut datos);
         validar(conn, &datos, cfg)?;
-        MantenimientoRepository::actualizar(conn, id, &datos)?;
-        sincronizar_proximo_aceite(conn, &datos)?;
+        // Pre-calcular antes de la tx
+        let es_cambio_aceite = datos.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
+        let placa_tx = datos.placa.clone();
+        let km_tx = if es_cambio_aceite { datos.km_proximo_cambio_aceite.filter(|&k| k > 0) } else { None };
+
+        conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
+            MantenimientoRepository::actualizar(tx, id, &datos)
+                .map_err(|e| rsfbclient::FbError::from(e.to_string()))?;
+            if es_cambio_aceite {
+                tx.execute(
+                    "UPDATE autos SET proximo_aceite = ?, updated_at = CURRENT_TIMESTAMP WHERE placa = ?",
+                    (km_tx, placa_tx.clone()),
+                )?;
+            }
+            Ok(())
+        }).map_err(|e| AppError::Database(e.to_string()))?;
         Self::obtener(conn, id)
     }
 
@@ -338,13 +366,3 @@ fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppCon
     Ok(())
 }
 
-/// Si el mantenimiento es un cambio de aceite, sincroniza `autos.proximo_aceite`
-/// con el km programado (o lo limpia si el registro ya no lo indica) para que las
-/// alertas del dashboard se disparen o se apaguen correctamente.
-fn sincronizar_proximo_aceite(conn: &mut PooledConnection, d: &MantenimientoDatos) -> Result<(), AppError> {
-    if d.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase() {
-        let km = d.km_proximo_cambio_aceite.filter(|&k| k > 0);
-        AutoRepository::actualizar_proximo_aceite(conn, &d.placa, km)?;
-    }
-    Ok(())
-}

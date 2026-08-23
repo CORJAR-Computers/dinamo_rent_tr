@@ -227,7 +227,10 @@ impl MantenimientoRepository {
     }
 
     /// Crea un mantenimiento y devuelve el id nuevo (RETURNING evita races con MAX(id))
-    pub fn insertar(conn: &mut PooledConnection, d: &MantenimientoDatos) -> Result<i64, AppError> {
+    pub fn insertar<C>(conn: &mut C, d: &MantenimientoDatos) -> Result<i64, AppError>
+    where
+        C: Execute,
+    {
         let (id,): (i64,) = conn
             .execute_returnable(
                 "INSERT INTO mantenimiento_vehiculos (\
@@ -250,7 +253,10 @@ impl MantenimientoRepository {
     }
 
     /// Actualiza un mantenimiento por id
-    pub fn actualizar(conn: &mut PooledConnection, id: i64, d: &MantenimientoDatos) -> Result<(), AppError> {
+    pub fn actualizar<C>(conn: &mut C, id: i64, d: &MantenimientoDatos) -> Result<(), AppError>
+    where
+        C: Execute,
+    {
         conn.execute(
             "UPDATE mantenimiento_vehiculos SET \
                 placa = ?, pieza_varias_tipo = ?, pieza_varias_fecha = ?, pieza_varias_desc = ?, \
