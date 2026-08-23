@@ -196,7 +196,7 @@ impl ReservaRepository {
         let rows: Vec<ReservaRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM reservas WHERE deleted_at IS NULL AND estado = ? \
-                 AND deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
+ ORDER BY fecha_recogida DESC, id DESC"
             ),
             (estado.to_string(),),
         )?;
