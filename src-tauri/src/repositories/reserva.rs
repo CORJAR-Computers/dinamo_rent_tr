@@ -328,7 +328,7 @@ impl ReservaRepository {
 
     /// Total de reservas
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM reservas", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM reservas WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 

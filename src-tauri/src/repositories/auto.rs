@@ -366,7 +366,7 @@ impl AutoRepository {
 
     /// Total de vehículos
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM autos", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM autos WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 

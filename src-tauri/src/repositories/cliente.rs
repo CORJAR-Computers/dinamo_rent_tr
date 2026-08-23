@@ -150,7 +150,7 @@ impl ClienteRepository {
     /// Lista todos los clientes (por nombre completo)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Cliente>, AppError> {
         let rows: Vec<ClienteRow> = conn.query(
-            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY nombre_completo"),
+            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL ORDER BY nombre_completo"),
             (),
         )?;
         Ok(rows.into_iter().map(from_row).collect())
@@ -174,7 +174,7 @@ impl ClienteRepository {
     /// Filtra por estado (Activo / Inactivo / Lista Negra / VIP)
     pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Cliente>, AppError> {
         let rows: Vec<ClienteRow> = conn.query(
-            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND estado = ? AND deleted_at IS NULL ORDER BY nombre_completo"),
+            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND estado = ? ORDER BY nombre_completo"),
             (estado.to_string(),),
         )?;
         Ok(rows.into_iter().map(from_row).collect())
@@ -314,7 +314,7 @@ impl ClienteRepository {
 
     /// Total de clientes
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM clientes", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM clientes WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 }
