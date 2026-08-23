@@ -39,6 +39,7 @@ function renta(overrides: Partial<Renta> = {}): Renta {
 		cobraIva: true,
 		tieneComision: false,
 		comision: '0.00',
+		cobrarHorasExtra: true,
 		valorNeto: '535500.00',
 		total: '535500.00',
 		abono: '0.00',
