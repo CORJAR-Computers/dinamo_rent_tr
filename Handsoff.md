@@ -675,7 +675,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 El esquema Firebird se gestiona con un runner propio (`src-tauri/src/core/migrations.rs`) que
 aplica en orden los scripts de `src-tauri/migrations/` no ejecutados y registra cada versión en
-`schema_migrations`. Serie actual: **0001-0025** (propósito de cada una y esquema canónico de
+`schema_migrations`. Serie actual: **0001-0027** (propósito de cada una y esquema canónico de
 índices en el README §Migraciones). La **0015** (columna `comparendos.numero_comparendo` +
 índice) da soporte a la deduplicación del Agente SIMIT; ya está aplicada a la BD dev. La
 **0016** (`atribucion_comparendo_renta.sql`, DML idempotente) vincula los comparendos sin
@@ -700,6 +700,10 @@ y triggers `BEFORE UPDATE`/`BEFORE DELETE` sobre `auditoria` que lanzan `EXCEPTI
 bloquear modificaciones (append-only, no-repudio). Patrón: `EXECUTE BLOCK` con guard en
 `RDB$EXCEPTIONS`/`RDB$TRIGGERS` + `EXECUTE STATEMENT` con el DDL. La tabla queda
 inmutable salvo desactivación explícita del trigger (`ALTER TRIGGER ... INACTIVE`).
+
+La **0026** (`cobrar_horas_extra.sql`) añade la columna `COBRAR_HORAS_EXTRA` (SMALLINT, default 1) a la tabla `rentas`. Controla si las horas extras se cobran al cierre de una renta: cuando el operador desmarca el checkbox de «Cobrar Horas Extra» en el formulario de creación, las horas excedentes se ignoran (cortesía al cliente). Reescrita desde la versión original que usaba `SET TERM` (incompatible con el migration runner); ahora usa `EXECUTE BLOCK` + `EXECUTE STATEMENT` con guards idempotentes.
+
+La **0027** (`soft_delete_entities.sql`) completa la migración de hard-delete a soft-delete para las 4 entidades que aún usaban `DELETE FROM`: **usuarios**, **reservas**, **clientes** y **autos**. Agrega la columna `DELETED_AT` (TIMESTAMP, default NULL) + índice por tabla, alineándolas con las 5 entidades que ya lo tenían (rentas, pagos, gastos, comparendos, mantenimiento — desde la 0006). Patrón: `EXECUTE BLOCK` con guard `RDB$RELATION_FIELDS` / `RDB$INDICES` (idempotente). Los repositories ahora usan `UPDATE SET deleted_at = CURRENT_TIMESTAMP` en vez de `DELETE FROM`, y todos los SELECT filtran `WHERE deleted_at IS NULL`. Excepción: `obtener_para_autenticacion` NO filtra por `deleted_at` porque el login usa el flag `activo` para autorización (soft-delete es solo para retención de datos). Cada eliminación registra auditoría via `log_audit` con acciones `ELIMINAR RESERVA` / `ELIMINAR CLIENTE` / `ELIMINAR VEHICULO` / `USUARIO ELIMINADO`.
 
 ### 5.1 Cómo añadir una migración nueva (000N)
 
