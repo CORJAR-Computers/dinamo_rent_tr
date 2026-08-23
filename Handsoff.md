@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-19** · Estado: **todos los módulos operativos, validación verde · release v1.0.18 en preparación · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-08-23** · Estado: **todos los módulos operativos, validación verde · release v1.0.26 publicada · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -596,13 +596,23 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       (backend, `package_info` → Cargo.toml / tauri.conf.json en el build) + store
       `src/lib/stores/app.svelte.ts`; `+layout.svelte` y `login/+page.svelte` renderizan la
       versión real (`v{version}`) en vez del literal, con test de integración (`15a2311`).
-      Queda solo el repaso visual en la app real (con la prueba de campo del auto-update, §6
-      de RELEASE_CHECKLIST, v1.0.17).*
+      Repaso visual completado.*
 - [-] **Setup wizard de primera ejecución y diálogo de config BD** — **descartados (19-08):**
       el proyecto es de **uso interno de Dinamo**; la instalación con defaults (auto-create del
       `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
       hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
       automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
+
+### v1.0.26 — Hardening de seguridad y fixes SQL
+
+- [x] **Atomicidad en mantenimiento**: `crear()` y `actualizar()` envueltos en `conn.with_transaction()` para que INSERT de mantenimiento + sync de `autos.proximo_aceite` sean atómicos. `MantenimientoRepository` ahora acepta `C: Execute` genérico.
+- [x] **Sesiones periódicas**: hilo de fondo que purga sesiones expiradas cada 5 minutos (`session_cleanup.rs`). `AppState.sessions` es `Arc<Mutex<SessionStore>>`.
+- [x] **Auditoría completa**: `log_audit` en creación/edición de clientes, vehículos y reservas (6 acciones nuevas).
+- [x] **Log injection prevention**: `sanitize_log()` escapa `
+`, ``, `	`, ` `, `` en `frontend_errors.log`. Carácter chino `位置` → `línea`.
+- [x] **Unwrap seguros**: 6 Mutex `.unwrap()` en `simit.rs` → `.unwrap_or_else(|e| e.into_inner())`.
+- [x] **SQL precedence fixes**: paréntesis en `buscar()` de cliente, auto y reserva; `deleted_at IS NULL` duplicados eliminados en auto, reserva, usuario.
+- [x] **StatusBadge capitalize**: primera letra capitalizada correctamente.
 
 ## 4. Convenciones a respetar
 

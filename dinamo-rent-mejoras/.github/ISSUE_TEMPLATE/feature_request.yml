@@ -1,0 +1,40 @@
+---
+name: Solicitud de funcionalidad
+about: Sugiere una nueva funcionalidad para Dinamo Rent ERP
+title: "[FEAT] "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: Qué problema resuelve esta funcionalidad
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución propuesta
+      description: Descripción de la funcionalidad que te gustaría ver
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+  - type: dropdown
+    id: module
+    attributes:
+      label: Módulo
+      options:
+        - Rentas
+        - Clientes
+        - Flota / Autos
+        - Reservas
+        - Calendario
+        - Comparendos / SIMIT
+        - Mantenimiento
+        - Gastos
+        - Informes
+        - Finanzas / Pagos
+        - Otro

@@ -1,0 +1,67 @@
+---
+name: Reporte de bug
+about: Reporta un bug en Dinamo Rent ERP
+title: "[BUG] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar un bug. Por favor completa la siguiente información.
+  - type: input
+    id: version
+    attributes:
+      label: Versión de Dinamo Rent
+      description: Se ve en el menú Ayuda → Acerca de, o en el login
+      placeholder: "1.0.25"
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Módulo afectado
+      options:
+        - Rentas
+        - Clientes
+        - Flota / Autos
+        - Reservas
+        - Calendario
+        - Comparendos / SIMIT
+        - Mantenimiento
+        - Gastos
+        - Informes
+        - Finanzas / Pagos
+        - Auditoría
+        - Login / Usuarios
+        - Backup / Restauración
+        - Otro
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del bug
+      description: Qué ocurrió, qué esperabas que ocurriera
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      placeholder: |
+        1. Ir a '...'
+        2. Hacer clic en '...'
+        3. Ver error
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: "Pega aquí cualquier log de %APPDATA%\com.corjar.dinamorent\logs\app.log (sin datos sensibles)"
+      render: shell
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Capturas de pantalla
+      description: Si aplica, añade capturas

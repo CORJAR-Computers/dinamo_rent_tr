@@ -1,0 +1,19 @@
+# CODEOWNERS de Dinamo Rent ERP
+# Cada línea define quién es responsable de revisar cambios en esa ruta.
+
+# Backend Rust (Tauri commands, services, repositories, core)
+/src-tauri/src/           @CORJAR-Computers/backend
+
+# Frontend Svelte (routes, components, lib)
+/src/                     @CORJAR-Computers/frontend
+
+# Scripts de operación y CI
+/scripts/                 @CORJAR-Computers/devops
+/.github/workflows/       @CORJAR-Computers/devops
+
+# Migraciones de BD
+/src-tauri/migrations/    @CORJAR-Computers/backend
+
+# Documentación crítica
+/SECURITY.md              @CORJAR-Computers/security
+/RELEASE_CHECKLIST.md     @CORJAR-Computers/devops
