@@ -156,7 +156,7 @@ impl UsuarioRepository {
         id: i64,
     ) -> Result<Option<Usuario>, AppError> {
         let row: Option<UsuarioRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM usuarios WHERE id = ?"),
+            &format!("SELECT {SELECT_COLS} FROM usuarios WHERE id = ? AND deleted_at IS NULL"),
             (id,),
         )?;
         Ok(row.map(
@@ -172,7 +172,7 @@ impl UsuarioRepository {
         let rows: Vec<UsuarioRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM usuarios \
-                 WHERE UPPER(username) LIKE UPPER(?) OR UPPER(nombre) LIKE UPPER(?) OR UPPER(rol) LIKE UPPER(?) \
+                 WHERE (UPPER(username) LIKE UPPER(?) OR UPPER(nombre) LIKE UPPER(?) OR UPPER(rol) LIKE UPPER(?)) \
                  AND deleted_at IS NULL ORDER BY username"
             ),
             (like.clone(), like.clone(), like),
@@ -338,7 +338,7 @@ impl UsuarioRepository {
 
     /// Cuenta usuarios (para seed)
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM usuarios", ())?;
+        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM usuarios WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
