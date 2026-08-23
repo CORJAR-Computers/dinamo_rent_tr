@@ -6,6 +6,28 @@ Las versiones se publican como [releases en GitHub](https://github.com/CORJAR-Co
 
 ---
 
+## [v1.0.25] — 2026-08-23
+
+### Añadido
+
+- **Soft-delete completo**: migración 0027 (`0027_soft_delete_entities.sql`) — usuarios,
+  reservas, clientes y autos ahora usan `DELETED_AT` (TIMESTAMP) en vez de `DELETE FROM`,
+  alineándose con las 5 entidades que ya lo tenían (rentas, pagos, gastos, comparendos,
+  mantenimiento desde la 0006). Los registros eliminados se marcan con timestamp y los
+  repositories filtran `WHERE deleted_at IS NULL` en todos los SELECT.
+- **Auditoría de eliminaciones**: cada soft-delete en reservas, clientes, vehículos y usuarios
+  registra evento de auditoría via `log_audit` con acciones `ELIMINAR RESERVA`,
+  `ELIMINAR CLIENTE`, `ELIMINAR VEHICULO`, `USUARIO ELIMINADO`.
+
+### Corregido
+
+- **Migración 0026 reescrita**: `cobrar_horas_extra.sql` ahora usa `EXECUTE BLOCK` +
+  `EXECUTE STATEMENT` en vez de `SET TERM` (compatibilidad con el migration runner).
+- **Fix tests frontend**: `cobrarHorasExtra` añadido a mocks de rentas en tests de
+  rentas, alertas, calendario y timelineVehiculo.
+- **Fix usuario.rs**: `obtener_por_id` ahora filtra `deleted_at IS NULL`,
+  `buscar` con paréntesis correctos en OR, `contar` con filtro.
+
 ## [v1.0.24] — 2026-08-22
 
 ### Corregido
