@@ -182,7 +182,7 @@ impl AutoRepository {
     /// Lista todos los vehículos (por marca, placa)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Auto>, AppError> {
         let rows: Vec<AutoRow> =
-            conn.query(&format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY marca, placa"), ())?;
+            conn.query(&format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL ORDER BY marca, placa"), ())?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
@@ -192,7 +192,7 @@ impl AutoRepository {
         let rows: Vec<AutoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM autos \
-                 WHERE UPPER(placa) LIKE UPPER(?) OR UPPER(marca) LIKE UPPER(?) OR UPPER(modelo) LIKE UPPER(?) \
+                 WHERE (UPPER(placa) LIKE UPPER(?) OR UPPER(marca) LIKE UPPER(?) OR UPPER(modelo) LIKE UPPER(?)) \
                  AND deleted_at IS NULL ORDER BY marca, placa"
             ),
             (like.clone(), like.clone(), like),
@@ -203,7 +203,7 @@ impl AutoRepository {
     /// Filtra por estado (Todos / Disponible / Rentado / ...)
     pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Auto>, AppError> {
         let rows: Vec<AutoRow> = conn.query(
-            &format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND estado = ? AND deleted_at IS NULL ORDER BY marca, placa"),
+            &format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND estado = ? ORDER BY marca, placa"),
             (estado.to_string(),),
         )?;
         Ok(rows.into_iter().map(from_row).collect())

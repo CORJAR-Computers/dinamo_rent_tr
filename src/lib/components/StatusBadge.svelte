@@ -21,7 +21,7 @@
 		'VIP': 'bg-estado-vip/10 text-estado-vip border-estado-vip/25'
 	};
 
-	const text = $derived(capitalize ? estado : estado);
+	const text = $derived(capitalize ? estado.charAt(0).toUpperCase() + estado.slice(1) : estado);
 	const classes = $derived(MAP[estado] ?? 'bg-primary/10 text-primary border-primary/25');
 </script>
 

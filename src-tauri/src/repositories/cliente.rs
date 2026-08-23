@@ -162,8 +162,8 @@ impl ClienteRepository {
         let rows: Vec<ClienteRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM clientes \
-                 WHERE UPPER(nombre_completo) LIKE UPPER(?) OR UPPER(nombres) LIKE UPPER(?) \
-                    OR UPPER(no_doc) LIKE UPPER(?) OR UPPER(celular) LIKE UPPER(?) \
+                 WHERE (UPPER(nombre_completo) LIKE UPPER(?) OR UPPER(nombres) LIKE UPPER(?) \
+                    OR UPPER(no_doc) LIKE UPPER(?) OR UPPER(celular) LIKE UPPER(?)) \
                  AND deleted_at IS NULL ORDER BY nombre_completo"
             ),
             (like.clone(), like.clone(), like.clone(), like),

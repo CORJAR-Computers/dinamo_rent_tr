@@ -141,7 +141,7 @@ impl UsuarioRepository {
 
     /// Lista todos los usuarios (orden alfabético)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Usuario>, AppError> {        let rows: Vec<UsuarioRow> =
-            conn.query(&format!("SELECT {SELECT_COLS} FROM usuarios WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY username"), ())?;
+            conn.query(&format!("SELECT {SELECT_COLS} FROM usuarios WHERE deleted_at IS NULL ORDER BY username"), ())?;
         Ok(rows
             .into_iter()
             .map(|(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {

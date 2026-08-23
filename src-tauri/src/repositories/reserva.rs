@@ -169,7 +169,7 @@ impl ReservaRepository {
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Reserva>, AppError> {
         let rows: Vec<ReservaRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM reservas WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
+                "SELECT {SELECT_COLS} FROM reservas WHERE deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
             ),
             (),
         )?;
@@ -182,8 +182,8 @@ impl ReservaRepository {
         let rows: Vec<ReservaRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM reservas \
-                 WHERE UPPER(nombre_cliente) LIKE UPPER(?) OR UPPER(placa_asignada) LIKE UPPER(?) \
-                    OR UPPER(nacionalidad) LIKE UPPER(?) \
+                 WHERE (UPPER(nombre_cliente) LIKE UPPER(?) OR UPPER(placa_asignada) LIKE UPPER(?) \
+                    OR UPPER(nacionalidad) LIKE UPPER(?)) \
                  AND deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
             ),
             (like.clone(), like.clone(), like),
