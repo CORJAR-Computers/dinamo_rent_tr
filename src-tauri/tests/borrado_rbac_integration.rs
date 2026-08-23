@@ -26,7 +26,7 @@ fn dev_state() -> AppState {
     let pool = dinamo_rent_lib::core::db::create_pool(&cfg).expect("pool embedded");
     AppState {
         pool,
-        sessions: Mutex::new(SessionStore::new(3600)),
+        sessions: std::sync::Arc::new(Mutex::new(SessionStore::new(3600))),
         login_tracker: Mutex::new(LoginAttemptTracker::new(5, 1800, 300, 10)),
         config: cfg.clone(),
         pii_key: Mutex::new(cfg.db_encryption_key.clone()),

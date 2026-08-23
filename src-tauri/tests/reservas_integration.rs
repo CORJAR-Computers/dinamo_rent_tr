@@ -27,7 +27,7 @@ fn dev_state() -> AppState {
     let pool = dinamo_rent_lib::core::db::create_pool(&cfg).expect("pool embedded");
     AppState {
         pool,
-        sessions: Mutex::new(SessionStore::new(3600)),
+        sessions: std::sync::Arc::new(Mutex::new(SessionStore::new(3600))),
         login_tracker: Mutex::new(LoginAttemptTracker::new(5, 1800, 300, 10)),
         config: cfg.clone(),
         pii_key: Mutex::new(cfg.db_encryption_key.clone()),
@@ -92,7 +92,7 @@ fn reserva_crud_roundtrip() {
     datos.nombre_cliente = "NOMBRE EQUIVOCADO".into();
 
     // Crear
-    let creada = ReservaService::crear(&mut conn, cfg, datos.clone()).expect("crear reserva");
+    let creada = ReservaService::crear(&mut conn, cfg, "test", datos.clone()).expect("crear reserva");
     let id = creada.id;
     assert_eq!(creada.nombre_cliente, nombre_cliente, "nombre autocompletado del cliente");
     assert_eq!(creada.dias_calculados, 3);
@@ -108,7 +108,7 @@ fn reserva_crud_roundtrip() {
 
     // Actualizar (abono > total → debe fallar; primero uno válido)
     datos.abono = "200000".into();
-    let actualizada = ReservaService::actualizar(&mut conn, cfg, id, datos.clone())
+    let actualizada = ReservaService::actualizar(&mut conn, cfg, "test", id, datos.clone())
         .expect("actualizar reserva");
     assert_eq!(actualizada.abono, "200000.00");
 
@@ -127,31 +127,31 @@ fn reserva_validaciones() {
     // Fechas invertidas → validation
     let mut inv = datos_reserva("Cliente Inválido", 1);
     inv.fecha_retorno = "2020-01-01".into();
-    let err = ReservaService::crear(&mut conn, cfg, inv).expect_err("fechas invertidas");
+    let err = ReservaService::crear(&mut conn, cfg, "test", inv).expect_err("fechas invertidas");
     assert_eq!(err.kind(), "validation");
 
     // Abono mayor que el total → validation
     let mut abono = datos_reserva("Cliente Abono", 1);
     abono.abono = "99999999".into();
-    let err = ReservaService::crear(&mut conn, cfg, abono).expect_err("abono > total");
+    let err = ReservaService::crear(&mut conn, cfg, "test", abono).expect_err("abono > total");
     assert_eq!(err.kind(), "validation");
 
     // Estado inválido → validation
     let mut est = datos_reserva("Cliente Estado", 1);
     est.estado = "Inventada".into();
-    let err = ReservaService::crear(&mut conn, cfg, est).expect_err("estado inválido");
+    let err = ReservaService::crear(&mut conn, cfg, "test", est).expect_err("estado inválido");
     assert_eq!(err.kind(), "validation");
 
     // Hora inválida → validation
     let mut hora = datos_reserva("Cliente Hora", 1);
     hora.hora_recogida = Some("25:99".into());
-    let err = ReservaService::crear(&mut conn, cfg, hora).expect_err("hora inválida");
+    let err = ReservaService::crear(&mut conn, cfg, "test", hora).expect_err("hora inválida");
     assert_eq!(err.kind(), "validation");
 
     // id_cliente inexistente → Business (FK amigable)
     let mut fk = datos_reserva("Cliente FK", 1);
     fk.id_cliente = Some(999_999_999);
-    let err = ReservaService::crear(&mut conn, cfg, fk).expect_err("cliente inexistente");
+    let err = ReservaService::crear(&mut conn, cfg, "test", fk).expect_err("cliente inexistente");
     assert_eq!(err.kind(), "business");
 }
 
@@ -163,7 +163,7 @@ fn reserva_cancelar() {
     let mut conn = state.pool.get().expect("conn");
 
     let creada =
-        ReservaService::crear(&mut conn, cfg, datos_reserva("Cliente Cancelar", 2))
+        ReservaService::crear(&mut conn, cfg, "test", datos_reserva("Cliente Cancelar", 2))
             .expect("crear reserva");
     let id = creada.id;
 
@@ -179,7 +179,7 @@ fn reserva_cancelar() {
     // Completada no se puede cancelar
     let mut datos = datos_reserva("Cliente Completar", 1);
     datos.estado = "Completada".into();
-    let completada = ReservaService::crear(&mut conn, cfg, datos).expect("crear completada");
+    let completada = ReservaService::crear(&mut conn, cfg, "test", datos).expect("crear completada");
     let err = ReservaService::cancelar(&mut conn, completada.id).expect_err("no cancelar completada");
     assert_eq!(err.kind(), "business");
 
@@ -197,7 +197,7 @@ fn reserva_proximas_y_contar() {
 
     // Fecha futura → aparece en próximas
     let creada =
-        ReservaService::crear(&mut conn, cfg, datos_reserva("Cliente Proximas", 1))
+        ReservaService::crear(&mut conn, cfg, "test", datos_reserva("Cliente Proximas", 1))
             .expect("crear reserva");
     let id = creada.id;
 

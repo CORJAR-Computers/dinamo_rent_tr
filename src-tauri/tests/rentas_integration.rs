@@ -66,7 +66,7 @@ fn dev_state() -> AppState {
     let pool = dinamo_rent_lib::core::db::create_pool(&cfg).expect("pool embedded");
     AppState {
         pool,
-        sessions: Mutex::new(SessionStore::new(3600)),
+        sessions: std::sync::Arc::new(Mutex::new(SessionStore::new(3600))),
         login_tracker: Mutex::new(LoginAttemptTracker::new(5, 1800, 300, 10)),
         config: cfg.clone(),
         pii_key: Mutex::new(cfg.db_encryption_key.clone()),
@@ -732,6 +732,7 @@ fn renta_creada_desde_reserva_completa_la_reserva() {
     let reserva = ReservaService::crear(
         &mut conn,
         cfg,
+        "test",
         ReservaDatos {
             nombre_cliente: "Cliente Reserva Test".into(),
             placa_asignada: Some(placa.clone()),
@@ -791,6 +792,7 @@ fn renta_desde_reserva_cancelada_rechazada() {
     let reserva = ReservaService::crear(
         &mut conn,
         cfg,
+        "test",
         ReservaDatos {
             nombre_cliente: "Cliente Reserva Cancelada".into(),
             placa_asignada: Some(placa.clone()),

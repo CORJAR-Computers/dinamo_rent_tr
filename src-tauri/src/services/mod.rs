@@ -4,6 +4,7 @@ pub mod auditoria;
 pub mod auth;
 pub mod auto;
 pub mod backup;
+pub mod session_cleanup;
 pub mod cliente;
 pub mod comparendo;
 pub mod gasto;

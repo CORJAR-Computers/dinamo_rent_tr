@@ -26,7 +26,7 @@ fn dev_state() -> AppState {
     let pool = dinamo_rent_lib::core::db::create_pool(&cfg).expect("pool embedded");
     AppState {
         pool,
-        sessions: Mutex::new(SessionStore::new(3600)),
+        sessions: std::sync::Arc::new(Mutex::new(SessionStore::new(3600))),
         login_tracker: Mutex::new(LoginAttemptTracker::new(5, 1800, 300, 10)),
         config: cfg.clone(),
         pii_key: Mutex::new(cfg.db_encryption_key.clone()),
@@ -68,7 +68,7 @@ fn auto_crud_roundtrip() {
     };
 
     // Crear
-    let creado = AutoService::crear(&mut conn, cfg, datos.clone()).expect("crear auto");
+    let creado = AutoService::crear(&mut conn, cfg, "test", datos.clone()).expect("crear auto");
     assert_eq!(creado.placa, placa.to_uppercase(), "placa normalizada a mayúsculas");
     assert_eq!(creado.marca, "TESTMARK");
     assert_eq!(creado.costo_fijo_mensual, "1500000.50", "decimal sin pérdida");
@@ -79,14 +79,14 @@ fn auto_crud_roundtrip() {
     assert_eq!(obtenido.vencimiento_soat.as_deref(), Some("2027-12-31"));
 
     // Duplicado → error
-    let dup = AutoService::crear(&mut conn, cfg, datos.clone()).expect_err("placa duplicada");
+    let dup = AutoService::crear(&mut conn, cfg, "test", datos.clone()).expect_err("placa duplicada");
     assert_eq!(dup.kind(), "duplicate");
 
     // Actualizar
     datos.marca = "TESTMARK2".into();
     datos.estado = "Mantenimiento".into();
     let actualizado =
-        AutoService::actualizar(&mut conn, cfg, placa, datos).expect("actualizar auto");
+        AutoService::actualizar(&mut conn, cfg, "test", placa, datos).expect("actualizar auto");
     assert_eq!(actualizado.marca, "TESTMARK2");
     assert_eq!(actualizado.estado, "Mantenimiento");
 
@@ -142,7 +142,7 @@ fn cliente_crud_con_pii() {
     };
 
     // Crear (PII se cifra en BD)
-    let creado = ClienteService::crear(&mut conn, cfg, &cipher, datos.clone()).expect("crear cliente");
+    let creado = ClienteService::crear(&mut conn, cfg, &cipher, "test", datos.clone()).expect("crear cliente");
     let id = creado.cliente.id;
     assert_eq!(creado.cliente.nombre_completo, "CLIENTE PRUEBA", "nombres en mayúsculas");
     assert_eq!(creado.cliente.celular.as_deref(), Some("3101234567"), "PII descifrada");
@@ -156,14 +156,14 @@ fn cliente_crud_con_pii() {
     // Duplicado de documento → error
     let mut dup = datos.clone();
     dup.nombres = "Otro".into();
-    let err = ClienteService::crear(&mut conn, cfg, &cipher, dup).expect_err("doc duplicado");
+    let err = ClienteService::crear(&mut conn, cfg, &cipher, "test", dup).expect_err("doc duplicado");
     assert_eq!(err.kind(), "duplicate");
 
     // Actualizar
     datos.celular = Some("3009998877".into());
     datos.estado = "VIP".into();
     let actualizado =
-        ClienteService::actualizar(&mut conn, cfg, &cipher, id, datos).expect("actualizar cliente");
+        ClienteService::actualizar(&mut conn, cfg, &cipher, "test", id, datos).expect("actualizar cliente");
     assert_eq!(actualizado.cliente.celular.as_deref(), Some("3009998877"));
     assert_eq!(actualizado.cliente.estado, "VIP");
 

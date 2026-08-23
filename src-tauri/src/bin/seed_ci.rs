@@ -167,7 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  auto {} ya existe (skip)", datos.placa);
             continue;
         }
-        AutoService::crear(&mut conn, &cfg, datos)?;
+        AutoService::crear(&mut conn, &cfg, "seed", datos)?;
         n_autos_insertados += 1;
     }
     drop(conn);
@@ -233,7 +233,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  cliente doc {doc} ya existe (skip)");
             continue;
         }
-        ClienteService::crear(&mut conn, &cfg, &cipher, datos)?;
+        ClienteService::crear(&mut conn, &cfg, &cipher, "seed", datos)?;
         n_clientes_insertados += 1;
     }
     drop(conn);

@@ -21,7 +21,7 @@ use serde::Serialize;
 /// Estado compartido por la app (registrado en tauri::Builder::manage)
 pub struct AppState {
     pub pool: Pool,
-    pub sessions: Mutex<SessionStore>,
+    pub sessions: std::sync::Arc<Mutex<SessionStore>>,
     pub login_tracker: Mutex<LoginAttemptTracker>,
     pub config: Arc<AppConfig>,
     /// Clave PII en caliente (puede configurarse desde la UI sin reiniciar).

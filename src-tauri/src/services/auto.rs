@@ -72,6 +72,7 @@ impl AutoService {
     pub fn crear(
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
+        usuario: &str,
         mut datos: AutoDatos,
     ) -> Result<Auto, AppError> {
         normalizar(&mut datos);
@@ -83,6 +84,7 @@ impl AutoService {
             )));
         }
         AutoRepository::insertar(conn, &datos)?;
+        crate::core::audit::log_audit(conn, usuario, "CREAR VEHICULO", &format!("placa={}", datos.placa), "local")?;
         AutoRepository::obtener_por_placa(conn, &datos.placa)?.ok_or_else(|| {
             AppError::Generic("No se pudo recuperar el vehículo recién creado".into())
         })
@@ -92,6 +94,7 @@ impl AutoService {
     pub fn actualizar(
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
+        usuario: &str,
         placa: &str,
         mut datos: AutoDatos,
     ) -> Result<Auto, AppError> {
@@ -103,6 +106,7 @@ impl AutoService {
         normalizar(&mut datos);
         validar(&datos, cfg)?;
         AutoRepository::actualizar(conn, &placa, &datos)?;
+        crate::core::audit::log_audit(conn, usuario, "ACTUALIZAR VEHICULO", &format!("placa={placa}"), "local")?;
         AutoRepository::obtener_por_placa(conn, &placa)?.ok_or_else(|| {
             AppError::Generic("No se pudo recuperar el vehículo actualizado".into())
         })

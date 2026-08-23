@@ -135,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 7) Login real con el admin sembrado (valida hash Argon2 + sesión)
     let state = AppState {
         pool: pool.clone(),
-        sessions: Mutex::new(SessionStore::new(3600)),
+        sessions: std::sync::Arc::new(Mutex::new(SessionStore::new(3600))),
         login_tracker: Mutex::new(LoginAttemptTracker::new(5, 1800, 300, 10)),
         config: cfg.clone(),
         pii_key: Mutex::new(cfg.db_encryption_key.clone()),

@@ -63,6 +63,7 @@ impl ReservaService {
     pub fn crear(
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
+        usuario: &str,
         mut datos: ReservaDatos,
     ) -> Result<Reserva, AppError> {
         normalizar(&mut datos);
@@ -70,6 +71,7 @@ impl ReservaService {
         calcular_total(&mut datos);
         validar(&datos, cfg)?;
         let id = ReservaRepository::insertar(conn, &datos)?;
+        crate::core::audit::log_audit(conn, usuario, "CREAR RESERVA", &format!("reserva={id}"), "local")?;
         Self::obtener(conn, id)
     }
 
@@ -77,6 +79,7 @@ impl ReservaService {
     pub fn actualizar(
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
+        usuario: &str,
         id: i64,
         mut datos: ReservaDatos,
     ) -> Result<Reserva, AppError> {
@@ -86,6 +89,7 @@ impl ReservaService {
         calcular_total(&mut datos);
         validar(&datos, cfg)?;
         ReservaRepository::actualizar(conn, id, &datos)?;
+        crate::core::audit::log_audit(conn, usuario, "ACTUALIZAR RESERVA", &format!("reserva={id}"), "local")?;
         Self::obtener(conn, id)
     }
 

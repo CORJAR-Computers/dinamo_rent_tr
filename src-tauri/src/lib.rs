@@ -182,11 +182,16 @@ pub fn run() {
             );
             let state = AppState {
                 pool: pool.clone(),
-                sessions: std::sync::Mutex::new(crate::core::rbac::SessionStore::new(
-                    config.session_timeout,
-                )),
-                login_tracker: std::sync::Mutex::new(tracker),
+                sessions: {
+                    let store = std::sync::Arc::new(std::sync::Mutex::new(
+                        crate::core::rbac::SessionStore::new(config.session_timeout)
+                    ));
+                    // Limpieza periódica de sesiones expiradas (5 min)
+                    services::session_cleanup::spawn_session_cleanup(store.clone());
+                    store
+                },
                 config: config.clone(),
+                login_tracker: std::sync::Mutex::new(tracker),
                 pii_key: std::sync::Mutex::new(config.db_encryption_key.clone()),
             };
             app.manage(state);

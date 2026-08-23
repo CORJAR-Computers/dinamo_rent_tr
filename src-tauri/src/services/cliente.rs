@@ -65,12 +65,14 @@ impl ClienteService {
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
         cipher: &PiiCipher,
+        usuario: &str,
         mut datos: ClienteDatos,
     ) -> Result<ClienteConPii, AppError> {
         normalizar(&mut datos);
         validar(&datos, cfg)?;
         cifrar(cipher, &mut datos)?;
         let id = ClienteRepository::insertar(conn, &datos)?;
+        crate::core::audit::log_audit(conn, usuario, "CREAR CLIENTE", &format!("cliente={id}"), "local")?;
         let c = ClienteRepository::obtener_por_id(conn, id)?
             .ok_or_else(|| AppError::Generic("No se pudo recuperar el cliente creado".into()))?;
         Ok(descifrar(cipher, c))
@@ -81,6 +83,7 @@ impl ClienteService {
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
         cipher: &PiiCipher,
+        usuario: &str,
         id: i64,
         mut datos: ClienteDatos,
     ) -> Result<ClienteConPii, AppError> {
@@ -90,6 +93,7 @@ impl ClienteService {
         validar(&datos, cfg)?;
         cifrar(cipher, &mut datos)?;
         ClienteRepository::actualizar(conn, id, &datos)?;
+        crate::core::audit::log_audit(conn, usuario, "ACTUALIZAR CLIENTE", &format!("cliente={id}"), "local")?;
         let c = ClienteRepository::obtener_por_id(conn, id)?
             .ok_or_else(|| AppError::Generic("No se pudo recuperar el cliente actualizado".into()))?;
         Ok(descifrar(cipher, c))

@@ -97,12 +97,12 @@ impl CircuitBreaker {
 
     /// Verifica si se permite hacer un request
     pub fn allow_request(&self) -> bool {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *state {
             CircuitState::Closed => true,
             CircuitState::Open => {
                 // Verificar si ya pasó el timeout para cambiar a HalfOpen
-                let last_failure = self.last_failure_time.lock().unwrap();
+                let last_failure = self.last_failure_time.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(last) = *last_failure {
                     if last.elapsed() >= self.timeout {
                         *state = CircuitState::HalfOpen;
@@ -118,7 +118,7 @@ impl CircuitBreaker {
 
     /// Registra un exito
     pub fn record_success(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         self.failure_count.store(0, Ordering::SeqCst);
         if *state == CircuitState::HalfOpen {
             *state = CircuitState::Closed;
@@ -129,10 +129,10 @@ impl CircuitBreaker {
     /// Registra un fallo
     pub fn record_failure(&self) {
         let count = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
-        *self.last_failure_time.lock().unwrap() = Some(Instant::now());
+        *self.last_failure_time.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
         
         if count >= self.threshold {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             if *state != CircuitState::Open {
                 *state = CircuitState::Open;
                 log::warn!(
@@ -145,7 +145,7 @@ impl CircuitBreaker {
 
     /// Obtiene el estado actual
     pub fn current_state(&self) -> CircuitState {
-        *self.state.lock().unwrap()
+        *self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 

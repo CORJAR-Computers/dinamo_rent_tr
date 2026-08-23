@@ -127,6 +127,7 @@ fn rotacion_registra_pii_key_rotated_sin_exponer_la_clave() {
         &mut conn,
         &cfg,
         &PiiCipher::new(&old_key),
+        "test",
         ClienteDatos {
             tipo_doc: Some("Cédula".into()),
             no_doc: Some(format!("ROT{}", &suf[..suf.len().min(8)])),

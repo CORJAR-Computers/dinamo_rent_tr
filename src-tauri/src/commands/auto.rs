@@ -38,9 +38,9 @@ pub fn crear_auto(
     session_id: String,
     datos: AutoDatos,
 ) -> Cmd<Auto> {
-    require_session(&state, &session_id)?;
+    let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    AutoService::crear(&mut c, &state.config, datos).map_err(|e| e.to_payload())
+    AutoService::crear(&mut c, &state.config, &session.username, datos).map_err(|e| e.to_payload())
 }
 
 /// Actualiza un vehículo por placa
@@ -51,9 +51,9 @@ pub fn actualizar_auto(
     placa: String,
     datos: AutoDatos,
 ) -> Cmd<Auto> {
-    require_session(&state, &session_id)?;
+    let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    AutoService::actualizar(&mut c, &state.config, &placa, datos).map_err(|e| e.to_payload())
+    AutoService::actualizar(&mut c, &state.config, &session.username, &placa, datos).map_err(|e| e.to_payload())
 }
 
 /// Elimina un vehículo por placa

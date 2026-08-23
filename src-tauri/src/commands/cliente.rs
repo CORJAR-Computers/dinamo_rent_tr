@@ -46,10 +46,10 @@ pub fn crear_cliente(
     session_id: String,
     datos: ClienteDatos,
 ) -> Cmd<ClienteConPii> {
-    require_session(&state, &session_id)?;
+    let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     let cipher = PiiCipher::new(&state.pii_key());
-    ClienteService::crear(&mut c, &state.config, &cipher, datos).map_err(|e| e.to_payload())
+    ClienteService::crear(&mut c, &state.config, &cipher, &session.username, datos).map_err(|e| e.to_payload())
 }
 
 /// Actualiza un cliente por id
@@ -60,10 +60,10 @@ pub fn actualizar_cliente(
     id: i64,
     datos: ClienteDatos,
 ) -> Cmd<ClienteConPii> {
-    require_session(&state, &session_id)?;
+    let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     let cipher = PiiCipher::new(&state.pii_key());
-    ClienteService::actualizar(&mut c, &state.config, &cipher, id, datos)
+    ClienteService::actualizar(&mut c, &state.config, &cipher, &session.username, id, datos)
         .map_err(|e| e.to_payload())
 }
 
