@@ -70,7 +70,7 @@ pub fn actualizar_cliente(
 /// Elimina un cliente por id
 #[tauri::command]
 pub fn eliminar_cliente(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<()> {
-    require_eliminacion(&state, &session_id)?;
+    let session = require_eliminacion(&state, &session_id)?;
     let mut c = conn(&state)?;
-    ClienteService::eliminar(&mut c, id).map_err(|e| e.to_payload())
+    ClienteService::eliminar(&mut c, &session.username, id).map_err(|e| e.to_payload())
 }

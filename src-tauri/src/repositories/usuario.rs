@@ -129,7 +129,7 @@ impl UsuarioRepository {
         conn: &mut PooledConnection,
         username: &str,
     ) -> Result<Option<Usuario>, AppError> {        let row: Option<UsuarioRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM usuarios WHERE username = ?"),
+            &format!("SELECT {SELECT_COLS} FROM usuarios WHERE username = ? AND deleted_at IS NULL"),
             (username.trim().to_string(),),
         )?;
         Ok(row.map(
@@ -141,7 +141,7 @@ impl UsuarioRepository {
 
     /// Lista todos los usuarios (orden alfabético)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Usuario>, AppError> {        let rows: Vec<UsuarioRow> =
-            conn.query(&format!("SELECT {SELECT_COLS} FROM usuarios ORDER BY username"), ())?;
+            conn.query(&format!("SELECT {SELECT_COLS} FROM usuarios WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY username"), ())?;
         Ok(rows
             .into_iter()
             .map(|(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
@@ -173,7 +173,7 @@ impl UsuarioRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM usuarios \
                  WHERE UPPER(username) LIKE UPPER(?) OR UPPER(nombre) LIKE UPPER(?) OR UPPER(rol) LIKE UPPER(?) \
-                 ORDER BY username"
+                 AND deleted_at IS NULL ORDER BY username"
             ),
             (like.clone(), like.clone(), like),
         )?;
@@ -188,7 +188,7 @@ impl UsuarioRepository {
     /// ¿Existe un username? (chequeo de unicidad, insensible a mayúsculas)
     pub fn existe_username(conn: &mut PooledConnection, username: &str) -> Result<bool, AppError> {
         let count: Option<(i64,)> = conn.query_first(
-            "SELECT COUNT(*) FROM usuarios WHERE UPPER(username) = UPPER(?)",
+            "SELECT COUNT(*) FROM usuarios WHERE UPPER(username) = UPPER(?) AND deleted_at IS NULL",
             (username.trim().to_string(),),
         )?;
         Ok(count.map(|(c,)| c).unwrap_or(0) > 0)
@@ -248,9 +248,9 @@ impl UsuarioRepository {
         Ok(())
     }
 
-    /// Elimina un usuario (hard delete; sin FKs que lo impidan)
+    /// Elimina un usuario (soft-delete; sin FKs que lo impidan)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("DELETE FROM usuarios WHERE id = ?", (id,))
+        conn.execute("UPDATE usuarios SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (id,))
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
@@ -258,7 +258,7 @@ impl UsuarioRepository {
     /// Cuenta administradores activos (protección de último admin)
     pub fn contar_admins(conn: &mut PooledConnection) -> Result<i64, AppError> {
         let count: Option<(i64,)> = conn.query_first(
-            "SELECT COUNT(*) FROM usuarios WHERE rol = 'Administrador' AND activo = 1",
+            "SELECT COUNT(*) FROM usuarios WHERE rol = 'Administrador' AND activo = 1 AND deleted_at IS NULL",
             (),
         )?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
@@ -282,7 +282,7 @@ impl UsuarioRepository {
     pub fn registrar_acceso(conn: &mut PooledConnection, username: &str) -> Result<(), AppError> {
         conn.execute(
             "UPDATE usuarios SET ultimo_acceso = CURRENT_TIMESTAMP, intentos_fallidos = 0
-             WHERE username = ?",
+             WHERE username = ? AND deleted_at IS NULL",
             (username.to_string(),),
         )?;
         Ok(())
@@ -309,7 +309,7 @@ impl UsuarioRepository {
         intentos: i64,
     ) -> Result<(), AppError> {
         conn.execute(
-            "UPDATE usuarios SET intentos_fallidos = ? WHERE username = ?",
+            "UPDATE usuarios SET intentos_fallidos = ? WHERE username = ? AND deleted_at IS NULL",
             (intentos, username.to_string()),
         )?;
         Ok(())
@@ -319,7 +319,7 @@ impl UsuarioRepository {
     pub fn reset_intentos(conn: &mut PooledConnection, username: &str) -> Result<(), AppError> {
         conn.execute(
             "UPDATE usuarios SET intentos_fallidos = 0, updated_at = CURRENT_TIMESTAMP
-             WHERE username = ?",
+             WHERE username = ? AND deleted_at IS NULL",
             (username.to_string(),),
         )?;
         Ok(())
@@ -330,7 +330,7 @@ impl UsuarioRepository {
         conn: &mut PooledConnection,
     ) -> Result<std::collections::HashMap<String, u32>, AppError> {
         let rows: Vec<(String, i64)> = conn.query(
-            "SELECT username, intentos_fallidos FROM usuarios WHERE intentos_fallidos > 0",
+            "SELECT username, intentos_fallidos FROM usuarios WHERE intentos_fallidos > 0 AND deleted_at IS NULL",
             (),
         )?;
         Ok(rows.into_iter().map(|(u, i)| (u, i as u32)).collect())
@@ -348,7 +348,7 @@ impl UsuarioRepository {
         id: i64,
     ) -> Result<Option<String>, AppError> {
         let row: Option<(Option<String>,)> =
-            conn.query_first("SELECT tema FROM usuarios WHERE id = ?", (id,))?;
+            conn.query_first("SELECT tema FROM usuarios WHERE id = ? AND deleted_at IS NULL", (id,))?;
         Ok(row.and_then(|(t,)| t))
     }
 
@@ -359,7 +359,7 @@ impl UsuarioRepository {
         tema: &str,
     ) -> Result<(), AppError> {
         conn.execute(
-            "UPDATE usuarios SET tema = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE usuarios SET tema = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
             (tema.to_string(), id),
         )
         .map_err(|e| AppError::Database(e.to_string()))?;

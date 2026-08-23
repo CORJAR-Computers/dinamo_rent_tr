@@ -106,9 +106,10 @@ impl ReservaService {
     }
 
     /// Elimina una reserva (las rentas asociadas quedan con id_reserva NULL)
-    pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
+    pub fn eliminar(conn: &mut PooledConnection, usuario: &str, id: i64) -> Result<(), AppError> {
         Self::obtener(conn, id)?;
-        ReservaRepository::eliminar(conn, id)
+        ReservaRepository::eliminar(conn, id)?;
+        crate::core::audit::log_audit(conn, usuario, "ELIMINAR RESERVA", &format!("reserva={id}"), "local")
     }
 
     /// Total de reservas (dashboard)

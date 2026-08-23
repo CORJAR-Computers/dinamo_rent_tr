@@ -113,7 +113,7 @@ fn reserva_crud_roundtrip() {
     assert_eq!(actualizada.abono, "200000.00");
 
     // Eliminar
-    ReservaService::eliminar(&mut conn, id).expect("eliminar reserva");
+    ReservaService::eliminar(&mut conn, "test", id).expect("eliminar reserva");
     assert!(ReservaService::obtener(&mut conn, id).is_err(), "reserva eliminada");
 }
 
@@ -184,8 +184,8 @@ fn reserva_cancelar() {
     assert_eq!(err.kind(), "business");
 
     // Limpieza
-    ReservaService::eliminar(&mut conn, id).expect("eliminar cancelada");
-    ReservaService::eliminar(&mut conn, completada.id).expect("eliminar completada");
+    ReservaService::eliminar(&mut conn, "test", id).expect("eliminar cancelada");
+    ReservaService::eliminar(&mut conn, "test", completada.id).expect("eliminar completada");
 }
 
 #[test]
@@ -215,5 +215,5 @@ fn reserva_proximas_y_contar() {
     assert_eq!(suma, total);
 
     // Limpieza
-    ReservaService::eliminar(&mut conn, id).expect("eliminar");
+    ReservaService::eliminar(&mut conn, "test", id).expect("eliminar");
 }

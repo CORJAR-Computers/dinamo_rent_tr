@@ -772,7 +772,7 @@ fn renta_creada_desde_reserva_completa_la_reserva() {
 
     // Limpieza: renta + reserva
     RentaService::eliminar(&mut conn, renta.id, "test").expect("limpiar renta");
-    ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
+    ReservaService::eliminar(&mut conn, "test", reserva.id).expect("limpiar reserva");
 }
 
 /// Una reserva cancelada no puede generar una renta.
@@ -817,7 +817,7 @@ fn renta_desde_reserva_cancelada_rechazada() {
     // La reserva sigue Cancelada y no se creó renta
     let cancelada = ReservaService::obtener(&mut conn, reserva.id).expect("releer");
     assert_eq!(cancelada.estado, "Cancelada");
-    ReservaService::eliminar(&mut conn, reserva.id).expect("limpiar reserva");
+    ReservaService::eliminar(&mut conn, "test", reserva.id).expect("limpiar reserva");
 }
 
 #[test]

@@ -150,7 +150,7 @@ impl ClienteRepository {
     /// Lista todos los clientes (por nombre completo)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Cliente>, AppError> {
         let rows: Vec<ClienteRow> = conn.query(
-            &format!("SELECT {SELECT_COLS} FROM clientes ORDER BY nombre_completo"),
+            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY nombre_completo"),
             (),
         )?;
         Ok(rows.into_iter().map(from_row).collect())
@@ -164,7 +164,7 @@ impl ClienteRepository {
                 "SELECT {SELECT_COLS} FROM clientes \
                  WHERE UPPER(nombre_completo) LIKE UPPER(?) OR UPPER(nombres) LIKE UPPER(?) \
                     OR UPPER(no_doc) LIKE UPPER(?) OR UPPER(celular) LIKE UPPER(?) \
-                 ORDER BY nombre_completo"
+                 AND deleted_at IS NULL ORDER BY nombre_completo"
             ),
             (like.clone(), like.clone(), like.clone(), like),
         )?;
@@ -174,7 +174,7 @@ impl ClienteRepository {
     /// Filtra por estado (Activo / Inactivo / Lista Negra / VIP)
     pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Cliente>, AppError> {
         let rows: Vec<ClienteRow> = conn.query(
-            &format!("SELECT {SELECT_COLS} FROM clientes WHERE estado = ? ORDER BY nombre_completo"),
+            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND estado = ? AND deleted_at IS NULL ORDER BY nombre_completo"),
             (estado.to_string(),),
         )?;
         Ok(rows.into_iter().map(from_row).collect())
@@ -183,7 +183,7 @@ impl ClienteRepository {
     /// Obtiene un cliente por id
     pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Cliente>, AppError> {
         let row: Option<ClienteRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM clientes WHERE id = ?"),
+            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND id = ?"),
             (id,),
         )?;
         Ok(row.map(from_row))
@@ -199,7 +199,7 @@ impl ClienteRepository {
             return Ok(None);
         }
         let row: Option<ClienteRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM clientes WHERE no_doc = ?"),
+            &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND no_doc = ?"),
             (no_doc.trim().to_string(),),
         )?;
         Ok(row.map(from_row))
@@ -209,7 +209,7 @@ impl ClienteRepository {
     pub fn recientes(conn: &mut PooledConnection, limit: i64) -> Result<Vec<Cliente>, AppError> {
         let rows: Vec<ClienteRow> = conn.query(
             &format!(
-                "SELECT FIRST {limit} {SELECT_COLS} FROM clientes ORDER BY id DESC"
+                "SELECT FIRST {limit} {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL ORDER BY id DESC"
             ),
             (),
         )?;
@@ -291,9 +291,9 @@ impl ClienteRepository {
         Ok(())
     }
 
-    /// Elimina un cliente (FKs de rentas/reservas/comparendos son SET NULL)
+    /// Soft-delete de un cliente (FKs de rentas/reservas/comparendos son SET NULL)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        match conn.execute("DELETE FROM clientes WHERE id = ?", (id,)) {
+        match conn.execute("UPDATE clientes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (id,)) {
             Ok(_) => Ok(()),
             Err(e) => {
                 let lower = e.to_string().to_lowercase();

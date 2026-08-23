@@ -169,7 +169,7 @@ impl ReservaRepository {
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Reserva>, AppError> {
         let rows: Vec<ReservaRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM reservas ORDER BY fecha_recogida DESC, id DESC"
+                "SELECT {SELECT_COLS} FROM reservas WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
             ),
             (),
         )?;
@@ -184,7 +184,7 @@ impl ReservaRepository {
                 "SELECT {SELECT_COLS} FROM reservas \
                  WHERE UPPER(nombre_cliente) LIKE UPPER(?) OR UPPER(placa_asignada) LIKE UPPER(?) \
                     OR UPPER(nacionalidad) LIKE UPPER(?) \
-                 ORDER BY fecha_recogida DESC, id DESC"
+                 AND deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
             ),
             (like.clone(), like.clone(), like),
         )?;
@@ -195,8 +195,8 @@ impl ReservaRepository {
     pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Reserva>, AppError> {
         let rows: Vec<ReservaRow> = conn.query(
             &format!(
-                "SELECT {SELECT_COLS} FROM reservas WHERE estado = ? \
-                 ORDER BY fecha_recogida DESC, id DESC"
+                "SELECT {SELECT_COLS} FROM reservas WHERE deleted_at IS NULL AND estado = ? \
+                 AND deleted_at IS NULL ORDER BY fecha_recogida DESC, id DESC"
             ),
             (estado.to_string(),),
         )?;
@@ -220,7 +220,7 @@ impl ReservaRepository {
     /// Obtiene una reserva por id
     pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Reserva>, AppError> {
         let row: Option<ReservaRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM reservas WHERE id = ?"),
+            &format!("SELECT {SELECT_COLS} FROM reservas WHERE deleted_at IS NULL AND id = ?"),
             (id,),
         )?;
         Ok(row.map(from_row))
@@ -319,9 +319,9 @@ impl ReservaRepository {
         Ok(())
     }
 
-    /// Elimina una reserva (las rentas asociadas quedan con id_reserva NULL por SET NULL)
+    /// Soft-delete de una reserva (las rentas asociadas quedan con id_reserva NULL por SET NULL)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("DELETE FROM reservas WHERE id = ?", (id,))
+        conn.execute("UPDATE reservas SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (id,))
             .map_err(map_fb_error)?;
         Ok(())
     }
@@ -335,7 +335,7 @@ impl ReservaRepository {
     /// Conteo por estado (para el dashboard / filtros)
     pub fn contar_por_estado(conn: &mut PooledConnection) -> Result<Vec<(String, i64)>, AppError> {
         let rows: Vec<(String, i64)> = conn.query(
-            "SELECT estado, COUNT(*) FROM reservas GROUP BY estado ORDER BY estado",
+            "SELECT estado, COUNT(*) FROM reservas WHERE deleted_at IS NULL GROUP BY estado ORDER BY estado",
             (),
         )?;
         Ok(rows)

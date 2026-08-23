@@ -59,9 +59,9 @@ pub fn actualizar_auto(
 /// Elimina un vehículo por placa
 #[tauri::command]
 pub fn eliminar_auto(state: State<'_, AppState>, session_id: String, placa: String) -> Cmd<()> {
-    require_eliminacion(&state, &session_id)?;
+    let session = require_eliminacion(&state, &session_id)?;
     let mut c = conn(&state)?;
-    AutoService::eliminar(&mut c, &placa).map_err(|e| e.to_payload())
+    AutoService::eliminar(&mut c, &session.username, &placa).map_err(|e| e.to_payload())
 }
 
 /// Alertas de vencimientos (SOAT, técnico, extintor, batería, aceite)

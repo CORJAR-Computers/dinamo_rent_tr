@@ -95,7 +95,7 @@ fn auto_crud_roundtrip() {
     assert!(alertas.iter().all(|a| a.placa != placa.to_uppercase()));
 
     // Eliminar
-    AutoService::eliminar(&mut conn, placa).expect("eliminar auto");
+    AutoService::eliminar(&mut conn, "test", placa).expect("eliminar auto");
     assert!(AutoService::obtener(&mut conn, placa).is_err(), "auto eliminado");
 }
 
@@ -173,7 +173,7 @@ fn cliente_crud_con_pii() {
     assert!(encontrados.iter().any(|c| c.cliente.id == id));
 
     // Eliminar
-    ClienteService::eliminar(&mut conn, id).expect("eliminar cliente");
+    ClienteService::eliminar(&mut conn, "test", id).expect("eliminar cliente");
     assert!(ClienteService::obtener(&mut conn, &cipher, id).is_err(), "cliente eliminado");
 }
 

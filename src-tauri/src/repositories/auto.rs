@@ -182,7 +182,7 @@ impl AutoRepository {
     /// Lista todos los vehículos (por marca, placa)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Auto>, AppError> {
         let rows: Vec<AutoRow> =
-            conn.query(&format!("SELECT {SELECT_COLS} FROM autos ORDER BY marca, placa"), ())?;
+            conn.query(&format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND deleted_at IS NULL ORDER BY marca, placa"), ())?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
@@ -193,7 +193,7 @@ impl AutoRepository {
             &format!(
                 "SELECT {SELECT_COLS} FROM autos \
                  WHERE UPPER(placa) LIKE UPPER(?) OR UPPER(marca) LIKE UPPER(?) OR UPPER(modelo) LIKE UPPER(?) \
-                 ORDER BY marca, placa"
+                 AND deleted_at IS NULL ORDER BY marca, placa"
             ),
             (like.clone(), like.clone(), like),
         )?;
@@ -203,7 +203,7 @@ impl AutoRepository {
     /// Filtra por estado (Todos / Disponible / Rentado / ...)
     pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Auto>, AppError> {
         let rows: Vec<AutoRow> = conn.query(
-            &format!("SELECT {SELECT_COLS} FROM autos WHERE estado = ? ORDER BY marca, placa"),
+            &format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND estado = ? AND deleted_at IS NULL ORDER BY marca, placa"),
             (estado.to_string(),),
         )?;
         Ok(rows.into_iter().map(from_row).collect())
@@ -215,7 +215,7 @@ impl AutoRepository {
         placa: &str,
     ) -> Result<Option<Auto>, AppError> {
         let row: Option<AutoRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM autos WHERE placa = ?"),
+            &format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND placa = ?"),
             (placa.trim().to_string(),),
         )?;
         Ok(row.map(from_row))
@@ -224,7 +224,7 @@ impl AutoRepository {
     /// ¿Existe un vehículo con esa placa?
     pub fn existe(conn: &mut PooledConnection, placa: &str) -> Result<bool, AppError> {
         let count: Option<(i64,)> = conn.query_first(
-            "SELECT COUNT(*) FROM autos WHERE placa = ?",
+            "SELECT COUNT(*) FROM autos WHERE deleted_at IS NULL AND placa = ?",
             (placa.trim().to_string(),),
         )?;
         Ok(count.map(|(c,)| c).unwrap_or(0) > 0)
@@ -316,10 +316,10 @@ impl AutoRepository {
         Ok(())
     }
 
-    /// Elimina un vehículo (FKs: mantenimiento/comparendos CASCADE, gastos/reservas SET NULL,
+    /// Soft-delete de un vehículo (FKs: mantenimiento/comparendos CASCADE, gastos/reservas SET NULL,
     /// rentas SIN cascada → bloquea si hay rentas asociadas)
     pub fn eliminar(conn: &mut PooledConnection, placa: &str) -> Result<(), AppError> {
-        match conn.execute("DELETE FROM autos WHERE placa = ?", (placa.trim().to_string(),)) {
+        match conn.execute("UPDATE autos SET deleted_at = CURRENT_TIMESTAMP WHERE placa = ?", (placa.trim().to_string(),)) {
             Ok(_) => Ok(()),
             Err(e) => {
                 let lower = e.to_string().to_lowercase();
@@ -358,7 +358,7 @@ impl AutoRepository {
     pub fn placas_activas(conn: &mut PooledConnection) -> Result<Vec<String>, AppError> {
         let rows: Vec<(String,)> = conn.query(
             "SELECT placa FROM autos \
-             WHERE estado NOT IN ('Vendido', 'Baja') ORDER BY placa",
+             WHERE deleted_at IS NULL AND estado NOT IN ('Vendido', 'Baja') ORDER BY placa",
             (),
         )?;
         Ok(rows.into_iter().map(|(p,)| p).collect())
@@ -373,7 +373,7 @@ impl AutoRepository {
     /// Conteo por estado (para dashboard: Disponible, Rentado, Mantenimiento, ...)
     pub fn contar_por_estado(conn: &mut PooledConnection) -> Result<Vec<(String, i64)>, AppError> {
         let rows: Vec<(String, i64)> = conn.query(
-            "SELECT estado, COUNT(*) FROM autos GROUP BY estado ORDER BY estado",
+            "SELECT estado, COUNT(*) FROM autos WHERE deleted_at IS NULL GROUP BY estado ORDER BY estado",
             (),
         )?;
         Ok(rows)

@@ -109,8 +109,9 @@ impl AutoService {
     }
 
     /// Elimina un vehículo por placa
-    pub fn eliminar(conn: &mut PooledConnection, placa: &str) -> Result<(), AppError> {
-        AutoRepository::eliminar(conn, placa)
+    pub fn eliminar(conn: &mut PooledConnection, usuario: &str, placa: &str) -> Result<(), AppError> {
+        AutoRepository::eliminar(conn, placa)?;
+        crate::core::audit::log_audit(conn, usuario, "ELIMINAR VEHICULO", &format!("placa={placa}"), "local")
     }
 
     /// Total de vehículos (dashboard)

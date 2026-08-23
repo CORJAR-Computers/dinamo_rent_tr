@@ -96,8 +96,9 @@ impl ClienteService {
     }
 
     /// Elimina un cliente por id
-    pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        ClienteRepository::eliminar(conn, id)
+    pub fn eliminar(conn: &mut PooledConnection, usuario: &str, id: i64) -> Result<(), AppError> {
+        ClienteRepository::eliminar(conn, id)?;
+        crate::core::audit::log_audit(conn, usuario, "ELIMINAR CLIENTE", &format!("cliente={id}"), "local")
     }
 
     /// Total de clientes (dashboard)
