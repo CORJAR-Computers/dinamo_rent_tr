@@ -119,7 +119,7 @@ chrono = { version = "0.4", features = ["serde"] }
 #   del SIMIT emite cookies de sesión (ADC_CONN_*/ADC_REQ_*) y rechaza con 401
 #   "No se puede definir la política de seguridad" las peticiones sin ellas —
 #   Fase 1 (ver Handsoff §3 y API-Runt-simit/service.py).
-ureq = { version = "2.12", features = ["json", "cookies"] }
+ureq = { version = "3.4", features = ["json", "cookies"] }
 # Store de cookies de ureq (mismo crate que ureq usa internamente); lo
 # declaramos directo para construir el jar explícitamente en services/simit.rs.
 cookie_store = "0.21"
