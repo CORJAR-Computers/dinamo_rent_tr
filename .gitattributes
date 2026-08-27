@@ -1,2 +1,41 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalización de line endings: FORZAR LF en todos los archivos de texto.
+# Previene que Git convierta LF→CRLF en checkout de Windows (core.autocrlf=true),
+# lo que rompe el check de prettier ("endOfLine": "lf") en CI.
+# Fix del bug que dejó todos los runs de CI en rojo (#198-#226).
+
+# Archivos de texto: siempre LF en el repo y en checkout
+*.svelte  text eol=lf
+*.ts      text eol=lf
+*.js      text eol=lf
+*.mjs     text eol=lf
+*.css     text eol=lf
+*.html    text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.md      text eol=lf
+*.rs      text eol=lf
+*.toml    text eol=lf
+*.ini     text eol=lf
+*.sql     text eol=lf
+*.sh      text eol=lf
+*.ps1     text eol=crlf
+
+# Archivos binarios: nunca tocar
+*.fdb     binary
+*.fbk     binary
+*.exe     binary
+*.dll     binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.svg     text eol=lf
+*.woff    binary
+*.woff2   binary
+*.pdf     binary
+*.docx    binary
+*.xlsx    binary
+*.zip     binary
+*.sig     binary
