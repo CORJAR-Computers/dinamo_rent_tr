@@ -60,10 +60,7 @@
 				/>
 			</FormField>
 			<FormField label="Observaciones">
-				<textarea
-					class="input min-h-15 resize-y"
-					bind:value={pago.observaciones}
-					maxlength="2000"
+				<textarea class="input min-h-15 resize-y" bind:value={pago.observaciones} maxlength="2000"
 				></textarea>
 			</FormField>
 		</div>
