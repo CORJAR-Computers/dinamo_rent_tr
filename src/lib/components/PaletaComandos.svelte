@@ -1,7 +1,10 @@
 <script module lang="ts">
 	/** Normaliza texto para búsqueda sin acentos ni mayúsculas. */
 	export function normalizarTexto(s: string): string {
-		return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+		return s
+			.toLowerCase()
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '');
 	}
 
 	/** ¿El evento corresponde a «abrir la paleta de comandos» (Ctrl+K / Cmd+K)? */
@@ -145,10 +148,10 @@
 </script>
 
 <Modal
-	open={open}
+	{open}
 	title="Ir a…"
 	subtitle="Busca una página por nombre o sección"
-	onClose={onClose}
+	{onClose}
 	width="max-w-lg"
 >
 	{#snippet children()}
@@ -178,7 +181,12 @@
 				Sin resultados para «{termino.trim()}».
 			</p>
 		{:else}
-			<ul id="paleta-resultados" class="mt-3 max-h-72 overflow-y-auto space-y-0.5" role="listbox" aria-label="Resultados de búsqueda">
+			<ul
+				id="paleta-resultados"
+				class="mt-3 max-h-72 overflow-y-auto space-y-0.5"
+				role="listbox"
+				aria-label="Resultados de búsqueda"
+			>
 				{#each resultados as r, i}
 					<li role="none">
 						<button
@@ -189,15 +197,21 @@
 							onmouseenter={() => (indice = i)}
 							onclick={() => navegar(r)}
 							class={'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors ' +
-								(i === indice ? 'bg-primary/10 text-primary ' : 'text-text-primary hover:bg-alt-row ')}
+								(i === indice
+									? 'bg-primary/10 text-primary '
+									: 'text-text-primary hover:bg-alt-row ')}
 						>
 							<span class={'shrink-0 ' + (i === indice ? 'text-primary' : 'text-text-secondary')}>
 								<Icon name={r.icon} class="w-4 h-4" />
 							</span>
 							<span class="flex-1 min-w-0 truncate">{r.label}</span>
-							<span class="text-[10px] uppercase tracking-wider text-text-secondary shrink-0">{r.seccion}</span>
+							<span class="text-[10px] uppercase tracking-wider text-text-secondary shrink-0"
+								>{r.seccion}</span
+							>
 							{#if r.actual}
-								<span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
+								<span
+									class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0"
+								>
 									Actual
 								</span>
 							{/if}
@@ -207,22 +221,39 @@
 			</ul>
 		{/if}
 
-		<p class="mt-3 pt-3 border-t border-border text-xs text-text-secondary flex items-center gap-x-4 gap-y-1.5 flex-wrap">
+		<p
+			class="mt-3 pt-3 border-t border-border text-xs text-text-secondary flex items-center gap-x-4 gap-y-1.5 flex-wrap"
+		>
 			<span class="flex items-center gap-1.5">
-				<kbd class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none">↑</kbd>
-				<kbd class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none">↓</kbd>
+				<kbd
+					class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none"
+					>↑</kbd
+				>
+				<kbd
+					class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none"
+					>↓</kbd
+				>
 				navegar
 			</span>
 			<span class="flex items-center gap-1.5">
-				<kbd class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none">Enter</kbd>
+				<kbd
+					class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none"
+					>Enter</kbd
+				>
 				abrir
 			</span>
 			<span class="flex items-center gap-1.5">
-				<kbd class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none">Esc</kbd>
+				<kbd
+					class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none"
+					>Esc</kbd
+				>
 				cerrar
 			</span>
 			<span class="ml-auto flex items-center gap-1.5">
-				<kbd class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none">Ctrl+K</kbd>
+				<kbd
+					class="inline-flex items-center rounded border border-border bg-alt-row/60 px-1 py-0.5 text-[10px] font-mono leading-none"
+					>Ctrl+K</kbd
+				>
 				en cualquier momento
 			</span>
 		</p>

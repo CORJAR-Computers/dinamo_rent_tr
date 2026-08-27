@@ -70,6 +70,278 @@
 	}
 </script>
 
+<div class="print-area orden-carta">
+	<!-- Encabezado -->
+	<div class="encabezado">
+		<div class="logo-bloque">
+			<div class="logo-caja">
+				<img src={empresa.logoSrc} alt={empresa.nombreMostrar} />
+			</div>
+			<div>
+				<p class="nombre-empresa">{empresa.nombreMostrar.toUpperCase()}</p>
+				<p class="subtitulo-empresa">Renta de vehículos · Contrato de renta</p>
+			</div>
+		</div>
+		<div class="titulo-derecha">
+			<p class="titulo-orden">ORDEN DE RENTA</p>
+			<p class="ref-contrato">
+				Contrato <span class="tabular-nums"
+					>{formatContrato(renta.anioContrato, renta.noContrato)}</span
+				>
+			</p>
+			<p class="ref-renta">
+				Renta No. <span class="tabular-nums">{String(renta.id).padStart(4, '0')}</span> · Emitida: {hoy}
+			</p>
+		</div>
+	</div>
+
+	<!-- Estado -->
+	<div class="fila-estado">
+		<span class="etiqueta-estado">Estado:</span>
+		<span class="badge-estado {estadoBadge}">{renta.estado}</span>
+	</div>
+
+	<!-- Cliente y vehículo -->
+	<div class="malla">
+		<div class="caja">
+			<p class="caja-titulo">Cliente</p>
+			<p class="nombre-cliente">{renta.nombreCliente}</p>
+			{#if renta.noLicencia || renta.nacionalidad}
+				<div class="linea" style="margin-top: 2px;">
+					<span class="l">
+						{#if renta.noLicencia}Lic. {renta.noLicencia}{#if renta.nacionalidad}
+								· {renta.nacionalidad}{/if}{:else}{renta.nacionalidad}{/if}
+					</span>
+				</div>
+			{/if}
+		</div>
+		<div class="caja">
+			<p class="caja-titulo">Vehículo</p>
+			<p class="nombre-cliente">{renta.vehiculo || 'Por definir'}</p>
+			<div class="linea" style="margin-top: 2px;">
+				<span class="l">Placa: <span class="valor-fuerte">{renta.placa || '—'}</span></span>
+				<span class="l"
+					>Km: <span class="valor-fuerte">{renta.kmSalida}</span> · Tanque: {renta.tanqueSalida ||
+						'—'}</span
+				>
+			</div>
+		</div>
+	</div>
+
+	<!-- Itinerario -->
+	<div class="malla">
+		<div class="caja">
+			<p class="caja-titulo">Recogida</p>
+			<div class="linea">
+				<span class="l">Fecha</span><span class="v tabular-nums"
+					>{formatDate(renta.fechaRecogida)}</span
+				>
+			</div>
+			<div class="linea">
+				<span class="l">Hora</span><span class="v tabular-nums">{hora(renta.horaRecogida)}</span>
+			</div>
+			{#if renta.ubicacionRecogida}
+				<div class="linea">
+					<span class="l">Lugar</span><span class="v">{renta.ubicacionRecogida}</span>
+				</div>
+			{/if}
+		</div>
+		<div class="caja">
+			<p class="caja-titulo">Retorno</p>
+			<div class="linea">
+				<span class="l">Fecha</span><span class="v tabular-nums"
+					>{formatDate(renta.fechaRetorno)}</span
+				>
+			</div>
+			<div class="linea">
+				<span class="l">Hora</span><span class="v tabular-nums">{hora(renta.horaRetorno)}</span>
+			</div>
+			{#if renta.ubicacionRetorno}
+				<div class="linea">
+					<span class="l">Lugar</span><span class="v">{renta.ubicacionRetorno}</span>
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	<!-- Tarifas -->
+	<table class="tabla">
+		<thead>
+			<tr>
+				<th>Concepto</th>
+				<th class="derecha">Valor</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td
+					>Valor del día × {renta.diasCalculados} día{renta.diasCalculados === 1 ? '' : 's'} ({formatCOP(
+						renta.valorDia
+					)})</td
+				>
+				<td class="derecha"
+					>{formatCOP((parseFloat(renta.valorDia) || 0) * renta.diasCalculados)}</td
+				>
+			</tr>
+			{#if (parseFloat(renta.valorHoraExtra) || 0) * renta.horasExtras > 0}
+				<tr>
+					<td>Horas extras ({renta.horasExtras} × {formatCOP(renta.valorHoraExtra)})</td>
+					<td class="derecha"
+						>{formatCOP((parseFloat(renta.valorHoraExtra) || 0) * renta.horasExtras)}</td
+					>
+				</tr>
+			{/if}
+			{#each extras as e}
+				<tr>
+					<td>{e.nombre}</td>
+					<td class="derecha">{formatCOP(e.monto)}</td>
+				</tr>
+			{/each}
+			{#if (parseFloat(renta.descuento) || 0) > 0}
+				<tr>
+					<td>Descuento</td>
+					<td class="derecha">- {formatCOP(renta.descuento)}</td>
+				</tr>
+			{/if}
+			<tr class="fila-subtotal">
+				<td>Subtotal</td>
+				<td class="derecha">{formatCOP(renta.subtotal, true)}</td>
+			</tr>
+			{#if (parseFloat(renta.impuestos) || 0) > 0}
+				<tr>
+					<td>Impuestos (IVA)</td>
+					<td class="derecha">{formatCOP(renta.impuestos, true)}</td>
+				</tr>
+			{/if}
+			<tr class="fila-total">
+				<td>TOTAL</td>
+				<td class="derecha">{formatCOP(renta.total, true)}</td>
+			</tr>
+			<tr>
+				<td>Abono recibido</td>
+				<td class="derecha">- {formatCOP(renta.abono, true)}</td>
+			</tr>
+			<tr class="fila-subtotal">
+				<td>Saldo pendiente</td>
+				<td class="derecha">{formatCOP(renta.saldoPendiente, true)}</td>
+			</tr>
+		</tbody>
+	</table>
+
+	<!-- Pagos -->
+	{#if renta.pagos.length > 0}
+		<table class="tabla pagos">
+			<thead>
+				<tr>
+					<th>Pagos recibidos</th>
+					<th class="derecha">Monto</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each renta.pagos as p}
+					<tr>
+						<td>
+							<span class="pago-concepto">{p.concepto}</span>
+							<span class="pago-detalle"> · {p.metodoPago} · {formatDate(p.fecha)}</span>
+						</td>
+						<td class="derecha">{formatCOP(p.monto, true)}</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
+
+	<!-- Inspecciones -->
+	{#if insSalida || insEntrada}
+		<div class="malla">
+			{#if insSalida}
+				<div class="caja">
+					<p class="caja-titulo">Inspección de salida</p>
+					<div class="inspeccion-lista">
+						<p>
+							Km: <span class="valor-fuerte">{insSalida.kilometraje}</span> · Gasolina: {insSalida.nivelGasolina}
+						</p>
+						<p>
+							Repuesto: {si(insSalida.tieneRepuesto)} · Gato/cruceta: {si(
+								insSalida.tieneGatoCruceta
+							)} · Kit: {si(insSalida.tieneKitCarretera)} · Docs: {si(insSalida.tieneDocumentos)}
+						</p>
+						{#if insSalida.danosCarroceria}<p class="danos">
+								Daños: {insSalida.danosCarroceria}
+							</p>{/if}
+					</div>
+				</div>
+			{/if}
+			{#if insEntrada}
+				<div class="caja">
+					<p class="caja-titulo">Inspección de entrada</p>
+					<div class="inspeccion-lista">
+						<p>
+							Km: <span class="valor-fuerte">{insEntrada.kilometraje}</span> · Gasolina: {insEntrada.nivelGasolina}
+						</p>
+						{#if insEntrada.danosCarroceria}<p class="danos">
+								Daños: {insEntrada.danosCarroceria}
+							</p>{/if}
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Devolución real -->
+	{#if renta.estado === 'Cerrada'}
+		<div class="caja" style="margin-bottom: 7px;">
+			<p class="caja-titulo">Devolución real</p>
+			<div class="devolucion-grid">
+				<div class="linea">
+					<span class="l">Fecha</span><span class="v">{formatDate(renta.fechaDevolucionReal)}</span>
+				</div>
+				<div class="linea">
+					<span class="l">Hora</span><span class="v">{hora(renta.horaDevolucionReal)}</span>
+				</div>
+				<div class="linea">
+					<span class="l">Km final</span><span class="v">{renta.kmFinal || '—'}</span>
+				</div>
+				<div class="linea">
+					<span class="l">Tanque final</span><span class="v">{renta.tanqueFinal || '—'}</span>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Observaciones -->
+	{#if renta.observaciones}
+		<div class="caja" style="margin-bottom: 7px;">
+			<p class="caja-titulo">Observaciones</p>
+			<p class="observaciones">{renta.observaciones}</p>
+		</div>
+	{/if}
+
+	<!-- Condiciones -->
+	<div class="condiciones">
+		<p>
+			• El vehículo debe devolverse en las mismas condiciones en que fue entregado y con el tanque
+			en el nivel pactado; de lo contrario se aplicarán los costos de lavado y combustible
+			correspondientes.
+		</p>
+		<p>
+			• El cliente es responsable por daños, multas y comparendos ocurridos durante el periodo de la
+			renta. El saldo pendiente debe cancelarse al momento de la devolución del vehículo.
+		</p>
+	</div>
+
+	<!-- El contrato de renta asociado lleva las firmas de las partes -->
+	<p class="nota-firmas">
+		Documento informativo: las firmas de las partes constan en el contrato de renta correspondiente.
+	</p>
+
+	<!-- Pie -->
+	<p class="pie">
+		{empresa.nombreMostrar} · Contrato {formatContrato(renta.anioContrato, renta.noContrato)} · Renta
+		No. {String(renta.id).padStart(4, '0')} · Impresa el {hoy}
+	</p>
+</div>
+
 <style>
 	/* Documento en papel Carta (8.5x11in ≈ 816px x 1056px a 96dpi) con
 	   tipografía amplia (11px) y aire entre secciones para que llene la hoja
@@ -390,213 +662,3 @@
 		color: var(--ord-pie);
 	}
 </style>
-
-<div class="print-area orden-carta">
-	<!-- Encabezado -->
-	<div class="encabezado">
-		<div class="logo-bloque">
-			<div class="logo-caja">
-				<img src={empresa.logoSrc} alt={empresa.nombreMostrar} />
-			</div>
-			<div>
-				<p class="nombre-empresa">{empresa.nombreMostrar.toUpperCase()}</p>
-				<p class="subtitulo-empresa">Renta de vehículos · Contrato de renta</p>
-			</div>
-		</div>
-		<div class="titulo-derecha">
-			<p class="titulo-orden">ORDEN DE RENTA</p>
-			<p class="ref-contrato">Contrato <span class="tabular-nums">{formatContrato(renta.anioContrato, renta.noContrato)}</span></p>
-			<p class="ref-renta">Renta No. <span class="tabular-nums">{String(renta.id).padStart(4, '0')}</span> · Emitida: {hoy}</p>
-		</div>
-	</div>
-
-	<!-- Estado -->
-	<div class="fila-estado">
-		<span class="etiqueta-estado">Estado:</span>
-		<span class="badge-estado {estadoBadge}">{renta.estado}</span>
-	</div>
-
-	<!-- Cliente y vehículo -->
-	<div class="malla">
-		<div class="caja">
-			<p class="caja-titulo">Cliente</p>
-			<p class="nombre-cliente">{renta.nombreCliente}</p>
-			{#if renta.noLicencia || renta.nacionalidad}
-				<div class="linea" style="margin-top: 2px;">
-					<span class="l">
-						{#if renta.noLicencia}Lic. {renta.noLicencia}{#if renta.nacionalidad} · {renta.nacionalidad}{/if}{:else}{renta.nacionalidad}{/if}
-					</span>
-				</div>
-			{/if}
-		</div>
-		<div class="caja">
-			<p class="caja-titulo">Vehículo</p>
-			<p class="nombre-cliente">{renta.vehiculo || 'Por definir'}</p>
-			<div class="linea" style="margin-top: 2px;">
-				<span class="l">Placa: <span class="valor-fuerte">{renta.placa || '—'}</span></span>
-				<span class="l">Km: <span class="valor-fuerte">{renta.kmSalida}</span> · Tanque: {renta.tanqueSalida || '—'}</span>
-			</div>
-		</div>
-	</div>
-
-	<!-- Itinerario -->
-	<div class="malla">
-		<div class="caja">
-			<p class="caja-titulo">Recogida</p>
-			<div class="linea"><span class="l">Fecha</span><span class="v tabular-nums">{formatDate(renta.fechaRecogida)}</span></div>
-			<div class="linea"><span class="l">Hora</span><span class="v tabular-nums">{hora(renta.horaRecogida)}</span></div>
-			{#if renta.ubicacionRecogida}
-				<div class="linea"><span class="l">Lugar</span><span class="v">{renta.ubicacionRecogida}</span></div>
-			{/if}
-		</div>
-		<div class="caja">
-			<p class="caja-titulo">Retorno</p>
-			<div class="linea"><span class="l">Fecha</span><span class="v tabular-nums">{formatDate(renta.fechaRetorno)}</span></div>
-			<div class="linea"><span class="l">Hora</span><span class="v tabular-nums">{hora(renta.horaRetorno)}</span></div>
-			{#if renta.ubicacionRetorno}
-				<div class="linea"><span class="l">Lugar</span><span class="v">{renta.ubicacionRetorno}</span></div>
-			{/if}
-		</div>
-	</div>
-
-	<!-- Tarifas -->
-	<table class="tabla">
-		<thead>
-			<tr>
-				<th>Concepto</th>
-				<th class="derecha">Valor</th>
-			</tr>
-		</thead>
-		<tbody>
-			<tr>
-				<td>Valor del día × {renta.diasCalculados} día{renta.diasCalculados === 1 ? '' : 's'} ({formatCOP(renta.valorDia)})</td>
-				<td class="derecha">{formatCOP((parseFloat(renta.valorDia) || 0) * renta.diasCalculados)}</td>
-			</tr>
-			{#if (parseFloat(renta.valorHoraExtra) || 0) * renta.horasExtras > 0}
-				<tr>
-					<td>Horas extras ({renta.horasExtras} × {formatCOP(renta.valorHoraExtra)})</td>
-					<td class="derecha">{formatCOP((parseFloat(renta.valorHoraExtra) || 0) * renta.horasExtras)}</td>
-				</tr>
-			{/if}
-			{#each extras as e}
-				<tr>
-					<td>{e.nombre}</td>
-					<td class="derecha">{formatCOP(e.monto)}</td>
-				</tr>
-			{/each}
-			{#if (parseFloat(renta.descuento) || 0) > 0}
-				<tr>
-					<td>Descuento</td>
-					<td class="derecha">- {formatCOP(renta.descuento)}</td>
-				</tr>
-			{/if}
-			<tr class="fila-subtotal">
-				<td>Subtotal</td>
-				<td class="derecha">{formatCOP(renta.subtotal, true)}</td>
-			</tr>
-			{#if (parseFloat(renta.impuestos) || 0) > 0}
-				<tr>
-					<td>Impuestos (IVA)</td>
-					<td class="derecha">{formatCOP(renta.impuestos, true)}</td>
-				</tr>
-			{/if}
-			<tr class="fila-total">
-				<td>TOTAL</td>
-				<td class="derecha">{formatCOP(renta.total, true)}</td>
-			</tr>
-			<tr>
-				<td>Abono recibido</td>
-				<td class="derecha">- {formatCOP(renta.abono, true)}</td>
-			</tr>
-			<tr class="fila-subtotal">
-				<td>Saldo pendiente</td>
-				<td class="derecha">{formatCOP(renta.saldoPendiente, true)}</td>
-			</tr>
-		</tbody>
-	</table>
-
-	<!-- Pagos -->
-	{#if renta.pagos.length > 0}
-		<table class="tabla pagos">
-			<thead>
-				<tr>
-					<th>Pagos recibidos</th>
-					<th class="derecha">Monto</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each renta.pagos as p}
-					<tr>
-						<td>
-							<span class="pago-concepto">{p.concepto}</span>
-							<span class="pago-detalle"> · {p.metodoPago} · {formatDate(p.fecha)}</span>
-						</td>
-						<td class="derecha">{formatCOP(p.monto, true)}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
-
-	<!-- Inspecciones -->
-	{#if insSalida || insEntrada}
-		<div class="malla">
-			{#if insSalida}
-				<div class="caja">
-					<p class="caja-titulo">Inspección de salida</p>
-					<div class="inspeccion-lista">
-						<p>Km: <span class="valor-fuerte">{insSalida.kilometraje}</span> · Gasolina: {insSalida.nivelGasolina}</p>
-						<p>Repuesto: {si(insSalida.tieneRepuesto)} · Gato/cruceta: {si(insSalida.tieneGatoCruceta)} · Kit: {si(insSalida.tieneKitCarretera)} · Docs: {si(insSalida.tieneDocumentos)}</p>
-						{#if insSalida.danosCarroceria}<p class="danos">Daños: {insSalida.danosCarroceria}</p>{/if}
-					</div>
-				</div>
-			{/if}
-			{#if insEntrada}
-				<div class="caja">
-					<p class="caja-titulo">Inspección de entrada</p>
-					<div class="inspeccion-lista">
-						<p>Km: <span class="valor-fuerte">{insEntrada.kilometraje}</span> · Gasolina: {insEntrada.nivelGasolina}</p>
-						{#if insEntrada.danosCarroceria}<p class="danos">Daños: {insEntrada.danosCarroceria}</p>{/if}
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- Devolución real -->
-	{#if renta.estado === 'Cerrada'}
-		<div class="caja" style="margin-bottom: 7px;">
-			<p class="caja-titulo">Devolución real</p>
-			<div class="devolucion-grid">
-				<div class="linea"><span class="l">Fecha</span><span class="v">{formatDate(renta.fechaDevolucionReal)}</span></div>
-				<div class="linea"><span class="l">Hora</span><span class="v">{hora(renta.horaDevolucionReal)}</span></div>
-				<div class="linea"><span class="l">Km final</span><span class="v">{renta.kmFinal || '—'}</span></div>
-				<div class="linea"><span class="l">Tanque final</span><span class="v">{renta.tanqueFinal || '—'}</span></div>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Observaciones -->
-	{#if renta.observaciones}
-		<div class="caja" style="margin-bottom: 7px;">
-			<p class="caja-titulo">Observaciones</p>
-			<p class="observaciones">{renta.observaciones}</p>
-		</div>
-	{/if}
-
-	<!-- Condiciones -->
-	<div class="condiciones">
-		<p>• El vehículo debe devolverse en las mismas condiciones en que fue entregado y con el tanque en el nivel pactado; de lo contrario se aplicarán los costos de lavado y combustible correspondientes.</p>
-		<p>• El cliente es responsable por daños, multas y comparendos ocurridos durante el periodo de la renta. El saldo pendiente debe cancelarse al momento de la devolución del vehículo.</p>
-	</div>
-
-	<!-- El contrato de renta asociado lleva las firmas de las partes -->
-	<p class="nota-firmas">
-		Documento informativo: las firmas de las partes constan en el contrato de renta correspondiente.
-	</p>
-
-	<!-- Pie -->
-	<p class="pie">
-		{empresa.nombreMostrar} · Contrato {formatContrato(renta.anioContrato, renta.noContrato)} · Renta No. {String(renta.id).padStart(4, '0')} · Impresa el {hoy}
-	</p>
-</div>

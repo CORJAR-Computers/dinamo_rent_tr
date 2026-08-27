@@ -1,11 +1,6 @@
 // src/lib/utils/calendario.test.ts — Tests de las utilidades puras de calendario
 import { describe, it, expect } from 'vitest';
-import {
-	celdasDelMes,
-	detectarSolapamientos,
-	diasSemanaCorto,
-	rangoCubreDia
-} from './calendario';
+import { celdasDelMes, detectarSolapamientos, diasSemanaCorto, rangoCubreDia } from './calendario';
 
 describe('rangoCubreDia', () => {
 	it('cubre los días del intervalo (inclusivo)', () => {

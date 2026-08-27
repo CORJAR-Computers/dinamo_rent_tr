@@ -16,7 +16,7 @@ use crate::core::audit::log_audit;
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
 use crate::core::security;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
 use crate::repositories::usuario::{Usuario, UsuarioRepository};
 
@@ -91,12 +91,17 @@ impl UsuarioService {
         conn: &mut PooledConnection,
         cfg: &Arc<AppConfig>,
         actor: &str,
-        mut datos: UsuarioDatos,    ) -> Result<Usuario, AppError> {
-		datos.username = datos.username.trim().to_string();
-		datos.nombre = mayusculas(&datos.nombre);
-		datos.rol = datos.rol.trim().to_string(); // rol: capitalización fija (Administrador, Supervisor, Operador)
-		datos.email = datos.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()); // email: sin mayúsculas
-		validar_base(&datos.nombre, &datos.rol, datos.email.as_deref(), cfg)?;
+        mut datos: UsuarioDatos,
+    ) -> Result<Usuario, AppError> {
+        datos.username = datos.username.trim().to_string();
+        datos.nombre = mayusculas(&datos.nombre);
+        datos.rol = datos.rol.trim().to_string(); // rol: capitalización fija (Administrador, Supervisor, Operador)
+        datos.email = datos
+            .email
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()); // email: sin mayúsculas
+        validar_base(&datos.nombre, &datos.rol, datos.email.as_deref(), cfg)?;
 
         // Username: obligatorio, sin espacios, longitud permitida
         if datos.username.is_empty() || datos.username.len() > 50 {
@@ -158,21 +163,26 @@ impl UsuarioService {
         cfg: &Arc<AppConfig>,
         actor: &str,
         id: i64,
-        mut datos: UsuarioDatosActualizar,    ) -> Result<Usuario, AppError> {
+        mut datos: UsuarioDatosActualizar,
+    ) -> Result<Usuario, AppError> {
         let actual = Self::obtener(conn, id)?;
-		datos.nombre = mayusculas(&datos.nombre);
-		datos.rol = datos.rol.trim().to_string(); // rol: capitalización fija
-		datos.email = datos.email.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()); // email: sin mayúsculas
-		validar_base(&datos.nombre, &datos.rol, datos.email.as_deref(), cfg)?;		// Protección: último administrador activo no se puede desactivar ni despromover
-		let es_admin_activo = actual.rol.as_deref() == Some("Administrador") && actual.activo;
-		if es_admin_activo
-			&& UsuarioRepository::contar_admins(conn)? <= 1
-			&& (datos.rol != "Administrador" || !datos.activo)
-		{
-			return Err(AppError::Business(
-				"No se puede modificar al último administrador activo del sistema.".into(),
-			));
-		}
+        datos.nombre = mayusculas(&datos.nombre);
+        datos.rol = datos.rol.trim().to_string(); // rol: capitalización fija
+        datos.email = datos
+            .email
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()); // email: sin mayúsculas
+        validar_base(&datos.nombre, &datos.rol, datos.email.as_deref(), cfg)?; // Protección: último administrador activo no se puede desactivar ni despromover
+        let es_admin_activo = actual.rol.as_deref() == Some("Administrador") && actual.activo;
+        if es_admin_activo
+            && UsuarioRepository::contar_admins(conn)? <= 1
+            && (datos.rol != "Administrador" || !datos.activo)
+        {
+            return Err(AppError::Business(
+                "No se puede modificar al último administrador activo del sistema.".into(),
+            ));
+        }
 
         UsuarioRepository::actualizar_datos(
             conn,
@@ -196,11 +206,7 @@ impl UsuarioService {
     }
 
     /// Elimina un usuario. No permite eliminar la propia cuenta ni al último admin.
-    pub fn eliminar(
-        conn: &mut PooledConnection,
-        actor: &str,
-        id: i64,
-    ) -> Result<(), AppError> {
+    pub fn eliminar(conn: &mut PooledConnection, actor: &str, id: i64) -> Result<(), AppError> {
         let actual = Self::obtener(conn, id)?;
         if actual.username == actor {
             return Err(AppError::Business(
@@ -243,7 +249,10 @@ impl UsuarioService {
             conn,
             actor,
             "CONTRASEÑA REINICIADA",
-            &format!("id={id}, username={} (cambio obligatorio en próximo login)", usuario.username),
+            &format!(
+                "id={id}, username={} (cambio obligatorio en próximo login)",
+                usuario.username
+            ),
             "local",
         )?;
         let usuario = Self::obtener(conn, id)?;
@@ -266,21 +275,24 @@ fn validar_base(
             "El nombre del usuario es obligatorio (máx. 100 caracteres).".into(),
         ));
     }
-    validate_no_xss(nombre, 100).map_err(|_| {
-        AppError::Validation("El nombre contiene caracteres no permitidos.".into())
-    })?;	if rol.is_empty() {
-		return Err(AppError::Validation("El rol es obligatorio.".into()));
-	}
-	let permitidos = roles_permitidos(cfg);
-	if !permitidos.contains(&rol) {
-		return Err(AppError::Validation(format!(
-			"Rol inválido '{rol}'. Permitidos: {}",
-			permitidos.join(", ")
-		)));
-	}
+    validate_no_xss(nombre, 100)
+        .map_err(|_| AppError::Validation("El nombre contiene caracteres no permitidos.".into()))?;
+    if rol.is_empty() {
+        return Err(AppError::Validation("El rol es obligatorio.".into()));
+    }
+    let permitidos = roles_permitidos(cfg);
+    if !permitidos.contains(&rol) {
+        return Err(AppError::Validation(format!(
+            "Rol inválido '{rol}'. Permitidos: {}",
+            permitidos.join(", ")
+        )));
+    }
     if let Some(email) = email {
-        if !email.is_empty() && !(email.contains('@') && email.contains('.') && email.len() <= 100) {
-            return Err(AppError::Validation("El correo electrónico no es válido.".into()));
+        if !email.is_empty() && !(email.contains('@') && email.contains('.') && email.len() <= 100)
+        {
+            return Err(AppError::Validation(
+                "El correo electrónico no es válido.".into(),
+            ));
         }
     }
     Ok(())

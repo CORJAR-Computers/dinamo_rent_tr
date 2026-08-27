@@ -279,7 +279,7 @@ select.input {
 	size: letter;
 	margin: 0 0 14mm 0;
 	@bottom-center {
-		content: "Página " counter(page) " de " counter(pages);
+		content: 'Página ' counter(page) ' de ' counter(pages);
 		font-family: Arial, sans-serif;
 		font-size: 7pt;
 		color: #444;

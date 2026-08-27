@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-	import ExcelJS from 'exceljs';
 	import {
 		comparendoApi,
 		autoApi,
@@ -28,6 +27,7 @@
 	import FormField from '$lib/components/FormField.svelte';
 	import OrdenComparendo from '$lib/components/reports/OrdenComparendo.svelte';
 	import AvisoImpresion from '$lib/components/AvisoImpresion.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { imprimirDocumento } from '$lib/utils/imprimir';
 
 	const sid = () => session.token ?? '';
@@ -93,7 +93,7 @@
 	let pagando = $state(false);
 	let eliminarId = $state<number | null>(null);
 	let eliminando = $state(false);
-	
+
 	let imprimirComparendo = $state<Comparendo | null>(null);
 
 	// ── Agente SIMIT ──
@@ -114,7 +114,8 @@
 		} catch (e) {
 			// Sin backend Tauri (tests / standalone) o error transitorio → sin panel
 			agente = null;
-			if (!(e instanceof ApiError)) console.error('No se pudo consultar el estado del Agente SIMIT', e);
+			if (!(e instanceof ApiError))
+				console.error('No se pudo consultar el estado del Agente SIMIT', e);
 		}
 	}
 
@@ -123,9 +124,15 @@
 		sincronizando = true;
 		try {
 			const resultado = await simitApi.sincronizarAhora(sid());
-			agente = { ...(agente ?? AGENTE_DEFAULT), ultimaSincronizacion: resultado.sincronizadoEn, ultimoResultado: resultado };
+			agente = {
+				...(agente ?? AGENTE_DEFAULT),
+				ultimaSincronizacion: resultado.sincronizadoEn,
+				ultimoResultado: resultado
+			};
 			if (resultado.insertados > 0) {
-				toast.success(`Agente SIMIT: ${resultado.insertados} comparendo${resultado.insertados === 1 ? '' : 's'} nuevo${resultado.insertados === 1 ? '' : 's'} registrado${resultado.insertados === 1 ? '' : 's'}.`);
+				toast.success(
+					`Agente SIMIT: ${resultado.insertados} comparendo${resultado.insertados === 1 ? '' : 's'} nuevo${resultado.insertados === 1 ? '' : 's'} registrado${resultado.insertados === 1 ? '' : 's'}.`
+				);
 			} else {
 				toast.success('Agente SIMIT: sincronización completada sin comparendos nuevos.');
 			}
@@ -144,6 +151,7 @@
 			return;
 		}
 		try {
+			const ExcelJS = (await import('exceljs')).default;
 			const wb = new ExcelJS.Workbook();
 			const ws = wb.addWorksheet('Comparendos SIMIT');
 			ws.columns = Array.from({ length: 10 }, () => ({ width: 16 }));
@@ -151,11 +159,23 @@
 			ws.getCell('A1').value = 'DINAMO RENT A CAR — REPORTE SIMIT';
 			ws.getCell('A1').font = { bold: true, size: 14 };
 			ws.mergeCells(2, 1, 2, 10);
-			ws.getCell('A2').value = `Sincronización: ${new Date(resultado.sincronizadoEn).toLocaleString('es-CO')}`;
+			ws.getCell('A2').value =
+				`Sincronización: ${new Date(resultado.sincronizadoEn).toLocaleString('es-CO')}`;
 			ws.addRow([]);
-			const header = ['Placa', 'N° Comparendo', 'Fecha', 'Hora', 'Tipo', 'Infracción', 'Organismo', 'Valor', 'Estado', 'Nuevo'];
+			const header = [
+				'Placa',
+				'N° Comparendo',
+				'Fecha',
+				'Hora',
+				'Tipo',
+				'Infracción',
+				'Organismo',
+				'Valor',
+				'Estado',
+				'Nuevo'
+			];
 			const headerRow = ws.addRow(header);
-			headerRow.eachCell((cell) => {
+			headerRow.eachCell((cell: any) => {
 				cell.font = { bold: true };
 				cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
 			});
@@ -186,7 +206,11 @@
 			a.click();
 			URL.revokeObjectURL(url);
 		} catch (e) {
-			toast.error(e instanceof Error ? 'No se pudo generar el Excel: ' + e.message : 'No se pudo generar el Excel.');
+			toast.error(
+				e instanceof Error
+					? 'No se pudo generar el Excel: ' + e.message
+					: 'No se pudo generar el Excel.'
+			);
 		}
 	}
 
@@ -250,9 +274,15 @@
 		listen<ResultadoSincronizacion>('simit-sync-complete', (evt) => {
 			if (!activo) return;
 			const r = evt.payload;
-			agente = { ...(agente ?? AGENTE_DEFAULT), ultimaSincronizacion: r.sincronizadoEn, ultimoResultado: r };
+			agente = {
+				...(agente ?? AGENTE_DEFAULT),
+				ultimaSincronizacion: r.sincronizadoEn,
+				ultimoResultado: r
+			};
 			if (r.insertados > 0) {
-				toast.success(`Agente SIMIT: ${r.insertados} comparendo${r.insertados === 1 ? '' : 's'} nuevo${r.insertados === 1 ? '' : 's'} registrado${r.insertados === 1 ? '' : 's'}.`);
+				toast.success(
+					`Agente SIMIT: ${r.insertados} comparendo${r.insertados === 1 ? '' : 's'} nuevo${r.insertados === 1 ? '' : 's'} registrado${r.insertados === 1 ? '' : 's'}.`
+				);
 			}
 			// Refrescar estado del agente: el backend ya calculó la próxima corrida
 			cargarAgente();
@@ -279,7 +309,9 @@
 			progreso = evt.payload;
 			// Limpiar progreso cuando se completa
 			if (evt.payload.tipo === 'completado') {
-				setTimeout(() => { progreso = null; }, 2000);
+				setTimeout(() => {
+					progreso = null;
+				}, 2000);
 			}
 		})
 			.then((u) => {
@@ -401,7 +433,9 @@
 			pagandoId = null;
 			await cargar();
 		} catch (e) {
-			toast.error(e instanceof ApiError ? e.message : 'No se pudo marcar el comparendo como pagado.');
+			toast.error(
+				e instanceof ApiError ? e.message : 'No se pudo marcar el comparendo como pagado.'
+			);
 			pagandoId = null;
 		} finally {
 			pagando = false;
@@ -480,11 +514,20 @@
 		<div>
 			<h2 class="text-2xl font-bold text-text-primary">Comparendos</h2>
 			<p class="text-sm text-text-secondary mt-0.5">
-				{comparendosVisibles.length} comparendo{comparendosVisibles.length === 1 ? '' : 's'} · multas de tránsito por vehículo
+				{comparendosVisibles.length} comparendo{comparendosVisibles.length === 1 ? '' : 's'} · multas
+				de tránsito por vehículo
 			</p>
 		</div>
 		<button class="btn-primary" onclick={abrirNuevo}>
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg
+			>
 			Registrar Comparendo
 		</button>
 	</div>
@@ -494,16 +537,32 @@
 		<div class="card p-4 space-y-3">
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div class="flex items-center gap-3">
-					<div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-						<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" /></svg>
+					<div
+						class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="w-5 h-5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="1.8"
+							><path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"
+							/></svg
+						>
 					</div>
 					<div>
 						<p class="font-semibold text-text-primary">Agente SIMIT</p>
 						<p class="text-xs text-text-secondary">
 							Consulta automática de comparendos por placa · cada {agente.intervalHours} h
 							{#if agente.ultimaSincronizacion}
-								· última: {formatDate(agente.ultimaSincronizacion.slice(0, 10))} {agente.ultimaSincronizacion.slice(11, 16)}								{:else if !agente.ultimoError && agente.startDelayMinutes > 0}
-									· primera corrida en ~{agente.startDelayMinutes} min
+								· última: {formatDate(agente.ultimaSincronizacion.slice(0, 10))}
+								{agente.ultimaSincronizacion.slice(11, 16)}
+							{:else if !agente.ultimoError && agente.startDelayMinutes > 0}
+								· primera corrida en ~{agente.startDelayMinutes} min
 							{:else}
 								· aún sin sincronizar
 							{/if}
@@ -517,39 +576,111 @@
 					{#if agente.ejecutando || sincronizando}
 						<div class="flex flex-col gap-2">
 							<span class="inline-flex items-center gap-2 text-xs font-semibold text-primary">
-								<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-							{#if progreso}
-								Consultando SIMIT... {progreso.indicePlaca}/{progreso.totalPlacas}
-							{:else}
-								Consultando SIMIT...
+								<svg
+									class="animate-spin h-4 w-4"
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									><circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									></circle><path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+									></path></svg
+								>
+								{#if progreso}
+									Consultando SIMIT... {progreso.indicePlaca}/{progreso.totalPlacas}
+								{:else}
+									Consultando SIMIT...
+								{/if}
+							</span>
+							{#if progreso && progreso.tipo !== 'inicio'}
+								<div class="w-full bg-primary/10 rounded-full h-2 overflow-hidden">
+									<div
+										class="bg-primary h-full transition-all duration-500 ease-out rounded-full"
+										style="width: {Math.max(
+											2,
+											(progreso.indicePlaca / Math.max(1, progreso.totalPlacas)) * 100
+										)}%"
+									></div>
+								</div>
+								<p class="text-[10px] text-text-secondary truncate" title={progreso.mensaje}>
+									{progreso.mensaje}
+								</p>
 							{/if}
-						</span>
-						{#if progreso && progreso.tipo !== 'inicio'}
-							<div class="w-full bg-primary/10 rounded-full h-2 overflow-hidden">
-								<div
-									class="bg-primary h-full transition-all duration-500 ease-out rounded-full"
-									style="width: {Math.max(2, (progreso.indicePlaca / Math.max(1, progreso.totalPlacas)) * 100)}%"
-								></div>
-							</div>
-							<p class="text-[10px] text-text-secondary truncate" title={progreso.mensaje}>
-								{progreso.mensaje}
-							</p>
-						{/if}
-					</div>
+						</div>
 					{:else if !agente.habilitado}
-						<span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold text-text-secondary border-border">Deshabilitado en config.ini</span>
+						<span
+							class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold text-text-secondary border-border"
+							>Deshabilitado en config.ini</span
+						>
 					{/if}
-					<button class="btn-ghost" onclick={descargarExcelSimit} disabled={!agente.ultimoResultado || agente.ultimoResultado.registros.length === 0}>
-						<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+					<button
+						class="btn-ghost"
+						onclick={descargarExcelSimit}
+						disabled={!agente.ultimoResultado || agente.ultimoResultado.registros.length === 0}
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="1.8"
+							><path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+							/></svg
+						>
 						Descargar Excel
 					</button>
 					{#if puedeEliminar}
-						<button class="btn-primary" onclick={sincronizarAhora} disabled={sincronizando || agente.ejecutando}>
+						<button
+							class="btn-primary"
+							onclick={sincronizarAhora}
+							disabled={sincronizando || agente.ejecutando}
+						>
 							{#if sincronizando || agente.ejecutando}
-								<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+								<svg
+									class="animate-spin h-4 w-4"
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									><circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									></circle><path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+									></path></svg
+								>
 								Sincronizando...
 							{:else}
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="w-4 h-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+									><path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+									/></svg
+								>
 								Sincronizar ahora
 							{/if}
 						</button>
@@ -557,94 +688,123 @@
 				</div>
 			</div>
 
-		{#if agente.ultimoResultado}
-			{@const r = agente.ultimoResultado}
-			<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
-				<span class="text-text-secondary">
-					Placas consultadas: <strong class="text-text-primary tabular-nums">{r.placasConsultadas}</strong>
-				</span>
-				<span class="text-text-secondary">
-					Encontrados: <strong class="text-text-primary tabular-nums">{r.encontrados}</strong>
-				</span>
-				<span class="text-text-secondary">
-					Nuevos en la BD: <strong class="text-exito tabular-nums">{r.insertados}</strong>
-				</span>
-				<span class="text-text-secondary">
-					Ya registrados: <strong class="text-text-primary tabular-nums">{r.duplicados}</strong>
-				</span>
-				{#if r.errores.length > 0}
+			{#if agente.ultimoResultado}
+				{@const r = agente.ultimoResultado}
+				<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
 					<span class="text-text-secondary">
-						Placas con error: <strong class="text-peligro tabular-nums">{r.errores.length}</strong>
+						Placas consultadas: <strong class="text-text-primary tabular-nums"
+							>{r.placasConsultadas}</strong
+						>
 					</span>
-				{/if}
-				<span class="text-text-secondary">
-					Total pendiente: <strong class="text-alerta tabular-nums">{formatCOP(r.totalPendiente)}</strong>
-				</span>
-				{#if r.metricas}
-					<button
-						class="text-primary hover:text-primary/80 transition-colors underline"
-						onclick={() => (mostrarMetricas = !mostrarMetricas)}
-					>
-						{mostrarMetricas ? 'Ocultar métricas' : 'Ver métricas'}
-					</button>
-					{#if logs.length > 0}
+					<span class="text-text-secondary">
+						Encontrados: <strong class="text-text-primary tabular-nums">{r.encontrados}</strong>
+					</span>
+					<span class="text-text-secondary">
+						Nuevos en la BD: <strong class="text-exito tabular-nums">{r.insertados}</strong>
+					</span>
+					<span class="text-text-secondary">
+						Ya registrados: <strong class="text-text-primary tabular-nums">{r.duplicados}</strong>
+					</span>
+					{#if r.errores.length > 0}
+						<span class="text-text-secondary">
+							Placas con error: <strong class="text-peligro tabular-nums">{r.errores.length}</strong
+							>
+						</span>
+					{/if}
+					<span class="text-text-secondary">
+						Total pendiente: <strong class="text-alerta tabular-nums"
+							>{formatCOP(r.totalPendiente)}</strong
+						>
+					</span>
+					{#if r.metricas}
 						<button
 							class="text-primary hover:text-primary/80 transition-colors underline"
-							onclick={() => (mostrarLogs = !mostrarLogs)}
+							onclick={() => (mostrarMetricas = !mostrarMetricas)}
 						>
-							{mostrarLogs ? 'Ocultar logs' : `Ver logs (${logs.length})`}
+							{mostrarMetricas ? 'Ocultar métricas' : 'Ver métricas'}
 						</button>
+						{#if logs.length > 0}
+							<button
+								class="text-primary hover:text-primary/80 transition-colors underline"
+								onclick={() => (mostrarLogs = !mostrarLogs)}
+							>
+								{mostrarLogs ? 'Ocultar logs' : `Ver logs (${logs.length})`}
+							</button>
+						{/if}
 					{/if}
+				</div>
+				{#if r.reporteHtml}
+					<p class="text-[11px] text-text-secondary font-mono truncate" title={r.reporteHtml}>
+						Reporte HTML: {r.reporteHtml}
+					</p>
 				{/if}
-			</div>
-			{#if r.reporteHtml}
-				<p class="text-[11px] text-text-secondary font-mono truncate" title={r.reporteHtml}>
-					Reporte HTML: {r.reporteHtml}
-				</p>
-			{/if}
-			{#if mostrarMetricas && r.metricas}
-				<div class="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-					<p class="text-xs font-semibold text-primary mb-2">📊 Métricas de Rendimiento</p>
-					<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-						<div>
-							<span class="text-text-secondary">Tiempo total:</span>
-							<span class="font-semibold text-text-primary ml-1">{(r.metricas.tiempoTotalMs / 1000).toFixed(1)}s</span>
+				{#if mostrarMetricas && r.metricas}
+					<div class="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+						<p class="text-xs font-semibold text-primary mb-2">📊 Métricas de Rendimiento</p>
+						<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+							<div>
+								<span class="text-text-secondary">Tiempo total:</span>
+								<span class="font-semibold text-text-primary ml-1"
+									>{(r.metricas.tiempoTotalMs / 1000).toFixed(1)}s</span
+								>
+							</div>
+							<div>
+								<span class="text-text-secondary">Promedio/placa:</span>
+								<span class="font-semibold text-text-primary ml-1"
+									>{r.metricas.tiempoPromedioPlacaMs}ms</span
+								>
+							</div>
+							<div>
+								<span class="text-text-secondary">Tiempo captcha:</span>
+								<span class="font-semibold text-text-primary ml-1"
+									>{(r.metricas.tiempoCaptchaMs / 1000).toFixed(1)}s</span
+								>
+							</div>
+							<div>
+								<span class="text-text-secondary">Tiempo consulta:</span>
+								<span class="font-semibold text-text-primary ml-1"
+									>{(r.metricas.tiempoConsultaMs / 1000).toFixed(1)}s</span
+								>
+							</div>
+							<div>
+								<span class="text-text-secondary">Reintentos:</span>
+								<span class="font-semibold text-text-primary ml-1"
+									>{r.metricas.totalReintentos}</span
+								>
+							</div>
+							<div>
+								<span class="text-text-secondary">Circuit Breaker:</span>
+								<span
+									class="font-semibold ml-1 {r.metricas.circuitBreakerState === 'Closed'
+										? 'text-exito'
+										: 'text-alerta'}">{r.metricas.circuitBreakerState}</span
+								>
+							</div>
+							<div>
+								<span class="text-text-secondary">Placas timeout:</span>
+								<span class="font-semibold text-text-primary ml-1">{r.metricas.placasTimeout}</span>
+							</div>
+							<div>
+								<span class="text-text-secondary">Errores red:</span>
+								<span class="font-semibold text-text-primary ml-1">{r.metricas.placasErrorRed}</span
+								>
+							</div>
 						</div>
-						<div>
-							<span class="text-text-secondary">Promedio/placa:</span>
-							<span class="font-semibold text-text-primary ml-1">{r.metricas.tiempoPromedioPlacaMs}ms</span>
-						</div>
-						<div>
-							<span class="text-text-secondary">Tiempo captcha:</span>
-							<span class="font-semibold text-text-primary ml-1">{(r.metricas.tiempoCaptchaMs / 1000).toFixed(1)}s</span>
-						</div>
-						<div>
-							<span class="text-text-secondary">Tiempo consulta:</span>
-							<span class="font-semibold text-text-primary ml-1">{(r.metricas.tiempoConsultaMs / 1000).toFixed(1)}s</span>
-						</div>
-						<div>
-							<span class="text-text-secondary">Reintentos:</span>
-							<span class="font-semibold text-text-primary ml-1">{r.metricas.totalReintentos}</span>
-						</div>
-						<div>
-							<span class="text-text-secondary">Circuit Breaker:</span>
-							<span class="font-semibold ml-1 {r.metricas.circuitBreakerState === 'Closed' ? 'text-exito' : 'text-alerta'}">{r.metricas.circuitBreakerState}</span>
-						</div>
-						<div>
-							<span class="text-text-secondary">Placas timeout:</span>
-							<span class="font-semibold text-text-primary ml-1">{r.metricas.placasTimeout}</span>
-						</div>
-						<div>
-							<span class="text-text-secondary">Errores red:</span>
-							<span class="font-semibold text-text-primary ml-1">{r.metricas.placasErrorRed}</span>
-						</div>
-					</div>					</div>
+					</div>
 				{/if}
 				{#if mostrarLogs && logs.length > 0}
 					<div class="mt-3 rounded-lg border border-border overflow-hidden">
-						<div class="flex items-center justify-between px-3 py-2 bg-primary/5 border-b border-border">
+						<div
+							class="flex items-center justify-between px-3 py-2 bg-primary/5 border-b border-border"
+						>
 							<span class="text-xs font-semibold text-primary">📋 Logs en tiempo real</span>
-							<button class="text-[10px] text-text-secondary hover:text-primary" onclick={() => { logs = []; mostrarLogs = false; }}>
+							<button
+								class="text-[10px] text-text-secondary hover:text-primary"
+								onclick={() => {
+									logs = [];
+									mostrarLogs = false;
+								}}
+							>
 								Limpiar
 							</button>
 						</div>
@@ -652,39 +812,54 @@
 							{#each logs as log}
 								<div class="flex items-start gap-2">
 									<span class="text-gray-500 shrink-0">{log.timestamp}</span>
-									<span class="shrink-0 w-12 text-center font-bold"
-									class:text-blue-400={log.level === 'info'}
-									class:text-green-400={log.level === 'success'}
-									class:text-yellow-400={log.level === 'warn'}
-									class:text-red-400={log.level === 'error'}
-								>
-									{log.level.toUpperCase()}
-								</span>
-								<span class="text-gray-300 break-all">{log.message}</span>
-							</div>
+									<span
+										class="shrink-0 w-12 text-center font-bold"
+										class:text-blue-400={log.level === 'info'}
+										class:text-green-400={log.level === 'success'}
+										class:text-yellow-400={log.level === 'warn'}
+										class:text-red-400={log.level === 'error'}
+									>
+										{log.level.toUpperCase()}
+									</span>
+									<span class="text-gray-300 break-all">{log.message}</span>
+								</div>
 							{/each}
 						</div>
 					</div>
 				{/if}
 				{#if r.errores.length > 0}
-				<div class="rounded-lg bg-peligro/10 border border-peligro/25 px-3 py-2 text-[11px] text-peligro max-h-24 overflow-y-auto">
-					{#each r.errores as e}
-						<p>• {e.placa}: {e.error}</p>
-					{/each}
-				</div>
+					<div
+						class="rounded-lg bg-peligro/10 border border-peligro/25 px-3 py-2 text-[11px] text-peligro max-h-24 overflow-y-auto"
+					>
+						{#each r.errores as e}
+							<p>• {e.placa}: {e.error}</p>
+						{/each}
+					</div>
+				{/if}
+			{:else if agente.ultimoError}
+				<p class="text-xs text-peligro">
+					Último error de sincronización: {agente.ultimoError}
+				</p>
 			{/if}
-		{:else if agente.ultimoError}
-			<p class="text-xs text-peligro">
-				Último error de sincronización: {agente.ultimoError}
-			</p>
-		{/if}
 		</div>
 	{/if}
 
 	<!-- Filtros -->
 	<div class="flex flex-wrap items-center gap-3">
 		<div class="relative grow max-w-sm">
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/></svg
+			>
 			<input
 				class="input pl-9"
 				type="search"
@@ -739,7 +914,18 @@
 	{#if loading}
 		<div class="card flex items-center justify-center py-16">
 			<div class="flex flex-col items-center gap-3">
-				<svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-8 w-8 text-primary"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				<p class="text-sm text-text-secondary">Cargando comparendos...</p>
 			</div>
 		</div>
@@ -769,7 +955,7 @@
 					{#if c.responsable}
 						<div class="max-w-[200px]">
 							<p class="text-text-primary truncate">{c.responsable.nombreCliente || '—'}</p>
-							<p class="text-xs text-text-secondary truncate" title="{c.responsable.estadoRenta}">
+							<p class="text-xs text-text-secondary truncate" title={c.responsable.estadoRenta}>
 								{formatContrato(c.responsable.anioContrato, c.responsable.noContrato)} ·
 								{formatDate(c.responsable.fechaRecogida)} → {formatDate(c.responsable.fechaRetorno)}
 							</p>
@@ -780,8 +966,15 @@
 				{:else if col.key === 'origen'}
 					<div class="flex items-center gap-1.5">
 						<span
-							class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap {c.origen === 'SIMIT' ? 'bg-primary/10 text-primary border-primary/25' : 'bg-black/5 text-text-secondary border-border'}"
-							title={c.origen === 'SIMIT' && c.ultimoVistoSimit ? `Confirmado por SIMIT el ${formatDate(c.ultimoVistoSimit.slice(0, 10))}` : c.origen === 'SIMIT' ? 'Importado por el Agente SIMIT' : 'Registrado manualmente'}
+							class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap {c.origen ===
+							'SIMIT'
+								? 'bg-primary/10 text-primary border-primary/25'
+								: 'bg-black/5 text-text-secondary border-border'}"
+							title={c.origen === 'SIMIT' && c.ultimoVistoSimit
+								? `Confirmado por SIMIT el ${formatDate(c.ultimoVistoSimit.slice(0, 10))}`
+								: c.origen === 'SIMIT'
+									? 'Importado por el Agente SIMIT'
+									: 'Registrado manualmente'}
 						>
 							{c.origen === 'SIMIT' ? 'SIMIT' : 'Manual'}
 						</span>
@@ -795,9 +988,15 @@
 						{/if}
 					</div>
 				{:else if col.key === 'monto'}
-					<p class="font-bold text-text-primary tabular-nums text-right whitespace-nowrap">{formatCOP(c.monto)}</p>
+					<p class="font-bold text-text-primary tabular-nums text-right whitespace-nowrap">
+						{formatCOP(c.monto)}
+					</p>
 				{:else if col.key === 'estado'}
-					<span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap {estadoClases(c.estado)}">
+					<span
+						class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap {estadoClases(
+							c.estado
+						)}"
+					>
 						<span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
 						{c.estado}
 					</span>
@@ -808,33 +1007,37 @@
 						<button
 							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 							title="Imprimir notificación"
+							aria-label={`Imprimir comparendo #${c.id} de placa ${c.placa}`}
 							onclick={() => (imprimirComparendo = c)}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5z" /></svg>
+							<Icon name="printer" class="w-4 h-4" />
 						</button>
 						{#if c.estado !== 'Pagado'}
 							<button
 								class="p-2 rounded-lg text-text-secondary hover:text-exito hover:bg-exito/10 transition-colors"
 								title="Marcar como pagado"
+								aria-label={`Marcar pagado comparendo #${c.id} de placa ${c.placa}`}
 								onclick={() => (pagandoId = c.id)}
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+								<Icon name="check" class="w-4 h-4" />
 							</button>
 						{/if}
 						<button
 							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 							title="Editar"
+							aria-label={`Editar comparendo #${c.id} de placa ${c.placa}`}
 							onclick={() => abrirEditar(c)}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" /></svg>
+							<Icon name="pencil" class="w-4 h-4" />
 						</button>
 						{#if puedeEliminar}
 							<button
 								class="p-2 rounded-lg text-text-secondary hover:text-peligro hover:bg-peligro/10 transition-colors"
 								title="Eliminar"
+								aria-label={`Eliminar comparendo #${c.id} de placa ${c.placa}`}
 								onclick={() => (eliminarId = c.id)}
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+								<Icon name="trash" class="w-4 h-4" />
 							</button>
 						{/if}
 					</div>
@@ -850,13 +1053,20 @@
 <Modal
 	open={modalOpen}
 	title={editando ? `Editar comparendo #${editandoId}` : 'Registrar comparendo'}
-	subtitle={editando ? 'Modifica los datos y guarda los cambios.' : 'Registra una multa de tránsito para un vehículo.'}
+	subtitle={editando
+		? 'Modifica los datos y guarda los cambios.'
+		: 'Registra una multa de tránsito para un vehículo.'}
 	onClose={() => (modalOpen = false)}
 	width="max-w-2xl"
 >
 	{#snippet children()}
 		{#if formError}
-			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
+			<div
+				class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro"
+				role="alert"
+			>
+				{formError}
+			</div>
 		{/if}
 
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
@@ -885,16 +1095,34 @@
 				</select>
 			</FormField>
 			<FormField label="Observaciones">
-				<input class="input" placeholder="Ej: Exceso de velocidad, foto-detección..." bind:value={form.observaciones} maxlength="2000" />
+				<input
+					class="input"
+					placeholder="Ej: Exceso de velocidad, foto-detección..."
+					bind:value={form.observaciones}
+					maxlength="2000"
+				/>
 			</FormField>
 		</div>
 	{/snippet}
 
 	{#snippet footer()}
-		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
+		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}
+			>Cancelar</button
+		>
 		<button class="btn-primary" onclick={guardar} disabled={guardando}>
 			{#if guardando}
-				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-4 w-4"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				Guardando...
 			{:else}
 				{editando ? 'Guardar cambios' : 'Registrar comparendo'}
@@ -928,7 +1156,9 @@
 <!-- Modal orden imprimible -->
 <Modal
 	open={imprimirComparendo !== null}
-	title={imprimirComparendo ? `Notificación de comparendo #${String(imprimirComparendo.id).padStart(4, '0')}` : ''}
+	title={imprimirComparendo
+		? `Notificación de comparendo #${String(imprimirComparendo.id).padStart(4, '0')}`
+		: ''}
 	subtitle="Vista previa del documento. Al imprimir solo se muestra la orden."
 	onClose={cerrarImpresion}
 	width="max-w-3xl"
@@ -943,9 +1173,20 @@
 	{#snippet footer()}
 		<button class="btn-ghost print-hidden" onclick={cerrarImpresion}>Cerrar</button>
 		<button class="btn-primary print-hidden" onclick={imprimir}>
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5z" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5z"
+				/></svg
+			>
 			Imprimir documento
 		</button>
 	{/snippet}
 </Modal>
-

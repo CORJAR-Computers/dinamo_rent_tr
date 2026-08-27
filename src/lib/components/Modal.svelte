@@ -163,18 +163,28 @@
 					class="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-alt-row transition-colors shrink-0"
 					aria-label="Cerrar"
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="w-5 h-5"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+						><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg
+					>
 				</button>
 			</div>
 
 			<!-- Cuerpo -->
-			<div class="{rawBody ? 'grow min-h-0' : 'px-5 py-4 overflow-y-auto grow'}">
+			<div class={rawBody ? 'grow min-h-0' : 'px-5 py-4 overflow-y-auto grow'}>
 				{@render children?.()}
 			</div>
 
 			<!-- Footer -->
 			{#if footer && !noFooter}
-				<div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-surface/50 rounded-b-xl">
+				<div
+					class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-surface/50 rounded-b-xl"
+				>
 					{@render footer()}
 				</div>
 			{/if}

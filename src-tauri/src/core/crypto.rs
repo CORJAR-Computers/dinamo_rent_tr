@@ -13,10 +13,10 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::engine::general_purpose::URL_SAFE as B64_URL;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL_NOPAD;
+use base64::Engine;
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
@@ -50,9 +50,8 @@ pub fn encrypt(key: &[u8; 32], plaintext: &str) -> Result<String, AppError> {
     if plaintext.is_empty() {
         return Ok(plaintext.to_string());
     }
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| {
-        AppError::Crypto(format!("Error creando cifrador AES: {e}"))
-    })?;
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| AppError::Crypto(format!("Error creando cifrador AES: {e}")))?;
     let mut nonce_bytes = [0u8; 12];
     use rand::RngCore;
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
@@ -87,9 +86,8 @@ pub fn decrypt(key: &[u8; 32], stored: &str) -> Result<String, AppError> {
     let ct = B64
         .decode(parts[1])
         .map_err(|e| AppError::Crypto(format!("Ciphertext inválido: {e}")))?;
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| {
-        AppError::Crypto(format!("Error creando descifrador AES: {e}"))
-    })?;
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| AppError::Crypto(format!("Error creando descifrador AES: {e}")))?;
     let pt = cipher
         .decrypt(Nonce::from_slice(&nonce_bytes), ct.as_ref())
         .map_err(|_| AppError::Crypto("No se pudo desencriptar (¿clave incorrecta?)".into()))?;
@@ -109,7 +107,10 @@ pub fn decrypt(key: &[u8; 32], stored: &str) -> Result<String, AppError> {
 ///   [0x80] [timestamp 8B] [IV 16B] [ciphertext] [HMAC-SHA256 32B]
 /// Decodifica base64url tolerando padding opcional (Python Fernet incluye '=')
 fn b64url_decode(s: &str) -> Option<Vec<u8>> {
-    B64_URL.decode(s.trim()).or_else(|_| B64_URL_NOPAD.decode(s.trim())).ok()
+    B64_URL
+        .decode(s.trim())
+        .or_else(|_| B64_URL_NOPAD.decode(s.trim()))
+        .ok()
 }
 
 pub fn fernet_decrypt(fernet_key_b64: &str, token: &str) -> Option<String> {
@@ -170,7 +171,10 @@ impl PiiCipher {
         } else {
             Some(db_encryption_key.trim().to_string())
         };
-        Self { aes_key, fernet_key }
+        Self {
+            aes_key,
+            fernet_key,
+        }
     }
 
     /// Cifra un valor PII (AES-256-GCM). Vacío pasa tal cual.

@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serial_test::serial;
-use tauri::Manager;
 use tauri::test::{mock_builder, mock_context, noop_assets};
+use tauri::Manager;
 
 use dinamo_rent_lib::commands::pii::get_pii_status;
 use dinamo_rent_lib::commands::simit::simit_sync_now;
@@ -88,12 +88,8 @@ fn simit_sync_now_deniega_operador() {
 
     // Operador con sesión válida → permission (sin red ni agente gestionado)
     let sid = sesion_rol(st.inner(), 2, "operador", "Operador");
-    let err = tauri::async_runtime::block_on(simit_sync_now(
-        handle.clone(),
-        st.clone(),
-        sid,
-    ))
-    .expect_err("Operador no dispara sincronizaciones SIMIT");
+    let err = tauri::async_runtime::block_on(simit_sync_now(handle.clone(), st.clone(), sid))
+        .expect_err("Operador no dispara sincronizaciones SIMIT");
     assert_eq!(err.kind, "permission");
 
     // Sin sesión → session_expired

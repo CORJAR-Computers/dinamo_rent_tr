@@ -3,7 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { tauri } from '../../test/tauri';
 import { session } from '$lib/stores/session.svelte';
-import type { Renta, RentaDatos, RentaCierreDatos, PagoDatos, InspeccionDatos, Auto, BusinessLists, Reserva } from '$lib/api';
+import type {
+	Renta,
+	RentaDatos,
+	RentaCierreDatos,
+	PagoDatos,
+	InspeccionDatos,
+	Auto,
+	BusinessLists,
+	Reserva
+} from '$lib/api';
 import RentasPage from './+page.svelte';
 
 function renta(overrides: Partial<Renta> = {}): Renta {
@@ -135,9 +144,8 @@ const LISTS: BusinessLists = {
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 function setSesion(rol = 'Administrador') {
@@ -165,7 +173,14 @@ describe('página de Rentas', () => {
 	it('lista las rentas con totales y estado', async () => {
 		tauri.register('listar_rentas', () => [
 			renta(),
-			renta({ id: 2, noContrato: 43, placa: 'XYZ987', nombreCliente: 'Otro Cliente', estado: 'Cerrada', total: '714000.00' })
+			renta({
+				id: 2,
+				noContrato: 43,
+				placa: 'XYZ987',
+				nombreCliente: 'Otro Cliente',
+				estado: 'Cerrada',
+				total: '714000.00'
+			})
 		]);
 
 		render(RentasPage);
@@ -363,7 +378,11 @@ describe('página de Rentas', () => {
 		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Cerrar renta' }));
 
 		await waitFor(() => expect(cerrar).toHaveBeenCalledTimes(1));
-		const args = cerrar.mock.calls[0][0] as { sessionId: string; id: number; datos: RentaCierreDatos };
+		const args = cerrar.mock.calls[0][0] as {
+			sessionId: string;
+			id: number;
+			datos: RentaCierreDatos;
+		};
 		expect(args.id).toBe(5);
 		expect(args.datos.kmFinal).toBe('43100');
 		expect(args.datos.fechaDevolucionReal).toBeTruthy();
@@ -404,21 +423,23 @@ describe('página de Rentas', () => {
 
 	it('registra una inspección de salida', async () => {
 		tauri.register('listar_rentas', () => [renta({ id: 5 })]);
-		const inspeccionar = vi.fn((_args: { sessionId: string; idRenta: number; datos: InspeccionDatos }) => ({
-			id: 1,
-			idRenta: 5,
-			tipo: 'Salida',
-			fecha: '2026-08-01',
-			kilometraje: '42000',
-			nivelGasolina: 'Lleno',
-			limpieza: 'Limpio',
-			tieneRepuesto: true,
-			tieneGatoCruceta: true,
-			tieneKitCarretera: true,
-			tieneDocumentos: true,
-			danosCarroceria: null,
-			observaciones: null
-		}));
+		const inspeccionar = vi.fn(
+			(_args: { sessionId: string; idRenta: number; datos: InspeccionDatos }) => ({
+				id: 1,
+				idRenta: 5,
+				tipo: 'Salida',
+				fecha: '2026-08-01',
+				kilometraje: '42000',
+				nivelGasolina: 'Lleno',
+				limpieza: 'Limpio',
+				tieneRepuesto: true,
+				tieneGatoCruceta: true,
+				tieneKitCarretera: true,
+				tieneDocumentos: true,
+				danosCarroceria: null,
+				observaciones: null
+			})
+		);
 		tauri.register('registrar_inspeccion_renta', inspeccionar);
 
 		render(RentasPage);
@@ -439,7 +460,11 @@ describe('página de Rentas', () => {
 		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Registrar inspección' }));
 
 		await waitFor(() => expect(inspeccionar).toHaveBeenCalledTimes(1));
-		const args = inspeccionar.mock.calls[0][0] as { sessionId: string; idRenta: number; datos: InspeccionDatos };
+		const args = inspeccionar.mock.calls[0][0] as {
+			sessionId: string;
+			idRenta: number;
+			datos: InspeccionDatos;
+		};
 		expect(args.idRenta).toBe(5);
 		expect(args.datos.tipo).toBe('Salida');
 		expect(args.datos.kilometraje).toBe('42100');
@@ -596,7 +621,9 @@ describe('página de Rentas', () => {
 	});
 
 	it('filtra por estado con el selector', async () => {
-		const listar = vi.fn((_args: { sessionId: string; estado: string | null; placa: string | null }) => [renta()]);
+		const listar = vi.fn(
+			(_args: { sessionId: string; estado: string | null; placa: string | null }) => [renta()]
+		);
 		tauri.register('listar_rentas', listar);
 
 		render(RentasPage);

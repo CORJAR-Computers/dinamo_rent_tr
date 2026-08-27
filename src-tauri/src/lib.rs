@@ -96,8 +96,7 @@ pub fn run() {
                 .compact(),
         )
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .with(TracingToLogLayer);
     let _ = tracing::subscriber::set_global_default(subscriber);
@@ -147,18 +146,12 @@ pub fn run() {
             // actual queda intacta y la app arranca con ella; el resultado se
             // registra en el estado del panel más abajo.
             let restauracion_pendiente = services::backup::staging_restauracion_desde_args();
-            let resultado_restauracion: Option<Result<(), String>> = restauracion_pendiente
-                .as_ref()
-                .map(|staging| {
+            let resultado_restauracion: Option<Result<(), String>> =
+                restauracion_pendiente.as_ref().map(|staging| {
                     let r = services::backup::restaurar_en_arranque(&config, staging);
                     match &r {
-                        Ok(()) => log::info!(
-                            "Restauración completada: {}",
-                            staging.display()
-                        ),
-                        Err(e) => log::error!(
-                            "Restauración falló (se conserva la BD actual): {e}"
-                        ),
+                        Ok(()) => log::info!("Restauración completada: {}", staging.display()),
+                        Err(e) => log::error!("Restauración falló (se conserva la BD actual): {e}"),
                     }
                     r.map_err(|e| e.to_string())
                 });
@@ -184,7 +177,7 @@ pub fn run() {
                 pool: pool.clone(),
                 sessions: {
                     let store = std::sync::Arc::new(std::sync::Mutex::new(
-                        crate::core::rbac::SessionStore::new(config.session_timeout)
+                        crate::core::rbac::SessionStore::new(config.session_timeout),
                     ));
                     // Limpieza periódica de sesiones expiradas (5 min)
                     services::session_cleanup::spawn_session_cleanup(store.clone());
@@ -198,7 +191,9 @@ pub fn run() {
 
             // ── Estado en memoria del Agente SIMIT (comparendos automáticos) ──
             let simit_estado = std::sync::Arc::new(services::simit::EstadoAgenteSimit::default());
-            app.manage(services::simit::EstadoAgenteSimitManaged(simit_estado.clone()));
+            app.manage(services::simit::EstadoAgenteSimitManaged(
+                simit_estado.clone(),
+            ));
             // Flag de frontend listo para el diálogo de confirmación de cierre
             // (evita bloquear la X antes de que el webview escuche el evento).
             app.manage(commands::app::FrontendListo(
@@ -264,12 +259,10 @@ pub fn run() {
                     let log_dir = data_dir.join("logs");
                     let _ = std::fs::create_dir_all(&log_dir);
                     builder = builder.targets([
-                        tauri_plugin_log::Target::new(
-                            tauri_plugin_log::TargetKind::Folder {
-                                path: log_dir,
-                                file_name: Some("app".into()),
-                            },
-                        ),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                            path: log_dir,
+                            file_name: Some("app".into()),
+                        }),
                         tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     ]);
                 }

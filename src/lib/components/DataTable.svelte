@@ -60,7 +60,9 @@
 				<tr class="bg-alt-row/70 border-b border-border">
 					{#each columns as col}
 						<th
-							class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap {alignClass(col.align)} {col.class ?? ''}"
+							class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-text-secondary whitespace-nowrap {alignClass(
+								col.align
+							)} {col.class ?? ''}"
 						>
 							{col.header}
 						</th>
@@ -76,13 +78,21 @@
 					</tr>
 				{:else}
 					{#each items as item, idx (rowKey(item, idx))}
-						<tr class="border-b border-border/60 last:border-0 hover:bg-alt-row/50 transition-colors">
+						<tr
+							class="border-b border-border/60 last:border-0 hover:bg-alt-row/50 transition-colors"
+						>
 							{#each columns as col}
-								<td class="px-4 py-3 align-middle text-text-primary {alignClass(col.align)} {col.class ?? ''}">
+								<td
+									class="px-4 py-3 align-middle text-text-primary {alignClass(
+										col.align
+									)} {col.class ?? ''}"
+								>
 									{#if children}
 										{@render children(col, item)}
 									{:else}
-										<span class="block truncate max-w-[280px]">{String((item as Record<string, unknown>)[col.key] ?? '—')}</span>
+										<span class="block truncate max-w-[280px]"
+											>{String((item as Record<string, unknown>)[col.key] ?? '—')}</span
+										>
 									{/if}
 								</td>
 							{/each}

@@ -188,13 +188,14 @@ fn renta_crud_cierre_pagos_inspecciones() {
     assert_eq!(obtenida.id, id);
 
     // ── Inspección de salida ──
-    let ins = RentaService::registrar_inspeccion(&mut conn, id, datos_inspeccion("Salida", "42000"))
-        .expect("inspección salida");
+    let ins =
+        RentaService::registrar_inspeccion(&mut conn, id, datos_inspeccion("Salida", "42000"))
+            .expect("inspección salida");
     assert_eq!(ins.tipo, "Salida");
 
     // ── Pago parcial ──
-    let pago = RentaService::registrar_pago(&mut conn, id, "tester", datos_pago("200000"))
-        .expect("pago");
+    let pago =
+        RentaService::registrar_pago(&mut conn, id, "tester", datos_pago("200000")).expect("pago");
     assert_eq!(pago.monto, "200000.00");
     let tras_pago = RentaService::obtener(&mut conn, id).expect("tras pago");
     assert_eq!(tras_pago.abono, "200000.00");
@@ -227,13 +228,17 @@ fn renta_crud_cierre_pagos_inspecciones() {
     };
     let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.estado, "Cerrada");
-    assert_eq!(cerrada.fecha_devolucion_real.as_deref(), Some(hoy.format("%Y-%m-%d").to_string().as_str()));
+    assert_eq!(
+        cerrada.fecha_devolucion_real.as_deref(),
+        Some(hoy.format("%Y-%m-%d").to_string().as_str())
+    );
     // 4×150.000 − 10.000 descuento = 590.000 + 112.100 IVA = 702.100; saldo = 702.100 − 200.000
     assert_eq!(cerrada.total, "702100.00");
     assert_eq!(cerrada.saldo_pendiente, "502100.00");
 
     // No se puede cerrar dos veces
-    let err = RentaService::cerrar(&mut conn, cfg, id, "test", RentaCierreDatos::default()).expect_err("doble cierre");
+    let err = RentaService::cerrar(&mut conn, cfg, id, "test", RentaCierreDatos::default())
+        .expect_err("doble cierre");
     assert_eq!(err.kind(), "business");
 
     // ── Limpieza: eliminar (pagos e inspecciones caen en cascada) ──
@@ -299,8 +304,8 @@ fn renta_montos_en_blanco_ok() {
         descuento: Some(String::new()),
         observaciones: None,
     };
-    let cerrada =
-        RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar con ajustes en blanco");
+    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre)
+        .expect("cerrar con ajustes en blanco");
     assert_eq!(cerrada.estado, "Cerrada");
     assert_eq!(cerrada.total, "0.00");
 
@@ -329,9 +334,19 @@ fn renta_no_contrato_secuencial_independiente_del_id() {
 
     let anio_actual = Local::now().year() as i64;
     assert!(r1.no_contrato > 0, "no_contrato asignado");
-    assert_eq!(r1.anio_contrato, anio_actual, "año del contrato = año de creación");
-    assert_eq!(r2.anio_contrato, anio_actual, "ambas rentas en el mismo año");
-    assert_eq!(r2.no_contrato, r1.no_contrato + 1, "secuencia +1 dentro del año");
+    assert_eq!(
+        r1.anio_contrato, anio_actual,
+        "año del contrato = año de creación"
+    );
+    assert_eq!(
+        r2.anio_contrato, anio_actual,
+        "ambas rentas en el mismo año"
+    );
+    assert_eq!(
+        r2.no_contrato,
+        r1.no_contrato + 1,
+        "secuencia +1 dentro del año"
+    );
 
     // La persistencia también lo conserva (vuelve a leer desde la BD)
     let re_leida = RentaService::obtener(&mut conn, r1.id).expect("releer r1");
@@ -377,7 +392,10 @@ fn renta_crear_con_abono_inicial() {
     let creada = RentaService::crear(&mut conn, cfg, datos).expect("crear con abono");
     assert_eq!(creada.abono, "200000.00");
     assert_eq!(creada.total, "535500.00");
-    assert_eq!(creada.saldo_pendiente, "335500.00", "saldo = total − abono inicial");
+    assert_eq!(
+        creada.saldo_pendiente, "335500.00",
+        "saldo = total − abono inicial"
+    );
 
     RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 }
@@ -400,10 +418,16 @@ fn renta_comision_resta_del_total_valor_neto() {
     datos.tiene_comision = true;
     datos.comision = "50000".into();
     let creada = RentaService::crear(&mut conn, cfg, datos).expect("crear con comisión");
-    assert_eq!(creada.total, "535500.00", "el total que paga el cliente NO cambia con la comisión");
+    assert_eq!(
+        creada.total, "535500.00",
+        "el total que paga el cliente NO cambia con la comisión"
+    );
     assert_eq!(creada.comision, "50000.00");
     assert_eq!(creada.valor_neto, "485500.00", "neto = total − comisión");
-    assert_eq!(creada.saldo_pendiente, "535500.00", "el saldo tampoco cambia (comisión es costo interno)");
+    assert_eq!(
+        creada.saldo_pendiente, "535500.00",
+        "el saldo tampoco cambia (comisión es costo interno)"
+    );
 
     // Editar la comisión → el neto se recalcula (total se mantiene)
     let mut edit = datos_renta(&placa, None);
@@ -415,9 +439,13 @@ fn renta_comision_resta_del_total_valor_neto() {
     edit.horas_extras = creada.horas_extras;
     edit.valor_dia = creada.valor_dia.clone();
     edit.valor_hora_extra = creada.valor_hora_extra.clone();
-    let editada = RentaService::actualizar(&mut conn, cfg, creada.id, edit).expect("editar comisión");
+    let editada =
+        RentaService::actualizar(&mut conn, cfg, creada.id, edit).expect("editar comisión");
     assert_eq!(editada.total, "535500.00");
-    assert_eq!(editada.valor_neto, "435500.00", "neto recalculado = 535.500 − 100.000");
+    assert_eq!(
+        editada.valor_neto, "435500.00",
+        "neto recalculado = 535.500 − 100.000"
+    );
 
     // Cerrar → el neto se conserva con la comisión persistida (días/horas explícitos
     // para que el total no dependa del cálculo automático de la devolución)
@@ -431,7 +459,10 @@ fn renta_comision_resta_del_total_valor_neto() {
         ..Default::default()
     };
     let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar");
-    assert_eq!(cerrada.valor_neto, "435500.00", "el cierre conserva el neto");
+    assert_eq!(
+        cerrada.valor_neto, "435500.00",
+        "el cierre conserva el neto"
+    );
     assert_eq!(cerrada.estado, "Cerrada");
 
     RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
@@ -492,8 +523,14 @@ fn renta_validaciones_y_cancelacion() {
     assert!(!otra.cancelada);
 
     // No se puede cerrar una cancelada
-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", RentaCierreDatos::default())
-        .expect_err("cerrar cancelada");
+    let err = RentaService::cerrar(
+        &mut conn,
+        cfg,
+        creada.id,
+        "test",
+        RentaCierreDatos::default(),
+    )
+    .expect_err("cerrar cancelada");
     assert_eq!(err.kind(), "business");
 
     // Pagos en rentas no activas → business
@@ -560,7 +597,8 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
         fecha_devolucion_real: Some("no-es-fecha".into()),
         ..Default::default()
     };
-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_mal).expect_err("fecha inválida");
+    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_mal)
+        .expect_err("fecha inválida");
     assert_eq!(err.kind(), "validation");
 
     // Hora de devolución inválida → validation
@@ -568,7 +606,8 @@ fn renta_cierre_con_fecha_devolucion_invalida() {
         hora_devolucion_real: Some("25:99".into()),
         ..Default::default()
     };
-    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_hora).expect_err("hora inválida");
+    let err = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre_hora)
+        .expect_err("hora inválida");
     assert_eq!(err.kind(), "validation");
 
     RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
@@ -611,18 +650,29 @@ fn renta_cambiar_auto_sin_cerrar() {
     assert_eq!(creada.placa.as_deref(), Some(placa_a.as_str()));
 
     // ── Cambio de vehículo sin cerrar ──
-    let cambiada = RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect("cambiar auto");
-    assert_eq!(cambiada.placa.as_deref(), Some(placa_b.as_str()), "placa nueva");
+    let cambiada =
+        RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect("cambiar auto");
+    assert_eq!(
+        cambiada.placa.as_deref(),
+        Some(placa_b.as_str()),
+        "placa nueva"
+    );
     assert_eq!(cambiada.estado, "Activo", "la renta sigue activa");
 
     // El auto anterior queda Disponible y el nuevo Rentado
-    let estado_a: Option<(String,)> =
-        conn.query_first("SELECT estado FROM autos WHERE placa = ?", (placa_a.clone(),))
-            .expect("estado a");
+    let estado_a: Option<(String,)> = conn
+        .query_first(
+            "SELECT estado FROM autos WHERE placa = ?",
+            (placa_a.clone(),),
+        )
+        .expect("estado a");
     assert_eq!(estado_a.map(|r| r.0).as_deref(), Some("Disponible"));
-    let estado_b: Option<(String,)> =
-        conn.query_first("SELECT estado FROM autos WHERE placa = ?", (placa_b.clone(),))
-            .expect("estado b");
+    let estado_b: Option<(String,)> = conn
+        .query_first(
+            "SELECT estado FROM autos WHERE placa = ?",
+            (placa_b.clone(),),
+        )
+        .expect("estado b");
     assert_eq!(estado_b.map(|r| r.0).as_deref(), Some("Rentado"));
 
     // ── Mismo vehículo → no-op ──
@@ -638,15 +688,20 @@ fn renta_cambiar_auto_sin_cerrar() {
     .expect("marcar mantenimiento");
     RentaService::cambiar_auto(&mut conn, id, &placa_a, "tester").expect("volver a a");
     // La marca Mantenimiento de B se conserva (no se sobrescribe al liberarlo)
-    let estado_b: Option<(String,)> =
-        conn.query_first("SELECT estado FROM autos WHERE placa = ?", (placa_b.clone(),))
-            .expect("estado b mantenimiento");
+    let estado_b: Option<(String,)> = conn
+        .query_first(
+            "SELECT estado FROM autos WHERE placa = ?",
+            (placa_b.clone(),),
+        )
+        .expect("estado b mantenimiento");
     assert_eq!(estado_b.map(|r| r.0).as_deref(), Some("Mantenimiento"));
-    let err = RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect_err("no disponible");
+    let err =
+        RentaService::cambiar_auto(&mut conn, id, &placa_b, "tester").expect_err("no disponible");
     assert_eq!(err.kind(), "business");
 
     // ── Placa inexistente → business ──
-    let err = RentaService::cambiar_auto(&mut conn, id, "ZZZ999", "tester").expect_err("placa inexistente");
+    let err = RentaService::cambiar_auto(&mut conn, id, "ZZZ999", "tester")
+        .expect_err("placa inexistente");
     assert_eq!(err.kind(), "business");
 
     // ── Limpieza: restaurar estados y eliminar la renta ──
@@ -694,8 +749,12 @@ fn renta_cierre_calcula_dias_horas_automatico() {
         horas_extras: None,
         ..Default::default()
     };
-    let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar tarde");
-    assert_eq!(cerrada.dias_calculados, 3, "6 h de excedente → día completo");
+    let cerrada =
+        RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre).expect("cerrar tarde");
+    assert_eq!(
+        cerrada.dias_calculados, 3,
+        "6 h de excedente → día completo"
+    );
     assert_eq!(cerrada.horas_extras, 0);
     RentaService::eliminar(&mut conn, creada.id, "test").expect("limpieza");
 
@@ -708,7 +767,8 @@ fn renta_cierre_calcula_dias_horas_automatico() {
         horas_extras: None,
         ..Default::default()
     };
-    let cerrada2 = RentaService::cerrar(&mut conn, cfg, creada2.id, "test", cierre2).expect("cerrar puntual");
+    let cerrada2 =
+        RentaService::cerrar(&mut conn, cfg, creada2.id, "test", cierre2).expect("cerrar puntual");
     assert_eq!(cerrada2.dias_calculados, 2);
     assert_eq!(cerrada2.horas_extras, 2, "2 h de excedente → horas extras");
     RentaService::eliminar(&mut conn, creada2.id, "test").expect("limpieza2");
@@ -755,13 +815,17 @@ fn renta_creada_desde_reserva_completa_la_reserva() {
     let mut datos = datos_renta(&placa, None);
     datos.id_reserva = Some(reserva.id);
     let renta = RentaService::crear(&mut conn, cfg, datos).expect("crear renta desde reserva");
-    assert_eq!(renta.id_reserva, Some(reserva.id), "la renta enlaza la reserva");
+    assert_eq!(
+        renta.id_reserva,
+        Some(reserva.id),
+        "la renta enlaza la reserva"
+    );
 
     // La reserva quedó Completada (misma transacción)
-    let reserva_finalizada = ReservaService::obtener(&mut conn, reserva.id).expect("releer reserva");
+    let reserva_finalizada =
+        ReservaService::obtener(&mut conn, reserva.id).expect("releer reserva");
     assert_eq!(
-        reserva_finalizada.estado,
-        "Completada",
+        reserva_finalizada.estado, "Completada",
         "la reserva se completa al crear la renta desde ella"
     );
 
@@ -843,8 +907,8 @@ fn renta_editar_cerrada_recálculo_totales() {
     assert_eq!(creada.estado, "Activo");
 
     // Registrar un pago
-    let pago = RentaService::registrar_pago(&mut conn, id, "tester", datos_pago("100000"))
-        .expect("pago");
+    let pago =
+        RentaService::registrar_pago(&mut conn, id, "tester", datos_pago("100000")).expect("pago");
     assert_eq!(pago.monto, "100000.00");
 
     // Cerrar renta
@@ -870,14 +934,14 @@ fn renta_editar_cerrada_recálculo_totales() {
     // ── Editar renta cerrada: corregir valor_dia (150000 → 180000) ──
     let edicion = RentaCierreEditDatos {
         valor_dia: Some("180000".into()),
-        valor_hora_extra: None,  // conservar actual
-        dias_calculados: None,    // conservar actual
+        valor_hora_extra: None, // conservar actual
+        dias_calculados: None,  // conservar actual
         horas_extras: None,
         descuento: None,
         observaciones: Some("Corrección: digitó 150k en vez de 180k".into()),
     };
-    let editada = RentaService::editar_cerrada(&mut conn, cfg, id, "admin", edicion)
-        .expect("editar cerrada");
+    let editada =
+        RentaService::editar_cerrada(&mut conn, cfg, id, "admin", edicion).expect("editar cerrada");
     assert_eq!(editada.estado, "Cerrada", "sigue cerrada");
     assert_eq!(editada.placa, Some(placa.clone()), "placa intacta");
     assert_eq!(editada.abono, "100000.00", "abono no cambia");
@@ -900,7 +964,7 @@ fn renta_editar_cerrada_recálculo_totales() {
         dias_calculados: None,
         horas_extras: None,
         descuento: None,
-        observaciones: None,  // sin motivo
+        observaciones: None, // sin motivo
     };
     // El servicio permite observaciones None (el validador del backend/command lo rechaza)
     // pero el servicio en sí no valida esto — lo hace el comando Tauri.
@@ -913,9 +977,19 @@ fn renta_editar_cerrada_recálculo_totales() {
     let mut datos2 = datos_renta(&placa, id_cliente);
     datos2.valor_dia = "100000".into();
     let activa = RentaService::crear(&mut conn, cfg, datos2).expect("crear activa");
-    let err = RentaService::editar_cerrada(&mut conn, cfg, activa.id, "admin", RentaCierreEditDatos::default())
-        .expect_err("no se puede editar renta activa con editar_cerrada");
-    assert!(err.to_string().contains("Solo se pueden editar rentas cerradas"), "error: {err}");
+    let err = RentaService::editar_cerrada(
+        &mut conn,
+        cfg,
+        activa.id,
+        "admin",
+        RentaCierreEditDatos::default(),
+    )
+    .expect_err("no se puede editar renta activa con editar_cerrada");
+    assert!(
+        err.to_string()
+            .contains("Solo se pueden editar rentas cerradas"),
+        "error: {err}"
+    );
 
     // Limpieza
     RentaService::eliminar(&mut conn, id, "test").expect("eliminar editada");
@@ -955,8 +1029,8 @@ fn renta_extender_horas_y_dias() {
         valor: "25000".into(),
         observaciones: Some("Cliente solicita 2h más".into()),
     };
-    let extendida = RentaService::extender(&mut conn, cfg, id, "operador", ext_horas)
-        .expect("extender horas");
+    let extendida =
+        RentaService::extender(&mut conn, cfg, id, "operador", ext_horas).expect("extender horas");
     assert_eq!(extendida.estado, "Activo", "sigue activa");
     assert_eq!(extendida.dias_calculados, 3, "días no cambian");
     assert_eq!(extendida.horas_extras, 2, "+2 horas");
@@ -973,8 +1047,8 @@ fn renta_extender_horas_y_dias() {
         valor: "150000".into(),
         observaciones: None,
     };
-    let extendida2 = RentaService::extender(&mut conn, cfg, id, "operador", ext_dia)
-        .expect("extender día");
+    let extendida2 =
+        RentaService::extender(&mut conn, cfg, id, "operador", ext_dia).expect("extender día");
     assert_eq!(extendida2.dias_calculados, 4, "+1 día");
     assert_eq!(extendida2.horas_extras, 2, "horas se conservan");
     assert_eq!(extendida2.valor_dia_extra, "200000.00", "50k + 150k");
@@ -991,15 +1065,25 @@ fn renta_extender_horas_y_dias() {
     RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     let err = RentaService::extender(&mut conn, cfg, id, "admin", ExtensionDatos::default())
         .expect_err("no extender cerrada");
-    assert!(err.to_string().contains("Solo se pueden extender rentas activas"), "error: {err}");
+    assert!(
+        err.to_string()
+            .contains("Solo se pueden extender rentas activas"),
+        "error: {err}"
+    );
 
     // Tipo inválido
     let datos2 = datos_renta(&placa, id_cliente);
     let activa = RentaService::crear(&mut conn, cfg, datos2).expect("crear activa");
-    let bad_tipo = ExtensionDatos { tipo: "minutos".into(), ..Default::default() };
+    let bad_tipo = ExtensionDatos {
+        tipo: "minutos".into(),
+        ..Default::default()
+    };
     let err2 = RentaService::extender(&mut conn, cfg, activa.id, "admin", bad_tipo)
         .expect_err("tipo inválido");
-    assert!(err2.to_string().contains("'horas' o 'dias'"), "error: {err2}");
+    assert!(
+        err2.to_string().contains("'horas' o 'dias'"),
+        "error: {err2}"
+    );
 
     // Limpieza
     RentaService::eliminar(&mut conn, id, "test").expect("eliminar");

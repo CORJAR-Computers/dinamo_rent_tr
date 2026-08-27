@@ -107,7 +107,8 @@ fn analizar(conn: &mut PooledConnection, clave: &str) -> Result<PiiAnalisis, App
                     } else {
                         log::warn!(
                             "No se pudo descifrar el token PII del cliente id={} (campo {})",
-                            c.id, campo
+                            c.id,
+                            campo
                         );
                     }
                 }

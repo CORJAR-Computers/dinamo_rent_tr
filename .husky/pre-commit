@@ -10,4 +10,5 @@
 # desarrollador no quiera commitear aún). `lint:fix` sí arregla, pero lo
 # deja en el staging area para revisión manual.
 
-bun run lint
+bun run lint || npm run lint
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings

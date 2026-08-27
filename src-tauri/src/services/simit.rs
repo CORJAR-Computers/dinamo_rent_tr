@@ -50,8 +50,8 @@ use std::time::{Duration, Instant};
 use chrono::{Local, NaiveDate};
 use cookie_store::CookieStore;
 use rsfbclient::{Execute, Queryable};
-use serde::Serialize;
 use serde::Deserialize;
+use serde::Serialize;
 use sha2::Digest;
 use tauri::Emitter;
 
@@ -102,7 +102,10 @@ impl CircuitBreaker {
             CircuitState::Closed => true,
             CircuitState::Open => {
                 // Verificar si ya pasó el timeout para cambiar a HalfOpen
-                let last_failure = self.last_failure_time.lock().unwrap_or_else(|e| e.into_inner());
+                let last_failure = self
+                    .last_failure_time
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 if let Some(last) = *last_failure {
                     if last.elapsed() >= self.timeout {
                         *state = CircuitState::HalfOpen;
@@ -129,8 +132,11 @@ impl CircuitBreaker {
     /// Registra un fallo
     pub fn record_failure(&self) {
         let count = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
-        *self.last_failure_time.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
-        
+        *self
+            .last_failure_time
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+
         if count >= self.threshold {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             if *state != CircuitState::Open {
@@ -446,15 +452,16 @@ pub fn resolver_captcha_con_reintentos(
     base_delay_ms: u64,
 ) -> Result<(String, u64), AppError> {
     let mut ultimo_error = None;
-    
+
     for intento in 0..=max_retries {
         // Verificar circuit breaker
         if !CIRCUIT_BREAKER.allow_request() {
             return Err(AppError::Generic(
-                "Circuit Breaker abierto: el portal SIMIT no está disponible. Intenta más tarde.".into(),
+                "Circuit Breaker abierto: el portal SIMIT no está disponible. Intenta más tarde."
+                    .into(),
             ));
         }
-        
+
         match resolver_captcha() {
             Ok((token, duracion)) => {
                 CIRCUIT_BREAKER.record_success();
@@ -469,7 +476,7 @@ pub fn resolver_captcha_con_reintentos(
             Err(e) => {
                 CIRCUIT_BREAKER.record_failure();
                 ultimo_error = Some(e);
-                
+
                 if intento < max_retries {
                     // Backoff exponencial: base * 2^intento + jitter
                     let delay = base_delay_ms * (1u64 << intento) + (rand::random::<u64>() % 500);
@@ -484,10 +491,12 @@ pub fn resolver_captcha_con_reintentos(
             }
         }
     }
-    
-    Err(ultimo_error.unwrap_or_else(|| AppError::Generic(
-        "No se pudo resolver el captcha SIMIT después de múltiples intentos.".into(),
-    )))
+
+    Err(ultimo_error.unwrap_or_else(|| {
+        AppError::Generic(
+            "No se pudo resolver el captcha SIMIT después de múltiples intentos.".into(),
+        )
+    }))
 }
 
 /// Resuelve el captcha Proof-of-Work y devuelve el token (array JSON con la
@@ -501,11 +510,13 @@ pub fn resolver_captcha() -> Result<(String, u64), AppError> {
     let respuesta = con_headers_browser(agente().post(CAPTCHA_URL))
         .send_form(&[("endpoint", "question")])
         .map_err(|e| {
-            AppError::Generic(format!("No se pudo contactar el captcha SIMIT (qxcaptcha): {e}"))
+            AppError::Generic(format!(
+                "No se pudo contactar el captcha SIMIT (qxcaptcha): {e}"
+            ))
         })?;
-    let body: CaptchaRespuesta = respuesta.into_json().map_err(|e| {
-        AppError::Generic(format!("Respuesta inválida del captcha SIMIT: {e}"))
-    })?;
+    let body: CaptchaRespuesta = respuesta
+        .into_json()
+        .map_err(|e| AppError::Generic(format!("Respuesta inválida del captcha SIMIT: {e}")))?;
     if body.tiene_error() || body.data.is_none() {
         return Err(AppError::Generic(
             "El servidor de captcha SIMIT rechazó la consulta. Intenta de nuevo.".into(),
@@ -546,22 +557,22 @@ pub fn consultar_placa_con_reintentos(
 ) -> Result<(Vec<RegistroSimit>, MetricasPlaca), AppError> {
     let mut ultimo_error = None;
     let mut metricas = MetricasPlaca::default();
-    
+
     for intento in 0..=max_retries {
         // Verificar circuit breaker
         if !CIRCUIT_BREAKER.allow_request() {
-            return Err(AppError::Generic(
-                format!("Circuit Breaker abierto: no se puede consultar la placa {placa}")
-            ));
+            return Err(AppError::Generic(format!(
+                "Circuit Breaker abierto: no se puede consultar la placa {placa}"
+            )));
         }
-        
+
         let inicio = Instant::now();
         match consultar_placa(placa) {
             Ok((registros, tiempo_captcha, tiempo_consulta)) => {
                 CIRCUIT_BREAKER.record_success();
                 metricas.tiempo_captcha_ms += tiempo_captcha;
                 metricas.tiempo_consulta_ms += tiempo_consulta;
-                metricas.reintentos = intento as u32;
+                metricas.reintentos = intento;
                 log::debug!(
                     "Placa {placa} consultada OK: {} registros (intento {}/{}, {}ms)",
                     registros.len(),
@@ -573,9 +584,9 @@ pub fn consultar_placa_con_reintentos(
             }
             Err(e) => {
                 CIRCUIT_BREAKER.record_failure();
-                metricas.reintentos = intento as u32;
+                metricas.reintentos = intento;
                 ultimo_error = Some(e);
-                
+
                 if intento < max_retries {
                     // Backoff exponencial con jitter
                     let delay = base_delay_ms * (1u64 << intento) + (rand::random::<u64>() % 500);
@@ -590,10 +601,12 @@ pub fn consultar_placa_con_reintentos(
             }
         }
     }
-    
-    Err(ultimo_error.unwrap_or_else(|| AppError::Generic(
-        format!("No se pudo consultar la placa {placa} después de múltiples intentos")
-    )))
+
+    Err(ultimo_error.unwrap_or_else(|| {
+        AppError::Generic(format!(
+            "No se pudo consultar la placa {placa} después de múltiples intentos"
+        ))
+    }))
 }
 
 /// Métricas de una consulta individual de placa
@@ -709,13 +722,15 @@ pub fn consultar_placa(placa: &str) -> Result<(Vec<RegistroSimit>, u64, u64), Ap
                 duracion_captcha + duracion_captcha2,
                 tiempo_consulta
             );
-            Ok((registros, duracion_captcha + duracion_captcha2, tiempo_consulta))
+            Ok((
+                registros,
+                duracion_captcha + duracion_captcha2,
+                tiempo_consulta,
+            ))
         }
-        Err(ErrorConsulta::Unauthorized(detalle)) => {
-            Err(AppError::Generic(format!(
-                "SIMIT rechazó el token de seguridad para la placa {placa}: {detalle}"
-            )))
-        }
+        Err(ErrorConsulta::Unauthorized(detalle)) => Err(AppError::Generic(format!(
+            "SIMIT rechazó el token de seguridad para la placa {placa}: {detalle}"
+        ))),
         Err(ErrorConsulta::Otro(e)) => Err(e),
     }
 }
@@ -723,8 +738,19 @@ pub fn consultar_placa(placa: &str) -> Result<(Vec<RegistroSimit>, u64, u64), Ap
 // ─── Sincronización con la base de datos ──────────────────────────────────────
 
 /// Helper para emitir eventos de progreso al frontend
-fn emitir_progreso<R: tauri::Runtime>(app: &tauri::AppHandle<R>, tipo: &str, placa: &str, idx: usize, total: usize, mensaje: &str) {
-    let progreso = if total > 0 { idx as f64 / total as f64 } else { 1.0 };
+fn emitir_progreso<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    tipo: &str,
+    placa: &str,
+    idx: usize,
+    total: usize,
+    mensaje: &str,
+) {
+    let progreso = if total > 0 {
+        idx as f64 / total as f64
+    } else {
+        1.0
+    };
     let evento = EventoProgreso {
         tipo: tipo.to_string(),
         placa_actual: Some(placa.to_string()),
@@ -738,7 +764,13 @@ fn emitir_progreso<R: tauri::Runtime>(app: &tauri::AppHandle<R>, tipo: &str, pla
 }
 
 /// Helper para emitir eventos de log al frontend
-fn emitir_log<R: tauri::Runtime>(app: &tauri::AppHandle<R>, level: LogLevel, message: &str, placa: Option<&str>, detail: Option<&str>) {
+fn emitir_log<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    level: LogLevel,
+    message: &str,
+    placa: Option<&str>,
+    detail: Option<&str>,
+) {
     let evento = EventoLogSimit {
         timestamp: Local::now().format("%H:%M:%S").to_string(),
         level,
@@ -760,23 +792,36 @@ pub fn sincronizar<R: tauri::Runtime>(
     let inicio_total = Instant::now();
     let placas = AutoRepository::placas_activas(conn)?;
     let total_placas = placas.len();
-    
+
     log::info!(
         "Agente SIMIT: iniciando sincronización con {} placas",
         total_placas
     );
-    
+
     // Emitir evento de inicio y log
     if let Some(app) = app {
-        emitir_progreso(app, "inicio", "", 0, total_placas, &format!("Iniciando sincronización con {} placas", total_placas));
-        emitir_log(app, LogLevel::Info, &format!("Iniciando sincronización de {} placas", total_placas), None, None);
+        emitir_progreso(
+            app,
+            "inicio",
+            "",
+            0,
+            total_placas,
+            &format!("Iniciando sincronización con {} placas", total_placas),
+        );
+        emitir_log(
+            app,
+            LogLevel::Info,
+            &format!("Iniciando sincronización de {} placas", total_placas),
+            None,
+            None,
+        );
     }
-    
+
     let mut resultado = ResultadoSincronizacion {
         sincronizado_en: Local::now().to_rfc3339(),
         ..Default::default()
     };
-    
+
     let mut metricas = MetricasSimit::default();
     let max_retries = cfg.simit_max_retries;
     let base_delay_ms = cfg.simit_retry_base_delay_ms;
@@ -788,25 +833,42 @@ pub fn sincronizar<R: tauri::Runtime>(
             idx + 1,
             total_placas
         );
-        
+
         // Emitir evento de progreso antes de procesar cada placa
         if let Some(app) = app {
-            emitir_progreso(app, "placa", placa, idx, total_placas, &format!("Consultando placa {} ({}/{})", placa, idx + 1, total_placas));
+            emitir_progreso(
+                app,
+                "placa",
+                placa,
+                idx,
+                total_placas,
+                &format!("Consultando placa {} ({}/{})", placa, idx + 1, total_placas),
+            );
         }
-        
+
         match consultar_placa_con_reintentos(placa, max_retries, base_delay_ms) {
             Ok((registros, metricas_placa)) => {
                 resultado.placas_consultadas += 1;
                 metricas.placas_exitosas += 1;
-                
+
                 // Log de éxito
                 if let Some(app) = app {
-                    emitir_log(app, LogLevel::Success, &format!("Placa {} — {} registro(s) encontrado(s)", placa, registros.len()), Some(placa), None);
+                    emitir_log(
+                        app,
+                        LogLevel::Success,
+                        &format!(
+                            "Placa {} — {} registro(s) encontrado(s)",
+                            placa,
+                            registros.len()
+                        ),
+                        Some(placa),
+                        None,
+                    );
                 }
                 metricas.tiempo_captcha_ms += metricas_placa.tiempo_captcha_ms;
                 metricas.tiempo_consulta_ms += metricas_placa.tiempo_consulta_ms;
                 metricas.total_reintentos += metricas_placa.reintentos;
-                
+
                 for mut reg in registros {
                     resultado.encontrados += 1;
                     // Fecha inválida → se omite el registro (no aborta la placa).
@@ -827,8 +889,11 @@ pub fn sincronizar<R: tauri::Runtime>(
                     // sincroniza el estado (la BD converge con el SIMIT). En
                     // ambos casos se toca `ultimo_visto_simit` (confirmación)
                     // y se conserva el id para marcar el registro en la UI.
-                    let numero =
-                        reg.numero.as_deref().map(str::trim).filter(|n| !n.is_empty());
+                    let numero = reg
+                        .numero
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|n| !n.is_empty());
                     if let Some(id) = ComparendoRepository::id_existente(
                         conn,
                         numero,
@@ -864,9 +929,11 @@ pub fn sincronizar<R: tauri::Runtime>(
                     // vehículo el día de la infracción y se guarda el vínculo
                     // (id_renta/id_cliente) — el comparendo queda asociado al
                     // cliente que tenía el vehículo (cruce comparendos↔rentas).
-                    if let Some((id_renta, id_cliente)) =
-                        ComparendoRepository::renta_del_dia(conn, &reg.placa, &reg.fecha_infraccion)?
-                    {
+                    if let Some((id_renta, id_cliente)) = ComparendoRepository::renta_del_dia(
+                        conn,
+                        &reg.placa,
+                        &reg.fecha_infraccion,
+                    )? {
                         datos.id_renta = Some(id_renta);
                         datos.id_cliente = id_cliente;
                     }
@@ -887,12 +954,18 @@ pub fn sincronizar<R: tauri::Runtime>(
                     error: e.mensaje_usuario(),
                 });
                 log::warn!("Agente SIMIT: error consultando {placa}: {e}");
-                
+
                 // Log de error
                 if let Some(app) = app {
-                    emitir_log(app, LogLevel::Error, &format!("Placa {} — error: {}", placa, e.mensaje_usuario()), Some(placa), Some(&e.mensaje_usuario()));
+                    emitir_log(
+                        app,
+                        LogLevel::Error,
+                        &format!("Placa {} — error: {}", placa, e.mensaje_usuario()),
+                        Some(placa),
+                        Some(&e.mensaje_usuario()),
+                    );
                 }
-                
+
                 // Clasificar tipo de error
                 let error_msg = e.mensaje_usuario();
                 if error_msg.contains("timeout") || error_msg.contains("Timeout") {
@@ -906,11 +979,28 @@ pub fn sincronizar<R: tauri::Runtime>(
         if cfg.simit_polite_delay_ms > 0 && idx < total_placas - 1 {
             std::thread::sleep(Duration::from_millis(cfg.simit_polite_delay_ms));
         }
-        
+
         // Emitir evento de progreso después de procesar cada placa
         if let Some(app) = app {
-            let estado_placa = if resultado.errores.iter().any(|e| e.placa == *placa) { "error" } else { "ok" };
-            emitir_progreso(app, "placa_completada", placa, idx + 1, total_placas, &format!("Placa {} {} — {}/{}", placa, estado_placa, idx + 1, total_placas));
+            let estado_placa = if resultado.errores.iter().any(|e| e.placa == *placa) {
+                "error"
+            } else {
+                "ok"
+            };
+            emitir_progreso(
+                app,
+                "placa_completada",
+                placa,
+                idx + 1,
+                total_placas,
+                &format!(
+                    "Placa {} {} — {}/{}",
+                    placa,
+                    estado_placa,
+                    idx + 1,
+                    total_placas
+                ),
+            );
         }
     }
 
@@ -924,7 +1014,7 @@ pub fn sincronizar<R: tauri::Runtime>(
     };
     metricas.circuit_breaker_state = format!("{:?}", CIRCUIT_BREAKER.current_state());
     resultado.metricas = metricas;
-    
+
     log::info!(
         "Agente SIMIT: sincronización completada en {}ms - {} placas consultadas, {} nuevos, {} errores",
         tiempo_total,
@@ -932,11 +1022,27 @@ pub fn sincronizar<R: tauri::Runtime>(
         resultado.insertados,
         resultado.placas_con_error
     );
-    
+
     // Log de finalización
     if let Some(app) = app {
-        let nivel = if resultado.placas_con_error > 0 { LogLevel::Warn } else { LogLevel::Success };
-        emitir_log(app, nivel, &format!("Sincronización completada — {} placas, {} nuevos, {} errores, {}ms", resultado.placas_consultadas, resultado.insertados, resultado.placas_con_error, tiempo_total), None, Some(&format!("Total pendiente: ${}", resultado.total_pendiente)));
+        let nivel = if resultado.placas_con_error > 0 {
+            LogLevel::Warn
+        } else {
+            LogLevel::Success
+        };
+        emitir_log(
+            app,
+            nivel,
+            &format!(
+                "Sincronización completada — {} placas, {} nuevos, {} errores, {}ms",
+                resultado.placas_consultadas,
+                resultado.insertados,
+                resultado.placas_con_error,
+                tiempo_total
+            ),
+            None,
+            Some(&format!("Total pendiente: ${}", resultado.total_pendiente)),
+        );
     }
 
     // Total pendiente = suma de TODOS los registros encontrados (nuevos y ya
@@ -955,7 +1061,7 @@ pub fn sincronizar<R: tauri::Runtime>(
         Ok(path) => resultado.reporte_html = Some(path.to_string_lossy().to_string()),
         Err(e) => log::warn!("Agente SIMIT: no se pudo escribir el reporte HTML: {e}"),
     }
-    
+
     // Emitir evento de finalización
     if let Some(app) = app {
         emitir_progreso(
@@ -966,8 +1072,7 @@ pub fn sincronizar<R: tauri::Runtime>(
             total_placas,
             &format!(
                 "Sincronización completada — {} placas, {} nuevos",
-                resultado.placas_consultadas,
-                resultado.insertados
+                resultado.placas_consultadas, resultado.insertados
             ),
         );
     }
@@ -1295,13 +1400,13 @@ pub(crate) fn restaurar_ultimo_resultado(pool: &Pool, estado: &EstadoAgenteSimit
                 estado.registrar_ok(resultado);
             }
             Ok(None) => {}
-            Err(e) => log::warn!(
-                "Agente SIMIT: no se pudo cargar el último resultado persistido: {e}"
-            ),
+            Err(e) => {
+                log::warn!("Agente SIMIT: no se pudo cargar el último resultado persistido: {e}")
+            }
         },
-        Err(e) => log::warn!(
-            "Agente SIMIT: no se pudo conectar para restaurar el último resultado: {e}"
-        ),
+        Err(e) => {
+            log::warn!("Agente SIMIT: no se pudo conectar para restaurar el último resultado: {e}")
+        }
     }
 }
 
@@ -1320,7 +1425,10 @@ pub fn run_sync<R: tauri::Runtime>(
     app: Option<&tauri::AppHandle<R>>,
 ) -> Result<ResultadoSincronizacion, AppError> {
     // Inicializar circuit breaker con configuración
-    init_circuit_breaker(cfg.simit_circuit_breaker_threshold, cfg.simit_circuit_breaker_timeout_seconds);
+    init_circuit_breaker(
+        cfg.simit_circuit_breaker_threshold,
+        cfg.simit_circuit_breaker_timeout_seconds,
+    );
 
     if !portal_simit_accesible() {
         let msg = "El portal SIMIT no está accesible en este momento. Verifica tu conexión a internet e inténtalo más tarde.";
@@ -1374,8 +1482,10 @@ pub fn spawn_scheduler(
         loop {
             if cfg.simit_enabled {
                 let debe_ejecutar = match ultima_ejecucion {
-                    None => inicio.elapsed()
-                        >= Duration::from_secs(cfg.simit_start_delay_minutes.saturating_mul(60)),
+                    None => {
+                        inicio.elapsed()
+                            >= Duration::from_secs(cfg.simit_start_delay_minutes.saturating_mul(60))
+                    }
                     Some(t) => {
                         t.elapsed()
                             >= Duration::from_secs(cfg.simit_interval_hours.saturating_mul(3600))
@@ -1389,25 +1499,25 @@ pub fn spawn_scheduler(
                     if portal_simit_accesible() {
                         if estado.claimar() {
                             match run_sync(&pool, &cfg, &estado, Some(&app)) {
-                            Ok(resultado) => {
-                                ultima_ejecucion = Some(Instant::now());
-                                estado.fijar_proxima(Some(ahora_mas(
-                                    cfg.simit_interval_hours.saturating_mul(3600),
-                                )));
-                                log::info!(
-                                    "Agente SIMIT: sincronización OK — {} placas, {} nuevos",
-                                    resultado.placas_consultadas,
-                                    resultado.insertados
-                                );
-                                let _ = app.emit("simit-sync-complete", &resultado);
-                            }
-                            Err(e) => {
-                                estado.registrar_error(&e.to_string());
-                                // Reintento en el siguiente tick (60 s)
-                                estado.fijar_proxima(Some(ahora_mas(60)));
-                                log::error!("Agente SIMIT: falló la sincronización: {e}");
-                                // No se marca ultima_ejecucion → reintento en el siguiente tick
-                            }
+                                Ok(resultado) => {
+                                    ultima_ejecucion = Some(Instant::now());
+                                    estado.fijar_proxima(Some(ahora_mas(
+                                        cfg.simit_interval_hours.saturating_mul(3600),
+                                    )));
+                                    log::info!(
+                                        "Agente SIMIT: sincronización OK — {} placas, {} nuevos",
+                                        resultado.placas_consultadas,
+                                        resultado.insertados
+                                    );
+                                    let _ = app.emit("simit-sync-complete", &resultado);
+                                }
+                                Err(e) => {
+                                    estado.registrar_error(&e.to_string());
+                                    // Reintento en el siguiente tick (60 s)
+                                    estado.fijar_proxima(Some(ahora_mas(60)));
+                                    log::error!("Agente SIMIT: falló la sincronización: {e}");
+                                    // No se marca ultima_ejecucion → reintento en el siguiente tick
+                                }
                             }
                             estado.liberar();
                         }
@@ -1578,7 +1688,11 @@ fn parsear_fecha_hora(raw: &str) -> (String, String) {
         .chars()
         .take(5)
         .collect();
-    let hora = if hora.is_empty() { "00:00".into() } else { hora };
+    let hora = if hora.is_empty() {
+        "00:00".into()
+    } else {
+        hora
+    };
     // Normaliza DD/MM/YYYY → AAAA-MM-DD (dominio en ISO). ISO y variantes
     // con separadores '-' pasan sin cambios (bytes[2] != '/').
     let fecha = if fecha_raw.len() == 10
@@ -1822,7 +1936,10 @@ mod tests {
 
     #[test]
     fn escapa_html() {
-        assert_eq!(esc_html("<script>&\"x\"</script>"), "&lt;script&gt;&amp;&quot;x&quot;&lt;/script&gt;");
+        assert_eq!(
+            esc_html("<script>&\"x\"</script>"),
+            "&lt;script&gt;&amp;&quot;x&quot;&lt;/script&gt;"
+        );
     }
 
     // ─── Fase 1: token de una sola solución ─────────────────────────────────
@@ -1954,7 +2071,11 @@ mod tests {
     #[serial]
     fn cookie_jar_compartido_entre_peticiones() {
         let (base, server) = servidor_http(vec![
-            (200, vec![("Set-Cookie", "adc_test=xyz123; Path=/")], String::new()),
+            (
+                200,
+                vec![("Set-Cookie", "adc_test=xyz123; Path=/")],
+                String::new(),
+            ),
             (200, vec![], "ok".into()),
         ]);
         // Agente propio con timeout amplio: no depende del agente global de
@@ -1988,7 +2109,11 @@ mod tests {
     #[serial]
     fn sembrar_cookies_sitio_siembra_el_jar() {
         let (base, server) = servidor_http(vec![
-            (200, vec![("Set-Cookie", "ADC_CONN=abc; Path=/")], "<html>".into()),
+            (
+                200,
+                vec![("Set-Cookie", "ADC_CONN=abc; Path=/")],
+                "<html>".into(),
+            ),
             (200, vec![], "ok".into()),
         ]);
         let agente = ureq::AgentBuilder::new()
@@ -2023,8 +2148,8 @@ mod tests {
             .timeout(std::time::Duration::from_secs(60))
             .cookie_store(CookieStore::default())
             .build();
-        let err = enviar_consulta_con(&agente, "ABC123", "TOKEN", &base)
-            .expect_err("401 → Unauthorized");
+        let err =
+            enviar_consulta_con(&agente, "ABC123", "TOKEN", &base).expect_err("401 → Unauthorized");
         match err {
             ErrorConsulta::Unauthorized(detalle) => {
                 assert!(

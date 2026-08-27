@@ -53,9 +53,8 @@ const LISTS: BusinessLists = {
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 function setSesion(rol = 'Administrador') {
@@ -178,7 +177,9 @@ describe('página de Clientes', () => {
 	});
 
 	it('edita un cliente existente', async () => {
-		tauri.register('listar_clientes', () => [conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]);
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 		const actualizar = vi.fn((_args: { sessionId: string; id: number; datos: ClienteDatos }) =>
 			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
 		);
@@ -197,13 +198,19 @@ describe('página de Clientes', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
 		await waitFor(() => expect(actualizar).toHaveBeenCalledTimes(1));
-		const args = actualizar.mock.calls[0][0] as { sessionId: string; id: number; datos: ClienteDatos };
+		const args = actualizar.mock.calls[0][0] as {
+			sessionId: string;
+			id: number;
+			datos: ClienteDatos;
+		};
 		expect(args.id).toBe(1);
 		expect(args.datos.nombres).toBe('Ana María');
 	});
 
 	it('elimina un cliente tras confirmar', async () => {
-		tauri.register('listar_clientes', () => [conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]);
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 		const eliminar = vi.fn((_args: { sessionId: string; id: number }) => undefined);
 		tauri.register('eliminar_cliente', eliminar);
 
@@ -225,7 +232,9 @@ describe('página de Clientes', () => {
 
 	it('oculta el botón Eliminar para el rol Operador', async () => {
 		setSesion('Operador');
-		tauri.register('listar_clientes', () => [conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]);
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 
 		render(ClientesPage);
 		await screen.findByText('Ana Pérez');
@@ -235,7 +244,9 @@ describe('página de Clientes', () => {
 
 	it('muestra el botón Eliminar para el rol Supervisor', async () => {
 		setSesion('Supervisor');
-		tauri.register('listar_clientes', () => [conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]);
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 
 		render(ClientesPage);
 		await screen.findByText('Ana Pérez');
@@ -244,7 +255,9 @@ describe('página de Clientes', () => {
 	});
 
 	it('abre el panel de copiado con Ctrl+Shift+C (modal abierto en crear)', async () => {
-		tauri.register('listar_clientes', () => [conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]);
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 
 		render(ClientesPage);
 		await screen.findByText('Ana Pérez');
@@ -272,7 +285,9 @@ describe('página de Clientes', () => {
 	});
 
 	it('no abre el panel de copiado con Ctrl+Shift+C en modo edición', async () => {
-		tauri.register('listar_clientes', () => [conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]);
+		tauri.register('listar_clientes', () => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 
 		render(ClientesPage);
 		await screen.findByText('Ana Pérez');
@@ -285,18 +300,21 @@ describe('página de Clientes', () => {
 	});
 
 	it('filtra por búsqueda con debounce', async () => {
-		const listar = vi.fn((_args: { sessionId: string; busqueda: string | null }) =>
-			[conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))]
-		);
+		const listar = vi.fn((_args: { sessionId: string; busqueda: string | null }) => [
+			conPii(cliente({ id: 1, nombreCompleto: 'Ana Pérez' }))
+		]);
 		tauri.register('listar_clientes', listar);
 
 		render(ClientesPage);
 		await screen.findByText('Ana Pérez');
 		expect(listar).toHaveBeenCalledTimes(1);
 
-		await fireEvent.input(screen.getByPlaceholderText('Buscar por nombre, documento o celular...'), {
-			target: { value: 'ana' }
-		});
+		await fireEvent.input(
+			screen.getByPlaceholderText('Buscar por nombre, documento o celular...'),
+			{
+				target: { value: 'ana' }
+			}
+		);
 
 		await waitFor(() => expect(listar).toHaveBeenCalledTimes(2), { timeout: 2000 });
 		const args = listar.mock.calls[1][0] as { sessionId: string; busqueda: string | null };

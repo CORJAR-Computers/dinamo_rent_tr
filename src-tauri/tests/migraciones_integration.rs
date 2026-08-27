@@ -199,8 +199,7 @@ fn forzar_estado_parcial(pool: &Pool) {
         ("RESERVAS", "CHK_RESERVAS_ESTADO"),
         ("COMPARENDOS", "CHK_COMPARENDOS_ESTADO"),
     ] {
-        let sql =
-            "SELECT COUNT(*) FROM RDB$RELATION_CONSTRAINTS WHERE RDB$CONSTRAINT_NAME = ?";
+        let sql = "SELECT COUNT(*) FROM RDB$RELATION_CONSTRAINTS WHERE RDB$CONSTRAINT_NAME = ?";
         if existe_objeto(pool, sql, chk) {
             conn.execute(&format!("ALTER TABLE {tabla} DROP CONSTRAINT {chk}"), ())
                 .expect("drop constraint");
@@ -233,8 +232,7 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
     );
 
     // 1ª ejecución: debe AUTO-REPARAR sin error.
-    run_migrations(&pool, &migrations_dir)
-        .expect("la migración debe auto-reparar la BD parcial");
+    run_migrations(&pool, &migrations_dir).expect("la migración debe auto-reparar la BD parcial");
 
     // Las 16 migraciones quedan registradas.
     let aplicadas = versiones_aplicadas(&pool);
@@ -263,7 +261,11 @@ fn migraciones_auto_reparan_estado_parcial_y_son_idempotentes() {
     }
 
     // Objetos de 0007-0009 presentes (y columnas previas intactas).
-    assert_eq!(contar_triggers_updated_at(&pool), 9, "9 triggers updated_at");
+    assert_eq!(
+        contar_triggers_updated_at(&pool),
+        9,
+        "9 triggers updated_at"
+    );
     assert!(existe_columna(&pool, "RENTAS", "UPDATED_AT"));
     assert!(existe_columna(&pool, "RENTAS", "DELETED_AT"));
     assert!(existe_columna(&pool, "USUARIOS", "TEMA"));
@@ -464,7 +466,10 @@ fn create_pool_crea_la_bd_si_no_existe() {
     let cfg = config_con_db(&tmp);
     let pool = create_pool(&cfg).expect("create_pool debe crear la BD nueva");
 
-    assert!(tmp.exists(), "create_pool debe haber creado el archivo .fdb");
+    assert!(
+        tmp.exists(),
+        "create_pool debe haber creado el archivo .fdb"
+    );
 
     // Y la BD nueva debe poder migrarse desde cero (camino de instalación).
     let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
@@ -489,7 +494,10 @@ fn create_pool_crea_el_directorio_padre_de_la_bd() {
 
     let cfg = config_con_db(&tmp);
     let pool = create_pool(&cfg).expect("create_pool debe crear dir padre + BD");
-    assert!(tmp.exists(), "la BD debe existir con su directorio padre creado");
+    assert!(
+        tmp.exists(),
+        "la BD debe existir con su directorio padre creado"
+    );
     drop(pool);
 }
 
@@ -800,23 +808,20 @@ fn migracion_0014_no_borra_tablas_colisionantes() {
 
     let mut conn = pool.get().expect("conn");
     // (a) T2 con ESQUEMA DISTINTO al residual → 0014 NO debe dropearla.
-    conn
-        .execute(
-            "CREATE TABLE T2 (id INTEGER PRIMARY KEY, nombre VARCHAR(100), fecha TIMESTAMP)",
-            (),
-        )
-        .expect("crear T2 colisionante con esquema distinto");
+    conn.execute(
+        "CREATE TABLE T2 (id INTEGER PRIMARY KEY, nombre VARCHAR(100), fecha TIMESTAMP)",
+        (),
+    )
+    .expect("crear T2 colisionante con esquema distinto");
     // (b) PROBE_T y T_TEST con el ESQUEMA RESIDUAL EXACTO → 0014 SÍ debe
     //     dropearlas (patrón: PROBE_T H,D · T_TEST ID,ANIO,SEQ).
-    conn
-        .execute("CREATE TABLE PROBE_T (h INTEGER, d VARCHAR(50))", ())
+    conn.execute("CREATE TABLE PROBE_T (h INTEGER, d VARCHAR(50))", ())
         .expect("crear PROBE_T residual");
-    conn
-        .execute(
-            "CREATE TABLE T_TEST (id INTEGER, anio INTEGER, seq INTEGER)",
-            (),
-        )
-        .expect("crear T_TEST residual");
+    conn.execute(
+        "CREATE TABLE T_TEST (id INTEGER, anio INTEGER, seq INTEGER)",
+        (),
+    )
+    .expect("crear T_TEST residual");
 
     run_migrations(&pool, &migrations_dir).expect("migrar con tablas de test presentes");
 
@@ -934,11 +939,12 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
     ));
 
     run_migrations(&pool, &migrations_dir)
-        .expect("el runner debe auto-reparar una instalación nueva a medias");	assert_eq!(
-		versiones_aplicadas(&pool).len(),
-		MIGRACIONES_EMBEDIDAS.len(),
-		"todas las versiones"
-	);
+        .expect("el runner debe auto-reparar una instalación nueva a medias");
+    assert_eq!(
+        versiones_aplicadas(&pool).len(),
+        MIGRACIONES_EMBEDIDAS.len(),
+        "todas las versiones"
+    );
     // 0001 completo: la última tabla y su índice; 0002 completo.
     assert!(existe_objeto(
         &pool,
@@ -988,7 +994,10 @@ fn instalacion_nueva_a_medias_en_0001_se_auto_repara() {
         "IX_INSPECCIONES_ID_RENTA"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), MIGRACIONES_EMBEDIDAS.len());
+    assert_eq!(
+        versiones_aplicadas(&pool).len(),
+        MIGRACIONES_EMBEDIDAS.len()
+    );
 }
 
 /// Simula una instalación nueva con 0001+0002 completos y un crash a mitad de
@@ -1017,8 +1026,7 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
             .unwrap_or_else(|e| panic!("aplicar parcial 0003: {e}"));
     }
     let stmts_0004 = split_sql_statements(&leer("0004_no_contrato_anual.sql"));
-    conn
-        .execute(&stmts_0004[0], ())
+    conn.execute(&stmts_0004[0], ())
         .unwrap_or_else(|e| panic!("aplicar parcial 0004: {e}"));
 
     assert!(existe_columna(&pool, "RENTAS", "NO_CONTRATO"));
@@ -1031,10 +1039,12 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
         "precondición: 0003 quedó a medias (índice único sin crear)"
     );
 
-    run_migrations(&pool, &migrations_dir)
-        .expect("auto-reparar instalación a medias en 0003/0004");
+    run_migrations(&pool, &migrations_dir).expect("auto-reparar instalación a medias en 0003/0004");
 
-    assert_eq!(versiones_aplicadas(&pool).len(), MIGRACIONES_EMBEDIDAS.len());
+    assert_eq!(
+        versiones_aplicadas(&pool).len(),
+        MIGRACIONES_EMBEDIDAS.len()
+    );
     assert!(existe_objeto(
         &pool,
         "SELECT COUNT(*) FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = ?",
@@ -1052,7 +1062,10 @@ fn instalacion_nueva_a_medias_en_0003_0004_se_auto_repara() {
         "IX_RENTAS_NO_CONTRATO"
     ));
     run_migrations(&pool, &migrations_dir).expect("segunda ejecución no-op");
-    assert_eq!(versiones_aplicadas(&pool).len(), MIGRACIONES_EMBEDIDAS.len());
+    assert_eq!(
+        versiones_aplicadas(&pool).len(),
+        MIGRACIONES_EMBEDIDAS.len()
+    );
 }
 
 /// Renta temporal con rango de fechas dado (para el backfill de 0016)
@@ -1192,7 +1205,9 @@ fn migracion_0016_backfill_atribuye_comparendos() {
         Some(Some(renta.id)),
         "0016 vincula el comparendo con la renta del día"
     );
-    assert!(versiones_aplicadas(&pool).contains(&"0016_atribucion_comparendo_renta.sql".to_string()));
+    assert!(
+        versiones_aplicadas(&pool).contains(&"0016_atribucion_comparendo_renta.sql".to_string())
+    );
 
     // Limpieza directa sobre la copia (comparendo primero por la FK)
     conn.execute("DELETE FROM comparendos WHERE id = ?", (id_comparendo,))

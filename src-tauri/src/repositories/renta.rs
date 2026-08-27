@@ -433,7 +433,11 @@ impl RentaRepository {
     /// Consulta base con JOIN a autos (placa/marca/modelo).
     /// Ejecuta las dos consultas (A: 26 columnas, B: 15) con los mismos filtros
     /// y une los resultados por id.
-    fn consultar(conn: &mut PooledConnection, where_sql: &str, params: &ParamsType) -> Result<Vec<Renta>, AppError> {
+    fn consultar(
+        conn: &mut PooledConnection,
+        where_sql: &str,
+        params: &ParamsType,
+    ) -> Result<Vec<Renta>, AppError> {
         // Soft delete: siempre filtra rentas NO borradas. Si where_sql viene
         // vacío (obtener_todos), se inyecta WHERE r.deleted_at IS NULL. Si
         // viene con WHERE ..., se envuelve en paréntesis para no romper la
@@ -445,15 +449,11 @@ impl RentaRepository {
             let after = s.strip_prefix("WHERE").unwrap_or(s);
             format!("WHERE r.deleted_at IS NULL AND ({after})")
         };
-        let base = format!(
-            "FROM rentas r LEFT JOIN autos a ON a.placa = r.placa {where_deleted} "
-        );
-        let sql_a = format!(
-            "SELECT {SELECT_COLS_A} {base} ORDER BY r.fecha_recogida DESC, r.id DESC"
-        );
-        let sql_b = format!(
-            "SELECT {SELECT_COLS_B} {base} ORDER BY r.fecha_recogida DESC, r.id DESC"
-        );
+        let base = format!("FROM rentas r LEFT JOIN autos a ON a.placa = r.placa {where_deleted} ");
+        let sql_a =
+            format!("SELECT {SELECT_COLS_A} {base} ORDER BY r.fecha_recogida DESC, r.id DESC");
+        let sql_b =
+            format!("SELECT {SELECT_COLS_B} {base} ORDER BY r.fecha_recogida DESC, r.id DESC");
         // ParamsType no es Clone: se reconstruye clonando el vector de SqlType
         let to_params = |v: &[rsfbclient::SqlType]| ParamsType::Positional(v.to_vec());
         let (rows_a, rows_b) = match params {
@@ -498,7 +498,10 @@ impl RentaRepository {
             params.push(like.into_param());
         }
 
-        if let Some(est) = estado.map(|s| s.trim()).filter(|s| !s.is_empty() && *s != "Todos") {
+        if let Some(est) = estado
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty() && *s != "Todos")
+        {
             where_clauses.push("r.estado = ?".to_string());
             params.push(est.to_string().into_param());
         }
@@ -544,7 +547,10 @@ impl RentaRepository {
     }
 
     /// Filtra por estado
-    pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Renta>, AppError> {
+    pub fn obtener_por_estado(
+        conn: &mut PooledConnection,
+        estado: &str,
+    ) -> Result<Vec<Renta>, AppError> {
         Self::consultar(
             conn,
             "WHERE r.estado = ?",
@@ -553,7 +559,10 @@ impl RentaRepository {
     }
 
     /// Filtra por placa
-    pub fn obtener_por_placa(conn: &mut PooledConnection, placa: &str) -> Result<Vec<Renta>, AppError> {
+    pub fn obtener_por_placa(
+        conn: &mut PooledConnection,
+        placa: &str,
+    ) -> Result<Vec<Renta>, AppError> {
         Self::consultar(
             conn,
             "WHERE r.placa = ?",
@@ -576,6 +585,7 @@ impl RentaRepository {
     }
 
     /// Pagos de una renta (más recientes primero)
+    #[allow(clippy::type_complexity)]
     pub fn pagos_de(conn: &mut PooledConnection, id_renta: i64) -> Result<Vec<Pago>, AppError> {
         let rows: Vec<(i64, i64, String, String, String, String, Option<String>, String)> =
             conn.query(
@@ -600,7 +610,11 @@ impl RentaRepository {
     }
 
     /// Inspecciones de una renta (salida primero)
-    pub fn inspecciones_de(conn: &mut PooledConnection, id_renta: i64) -> Result<Vec<Inspeccion>, AppError> {
+    #[allow(clippy::type_complexity)]
+    pub fn inspecciones_de(
+        conn: &mut PooledConnection,
+        id_renta: i64,
+    ) -> Result<Vec<Inspeccion>, AppError> {
         let rows: Vec<(i64, i64, String, String, String, String, Option<String>, bool, bool, bool, bool, Option<String>, Option<String>)> =
             conn.query(
                 "SELECT id, id_renta, tipo, CAST(fecha AS VARCHAR(30)), CAST(kilometraje AS VARCHAR(20)), \
@@ -707,7 +721,11 @@ impl RentaRepository {
     }
 
     /// Actualiza una renta (no toca totales ni estado: los recalcula el servicio)
-    pub fn actualizar(conn: &mut PooledConnection, id: i64, d: &RentaDatos) -> Result<(), AppError> {
+    pub fn actualizar(
+        conn: &mut PooledConnection,
+        id: i64,
+        d: &RentaDatos,
+    ) -> Result<(), AppError> {
         conn.execute(
             "UPDATE rentas SET \
                 placa = ?, id_cliente = ?, nombre_cliente = ?, no_licencia = ?, nacionalidad = ?, \
@@ -818,10 +836,7 @@ impl RentaRepository {
 
     /// Marca una renta como cancelada
     pub fn cancelar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute(
-            "UPDATE rentas SET estado = 'Cancelada' WHERE id = ?",
-            (id,),
-        )?;
+        conn.execute("UPDATE rentas SET estado = 'Cancelada' WHERE id = ?", (id,))?;
         Ok(())
     }
 
@@ -878,7 +893,11 @@ impl RentaRepository {
     }
 
     /// Inserta una inspección (salida/entrada)
-    pub fn insertar_inspeccion(conn: &mut PooledConnection, id_renta: i64, i: &InspeccionDatos) -> Result<i64, AppError> {
+    pub fn insertar_inspeccion(
+        conn: &mut PooledConnection,
+        id_renta: i64,
+        i: &InspeccionDatos,
+    ) -> Result<i64, AppError> {
         let (id,): (i64,) = conn
             .execute_returnable(
                 "INSERT INTO inspecciones (\
@@ -907,6 +926,7 @@ impl RentaRepository {
     /// Edita campos financieros de una renta CERRADA (corrección de errores de digitación).
     /// Recalcula subtotal/impuestos/total/saldo_pendiente/valor_neto con los nuevos valores.
     /// NO toca abono (se gestiona por pagos) ni estado (permanece 'Cerrada').
+    #[allow(clippy::too_many_arguments)]
     pub fn editar_cerrada(
         conn: &mut PooledConnection,
         id: i64,
@@ -933,7 +953,9 @@ impl RentaRepository {
              WHERE id = ?",
             params![
                 d.valor_dia.as_deref().map(|s| s.trim().replace(',', ".")),
-                d.valor_hora_extra.as_deref().map(|s| s.trim().replace(',', ".")),
+                d.valor_hora_extra
+                    .as_deref()
+                    .map(|s| s.trim().replace(',', ".")),
                 d.dias_calculados,
                 d.horas_extras,
                 d.descuento.as_deref().map(|s| s.trim().replace(',', ".")),
@@ -977,7 +999,11 @@ impl RentaRepository {
 }
 
 fn bool_to_i(b: bool) -> i64 {
-    if b { 1 } else { 0 }
+    if b {
+        1
+    } else {
+        0
+    }
 }
 
 /// Recorta 'HH:MM:SS.0000' (Firebird) a 'HH:MM' para la UI
@@ -993,5 +1019,3 @@ fn km_limpio(v: &str) -> String {
         .map(|n| format!("{n}"))
         .unwrap_or_else(|_| v.trim().to_string())
 }
-
-

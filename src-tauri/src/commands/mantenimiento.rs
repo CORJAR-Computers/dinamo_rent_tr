@@ -21,8 +21,13 @@ pub fn listar_mantenimientos(
 ) -> Cmd<Vec<Mantenimiento>> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    MantenimientoService::listar(&mut c, busqueda.as_deref(), placa.as_deref(), tipo.as_deref())
-        .map_err(|e| e.to_payload())
+    MantenimientoService::listar(
+        &mut c,
+        busqueda.as_deref(),
+        placa.as_deref(),
+        tipo.as_deref(),
+    )
+    .map_err(|e| e.to_payload())
 }
 
 /// Mantenimientos recientes
@@ -39,7 +44,11 @@ pub fn mantenimientos_recientes(
 
 /// Obtiene un mantenimiento por id
 #[tauri::command]
-pub fn obtener_mantenimiento(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<Mantenimiento> {
+pub fn obtener_mantenimiento(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: i64,
+) -> Cmd<Mantenimiento> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     MantenimientoService::obtener(&mut c, id).map_err(|e| e.to_payload())
@@ -80,7 +89,10 @@ pub fn eliminar_mantenimiento(state: State<'_, AppState>, session_id: String, id
 
 /// Totales general, por placa y por tipo
 #[tauri::command]
-pub fn totales_mantenimiento(state: State<'_, AppState>, session_id: String) -> Cmd<TotalesMantenimiento> {
+pub fn totales_mantenimiento(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Cmd<TotalesMantenimiento> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     MantenimientoService::totales(&mut c).map_err(|e| e.to_payload())
@@ -88,7 +100,10 @@ pub fn totales_mantenimiento(state: State<'_, AppState>, session_id: String) -> 
 
 /// Alertas por kilometraje (cambio de aceite y frenos próximos o vencidos)
 #[tauri::command]
-pub fn alertas_km_mantenimiento(state: State<'_, AppState>, session_id: String) -> Cmd<Vec<AlertaKm>> {
+pub fn alertas_km_mantenimiento(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Cmd<Vec<AlertaKm>> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     MantenimientoService::alertas_km(&mut c, &state.config).map_err(|e| e.to_payload())

@@ -3,5 +3,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  dinamo_rent_lib::run();
+    dinamo_rent_lib::run();
 }

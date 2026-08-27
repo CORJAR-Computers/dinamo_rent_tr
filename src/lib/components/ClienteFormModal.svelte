@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { clienteApi, ApiError, type Cliente, type ClienteConPii, type ClienteDatos, type BusinessLists } from '$lib/api';
+	import {
+		clienteApi,
+		ApiError,
+		type Cliente,
+		type ClienteConPii,
+		type ClienteDatos,
+		type BusinessLists
+	} from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
 	import Modal from './Modal.svelte';
 	import FormField from './FormField.svelte';
@@ -90,7 +97,9 @@
 
 	// Opciones geográficas: catálogo base + valores ya usados en la BD
 	const paises = $derived(geografia.paises(clientes.map((x) => x.cliente.pais)));
-	const departamentos = $derived(geografia.departamentos(clientes.map((x) => x.cliente.estadoRegion)));
+	const departamentos = $derived(
+		geografia.departamentos(clientes.map((x) => x.cliente.estadoRegion))
+	);
 	const ciudades = $derived(geografia.ciudades(clientes.map((x) => x.cliente.ciudad)));
 
 	/** Rellena el formulario con los datos de un cliente existente (duplicado). */
@@ -123,17 +132,23 @@
 </script>
 
 <Modal
-	open={open}
+	{open}
 	title={editando ? `Editar cliente #${editando.id}` : 'Nuevo cliente'}
 	subtitle="Los datos de contacto y dirección se cifran al guardarse."
-	onClose={onClose}
+	{onClose}
 	width="max-w-2xl"
 	dismissible={!guardando}
 >
 	{#snippet children()}
 		{#if formError}
-			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
-		{/if}		{#if !editando}
+			<div
+				class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro"
+				role="alert"
+			>
+				{formError}
+			</div>
+		{/if}
+		{#if !editando}
 			<CopiarExistente
 				activo={open}
 				titulo="Copiar datos de un cliente existente"
@@ -143,7 +158,7 @@
 					(await clienteApi.listar(sid(), termino)).map((r) => ({
 						id: String(r.cliente.id),
 						titulo: r.cliente.nombreCompleto,
-					subtitulo: `${r.cliente.noDoc ? `${r.cliente.tipoDoc}: ${r.cliente.noDoc}` : r.cliente.tipoDoc ?? 'Cliente'}${r.cliente.ciudad ? ` · ${r.cliente.ciudad}` : ''}`,
+						subtitulo: `${r.cliente.noDoc ? `${r.cliente.tipoDoc}: ${r.cliente.noDoc}` : (r.cliente.tipoDoc ?? 'Cliente')}${r.cliente.ciudad ? ` · ${r.cliente.ciudad}` : ''}`,
 						bloqueado: r.piiOculto,
 						razonBloqueo: 'Tiene datos cifrados con clave antigua: no se pueden copiar.',
 						datos: r.cliente
@@ -154,48 +169,97 @@
 
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
 			<div class="col-span-full mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">1</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>1</span
+					>
 					Identificación
 				</h3>
 			</div>
 			<FormField label="Tipo de documento">
 				<select class="input" bind:value={form.tipoDoc}>
 					<option value="">—</option>
-					{#each (lists?.tiposDoc ?? ['Cédula', 'Pasaporte', 'Cédula Extranjería', 'NIT', 'Licencia USA']) as t}
+					{#each lists?.tiposDoc ?? ['Cédula', 'Pasaporte', 'Cédula Extranjería', 'NIT', 'Licencia USA'] as t}
 						<option value={t}>{t}</option>
 					{/each}
 				</select>
 			</FormField>
 			<FormField label="Número de documento" hint="Debe ser único.">
-				<input class="input" placeholder="Ej: 1036672369" bind:this={noDocInput} bind:value={form.noDoc} maxlength="30" />
+				<input
+					class="input"
+					placeholder="Ej: 1036672369"
+					bind:this={noDocInput}
+					bind:value={form.noDoc}
+					maxlength="30"
+				/>
 			</FormField>
 			<FormField label="Nombres" required>
-				<input class="input" placeholder="Nombres del cliente" bind:value={form.nombres} maxlength="100" />
+				<input
+					class="input"
+					placeholder="Nombres del cliente"
+					bind:value={form.nombres}
+					maxlength="100"
+				/>
 			</FormField>
 			<FormField label="Apellidos">
-				<input class="input" placeholder="Apellidos del cliente" bind:value={form.apellidos} maxlength="100" />
+				<input
+					class="input"
+					placeholder="Apellidos del cliente"
+					bind:value={form.apellidos}
+					maxlength="100"
+				/>
 			</FormField>
 
 			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">2</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>2</span
+					>
 					Contacto <span class="normal-case font-medium text-text-secondary/70">(se cifra)</span>
 				</h3>
 			</div>
 			<FormField label="Celular">
-				<input class="input" inputmode="tel" placeholder="Ej: 3101234567" bind:value={form.celular} maxlength="30" />
+				<input
+					class="input"
+					inputmode="tel"
+					placeholder="Ej: 3101234567"
+					bind:value={form.celular}
+					maxlength="30"
+				/>
 			</FormField>
 			<FormField label="Celular 2">
-				<input class="input" inputmode="tel" placeholder="Opcional" bind:value={form.celular2} maxlength="30" />
+				<input
+					class="input"
+					inputmode="tel"
+					placeholder="Opcional"
+					bind:value={form.celular2}
+					maxlength="30"
+				/>
 			</FormField>
 			<FormField label="Correo electrónico">
-				<input class="input" type="email" placeholder="cliente@correo.com" bind:value={form.email} maxlength="100" />
+				<input
+					class="input"
+					type="email"
+					placeholder="cliente@correo.com"
+					bind:value={form.email}
+					maxlength="100"
+				/>
 			</FormField>
 
 			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">3</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>3</span
+					>
 					Dirección y geografía
 				</h3>
 			</div>
@@ -237,8 +301,13 @@
 			</FormField>
 
 			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">4</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>4</span
+					>
 					Licencia y estado
 				</h3>
 			</div>
@@ -253,7 +322,7 @@
 			</FormField>
 			<FormField label="Estado">
 				<select class="input" bind:value={form.estado}>
-					{#each (lists?.estadosCliente ?? ['Activo', 'Inactivo', 'Lista Negra', 'VIP']) as e}
+					{#each lists?.estadosCliente ?? ['Activo', 'Inactivo', 'Lista Negra', 'VIP'] as e}
 						<option value={e}>{e}</option>
 					{/each}
 				</select>
@@ -265,7 +334,18 @@
 		<button class="btn-ghost" onclick={onClose} disabled={guardando}>Cancelar</button>
 		<button class="btn-primary" onclick={guardar} disabled={guardando}>
 			{#if guardando}
-				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-4 w-4"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				Guardando...
 			{:else}
 				{editando ? 'Guardar cambios' : 'Crear cliente'}

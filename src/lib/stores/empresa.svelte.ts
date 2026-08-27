@@ -89,7 +89,10 @@ class EmpresaStore {
 		if (propia) return propia.toUpperCase();
 		const d = this.direccion?.trim();
 		if (d) {
-			const partes = d.split(',').map((s) => s.trim()).filter(Boolean);
+			const partes = d
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean);
 			const ciudad = partes.length >= 2 ? partes[partes.length - 2] : partes[partes.length - 1];
 			if (ciudad) return ciudad.toUpperCase();
 		}

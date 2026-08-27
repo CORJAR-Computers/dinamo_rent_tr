@@ -8,18 +8,19 @@
 use std::sync::Arc;
 
 use chrono::{NaiveDate, NaiveTime};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromStr as _;
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
+use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
 use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::renta::{
-    ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos, RentaRepository,
+    ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos,
+    RentaCierreEditDatos, RentaDatos, RentaRepository,
 };
 use crate::repositories::reserva::ReservaRepository;
 
@@ -70,8 +71,10 @@ impl RentaService {
         completar_cliente(conn, &mut datos);
         calcular_totales(&mut datos, cfg);
         // El abono inicial descuenta del saldo: saldo = total − abono
-        datos.saldo_pendiente =
-            (dec(&datos.total, "0.00") - dec(&datos.abono, "0.00")).max(Decimal::ZERO).round_dp(2).to_string();
+        datos.saldo_pendiente = (dec(&datos.total, "0.00") - dec(&datos.abono, "0.00"))
+            .max(Decimal::ZERO)
+            .round_dp(2)
+            .to_string();
         validar(&datos, cfg)?;
         // Si la renta nace de una reserva, se completa la reserva (estado
         // «Completada») EN LA MISMA transacción que inserta la renta: atómico,
@@ -130,15 +133,18 @@ impl RentaService {
         let actual = Self::obtener(conn, id)?;
         if actual.estado == "Cerrada" {
             return Err(AppError::Business(
-                "No se puede editar una renta cerrada. Regístrala como nueva si es necesario.".into(),
+                "No se puede editar una renta cerrada. Regístrala como nueva si es necesario."
+                    .into(),
             ));
         }
         normalizar(&mut datos);
         completar_cliente(conn, &mut datos);
         calcular_totales(&mut datos, cfg);
         // Conservar el abono ya registrado: saldo = total − abono actual
-        datos.saldo_pendiente =
-            (dec(&datos.total, "0.00") - dec_str(&actual.abono)).max(Decimal::ZERO).round_dp(2).to_string();
+        datos.saldo_pendiente = (dec(&datos.total, "0.00") - dec_str(&actual.abono))
+            .max(Decimal::ZERO)
+            .round_dp(2)
+            .to_string();
         validar(&datos, cfg)?;
         RentaRepository::actualizar(conn, id, &datos)?;
         Self::obtener(conn, id)
@@ -170,10 +176,8 @@ impl RentaService {
             return Ok(actual); // mismo vehículo: no-op
         }
         // El vehículo nuevo debe existir y estar Disponible
-        let estado: Option<(String,)> = conn.query_first(
-            "SELECT estado FROM autos WHERE placa = ?",
-            (nueva.clone(),),
-        )?;
+        let estado: Option<(String,)> =
+            conn.query_first("SELECT estado FROM autos WHERE placa = ?", (nueva.clone(),))?;
         let Some((estado,)) = estado else {
             return Err(AppError::Business(format!(
                 "El vehículo {nueva} no existe."
@@ -275,7 +279,10 @@ impl RentaService {
             0
         };
         let vdia = dec(datos.valor_dia.as_deref().unwrap_or(""), &actual.valor_dia);
-        let vhe = dec(datos.valor_hora_extra.as_deref().unwrap_or(""), &actual.valor_hora_extra);
+        let vhe = dec(
+            datos.valor_hora_extra.as_deref().unwrap_or(""),
+            &actual.valor_hora_extra,
+        );
         let desc = dec(datos.descuento.as_deref().unwrap_or(""), &actual.descuento);
 
         let bruto = vdia * Decimal::from(dias) + vhe * Decimal::from(horas);
@@ -290,11 +297,19 @@ impl RentaService {
         ]);
         let subtotal = (bruto + extras - desc).max(Decimal::ZERO);
         // IVA según el flag guardado en la renta (checkbox del formulario)
-        let imp = if actual.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
+        let imp = if actual.cobra_iva {
+            impuesto(cfg)
+        } else {
+            Decimal::ZERO
+        };
         let impuestos = (subtotal * imp).round_dp(2);
         let total = subtotal + impuestos;
         // Valor neto = total − comisión persistida (información financiera)
-        let comision = if actual.tiene_comision { dec_str(&actual.comision) } else { Decimal::ZERO };
+        let comision = if actual.tiene_comision {
+            dec_str(&actual.comision)
+        } else {
+            Decimal::ZERO
+        };
         let valor_neto = (total - comision).max(Decimal::ZERO);
         let abono = dec_str(&actual.abono);
         let saldo = (total - abono).max(Decimal::ZERO);
@@ -305,9 +320,18 @@ impl RentaService {
         let hora_dev = parse_hora(&datos.hora_devolucion_real)?;
         let km_final = opt_str(&datos.km_final);
         let tanque_final = opt_str(&datos.tanque_final);
-        let valor_dia = datos.valor_dia.as_deref().map(|s| s.trim().replace(',', "."));
-        let valor_hora_extra = datos.valor_hora_extra.as_deref().map(|s| s.trim().replace(',', "."));
-        let descuento = datos.descuento.as_deref().map(|s| s.trim().replace(',', "."));
+        let valor_dia = datos
+            .valor_dia
+            .as_deref()
+            .map(|s| s.trim().replace(',', "."));
+        let valor_hora_extra = datos
+            .valor_hora_extra
+            .as_deref()
+            .map(|s| s.trim().replace(',', "."));
+        let descuento = datos
+            .descuento
+            .as_deref()
+            .map(|s| s.trim().replace(',', "."));
         let observaciones = opt_str(&datos.observaciones);
         let subtotal_s = subtotal.round_dp(2).to_string();
         let impuestos_s = impuestos.to_string();
@@ -393,10 +417,17 @@ impl RentaService {
     }
 
     /// Cancela una renta activa (no las cerradas)
-    pub fn cancelar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<RentaCancelada, AppError> {
+    pub fn cancelar(
+        conn: &mut PooledConnection,
+        id: i64,
+        usuario: &str,
+    ) -> Result<RentaCancelada, AppError> {
         let actual = Self::obtener(conn, id)?;
         if actual.estado == "Cancelada" {
-            return Ok(RentaCancelada { renta: actual, cancelada: false });
+            return Ok(RentaCancelada {
+                renta: actual,
+                cancelada: false,
+            });
         }
         if actual.estado == "Cerrada" {
             return Err(AppError::Business(
@@ -409,11 +440,18 @@ impl RentaService {
             conn,
             usuario,
             "CANCELAR RENTA",
-            &format!("renta={}, placa={}", id, actual.placa.as_deref().unwrap_or("-")),
+            &format!(
+                "renta={}, placa={}",
+                id,
+                actual.placa.as_deref().unwrap_or("-")
+            ),
             "local",
         )?;
         let renta = Self::obtener(conn, id)?;
-        Ok(RentaCancelada { renta, cancelada: true })
+        Ok(RentaCancelada {
+            renta,
+            cancelada: true,
+        })
     }
 
     /// Extiende una renta ACTIVA agregando horas o días extras.
@@ -453,7 +491,10 @@ impl RentaService {
         }
         // Calcular nuevo retorno
         let fecha_retorno_actual = actual.fecha_retorno.clone();
-        let hora_retorno_actual = actual.hora_retorno.clone().unwrap_or_else(|| "10:00".to_string());
+        let hora_retorno_actual = actual
+            .hora_retorno
+            .clone()
+            .unwrap_or_else(|| "10:00".to_string());
         let _recogida = NaiveDate::parse_from_str(&actual.fecha_recogida, "%Y-%m-%d")
             .map_err(|_| AppError::Validation("Fecha de recogida inválida".into()))?;
         let retorno = NaiveDate::parse_from_str(&fecha_retorno_actual, "%Y-%m-%d")
@@ -465,7 +506,7 @@ impl RentaService {
         };
         let retorno_dt = retorno.and_time(
             NaiveTime::parse_from_str(&hora_ret, "%H:%M:%S")
-                .map_err(|_| AppError::Validation("Hora de retorno inválida".into()))?
+                .map_err(|_| AppError::Validation("Hora de retorno inválida".into()))?,
         );
         let nuevo_retorno_dt = if datos.tipo == "horas" {
             retorno_dt + chrono::Duration::hours(datos.cantidad)
@@ -504,11 +545,21 @@ impl RentaService {
             &actual.valor_gasolina,
         ]);
         let desc = dec_str(&actual.descuento);
-        let subtotal = (vdia * Decimal::from(nuevo_dias) + vhe * Decimal::from(nuevas_horas) + extras - desc).max(Decimal::ZERO);
-        let imp = if actual.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
+        let subtotal =
+            (vdia * Decimal::from(nuevo_dias) + vhe * Decimal::from(nuevas_horas) + extras - desc)
+                .max(Decimal::ZERO);
+        let imp = if actual.cobra_iva {
+            impuesto(cfg)
+        } else {
+            Decimal::ZERO
+        };
         let impuestos = (subtotal * imp).round_dp(2);
         let total = subtotal + impuestos;
-        let comision = if actual.tiene_comision { dec_str(&actual.comision) } else { Decimal::ZERO };
+        let comision = if actual.tiene_comision {
+            dec_str(&actual.comision)
+        } else {
+            Decimal::ZERO
+        };
         let valor_neto = (total - comision).max(Decimal::ZERO);
         let abono = dec_str(&actual.abono);
         let saldo = (total - abono).max(Decimal::ZERO).round_dp(2);
@@ -615,8 +666,14 @@ impl RentaService {
             // Campos editables: usar nuevos valores si se proporcionaron, si no los originales
             dias_calculados: datos.dias_calculados.unwrap_or(actual.dias_calculados),
             horas_extras: datos.horas_extras.unwrap_or(actual.horas_extras),
-            valor_dia: datos.valor_dia.clone().unwrap_or_else(|| actual.valor_dia.clone()),
-            valor_hora_extra: datos.valor_hora_extra.clone().unwrap_or_else(|| actual.valor_hora_extra.clone()),
+            valor_dia: datos
+                .valor_dia
+                .clone()
+                .unwrap_or_else(|| actual.valor_dia.clone()),
+            valor_hora_extra: datos
+                .valor_hora_extra
+                .clone()
+                .unwrap_or_else(|| actual.valor_hora_extra.clone()),
             valor_dia_extra: actual.valor_dia_extra.clone(),
             costo_lavado: actual.costo_lavado.clone(),
             costo_silla: actual.costo_silla.clone(),
@@ -626,7 +683,10 @@ impl RentaService {
             costo_inversor: actual.costo_inversor.clone(),
             valor_gasolina: actual.valor_gasolina.clone(),
             // Descuento: usar nuevo valor si se proporcionó
-            descuento: datos.descuento.clone().unwrap_or_else(|| actual.descuento.clone()),
+            descuento: datos
+                .descuento
+                .clone()
+                .unwrap_or_else(|| actual.descuento.clone()),
             subtotal: actual.subtotal.clone(),
             impuestos: actual.impuestos.clone(),
             cobra_iva: actual.cobra_iva,
@@ -637,7 +697,10 @@ impl RentaService {
             total: actual.total.clone(),
             abono: actual.abono.clone(),
             saldo_pendiente: actual.saldo_pendiente.clone(),
-            observaciones: datos.observaciones.clone().or_else(|| actual.observaciones.clone()),
+            observaciones: datos
+                .observaciones
+                .clone()
+                .or_else(|| actual.observaciones.clone()),
             km_salida: actual.km_salida.clone(),
             tanque_salida: actual.tanque_salida.clone(),
             id_reserva: actual.id_reserva,
@@ -684,11 +747,17 @@ impl RentaService {
                     observaciones = COALESCE(?, observaciones) \
                  WHERE id = ?",
                 params![
-                    edit.valor_dia.as_deref().map(|s| s.trim().replace(',', ".")),
-                    edit.valor_hora_extra.as_deref().map(|s| s.trim().replace(',', ".")),
+                    edit.valor_dia
+                        .as_deref()
+                        .map(|s| s.trim().replace(',', ".")),
+                    edit.valor_hora_extra
+                        .as_deref()
+                        .map(|s| s.trim().replace(',', ".")),
                     edit.dias_calculados,
                     edit.horas_extras,
-                    edit.descuento.as_deref().map(|s| s.trim().replace(',', ".")),
+                    edit.descuento
+                        .as_deref()
+                        .map(|s| s.trim().replace(',', ".")),
                     d.subtotal,
                     d.impuestos,
                     d.total,
@@ -725,7 +794,11 @@ impl RentaService {
             conn,
             usuario,
             "ELIMINAR RENTA",
-            &format!("renta={}, placa={}", renta.id, renta.placa.as_deref().unwrap_or("-")),
+            &format!(
+                "renta={}, placa={}",
+                renta.id,
+                renta.placa.as_deref().unwrap_or("-")
+            ),
             "local",
         )?;
         Ok(())
@@ -759,10 +832,14 @@ impl RentaService {
             AppError::Validation("El monto del pago no es un número válido.".into())
         })?;
         if monto <= Decimal::ZERO {
-            return Err(AppError::Validation("El monto del pago debe ser mayor a cero.".into()));
+            return Err(AppError::Validation(
+                "El monto del pago debe ser mayor a cero.".into(),
+            ));
         }
         if pago.metodo_pago.is_empty() {
-            return Err(AppError::Validation("El método de pago es obligatorio.".into()));
+            return Err(AppError::Validation(
+                "El método de pago es obligatorio.".into(),
+            ));
         }
         if pago.concepto.is_empty() || pago.concepto.len() > 80 {
             return Err(AppError::Validation(
@@ -871,10 +948,14 @@ impl RentaService {
             ));
         }
         if inspeccion.kilometraje.parse::<f64>().is_err() {
-            return Err(AppError::Validation("El kilometraje no es un número válido.".into()));
+            return Err(AppError::Validation(
+                "El kilometraje no es un número válido.".into(),
+            ));
         }
         if inspeccion.nivel_gasolina.is_empty() {
-            return Err(AppError::Validation("El nivel de gasolina es obligatorio.".into()));
+            return Err(AppError::Validation(
+                "El nivel de gasolina es obligatorio.".into(),
+            ));
         }
         let id = RentaRepository::insertar_inspeccion(conn, id_renta, &inspeccion)?;
         Ok(RentaRepository::inspecciones_de(conn, id_renta)?
@@ -915,14 +996,42 @@ impl RentaService {
 
 /// Normaliza campos (trim → mayúsculas, montos con coma → punto)
 fn normalizar(d: &mut RentaDatos) {
-    d.placa = d.placa.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.placa = d
+        .placa
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
     d.nombre_cliente = mayusculas(&d.nombre_cliente);
-    d.no_licencia = d.no_licencia.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.nacionalidad = d.nacionalidad.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.tanque_salida = d.tanque_salida.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.no_licencia = d
+        .no_licencia
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.nacionalidad = d
+        .nacionalidad
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.ubicacion_recogida = d
+        .ubicacion_recogida
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.ubicacion_retorno = d
+        .ubicacion_retorno
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.observaciones = d
+        .observaciones
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.tanque_salida = d
+        .tanque_salida
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
     // Montos: vacío → "0.00". Sin esto, un campo monetario en blanco se enlaza
     // como '' a CAST(? AS DECIMAL) y Firebird falla con SQLCODE -303
     // "conversion error from string ''" (error real visto en producción al
@@ -953,9 +1062,21 @@ fn normalizar(d: &mut RentaDatos) {
 }
 
 fn normalizar_cierre(d: &mut RentaCierreDatos) {
-    d.km_final = d.km_final.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.tanque_final = d.tanque_final.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    d.km_final = d
+        .km_final
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    d.tanque_final = d
+        .tanque_final
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    d.observaciones = d
+        .observaciones
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     for m in [&mut d.valor_dia, &mut d.valor_hora_extra, &mut d.descuento] {
         if let Some(v) = m {
             *v = v.trim().replace(',', ".");
@@ -981,7 +1102,11 @@ fn completar_cliente(conn: &mut PooledConnection, d: &mut RentaDatos) {
 fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
     let dias = d.dias_calculados.max(0);
     // Si cobrar_horas_extra está desactivado, las horas extras no se cobran
-    let horas = if d.cobrar_horas_extra { d.horas_extras.max(0) } else { 0 };
+    let horas = if d.cobrar_horas_extra {
+        d.horas_extras.max(0)
+    } else {
+        0
+    };
     let vdia = dec(&d.valor_dia, "");
     let vhe = dec(&d.valor_hora_extra, "");
     let vde = dec(&d.valor_dia_extra, "");
@@ -996,15 +1121,24 @@ fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
         &d.valor_gasolina,
     ]);
     let desc = dec(&d.descuento, "");
-    let subtotal = (vdia * Decimal::from(dias) + vhe * Decimal::from(horas) + extras - desc).max(Decimal::ZERO);
+    let subtotal = (vdia * Decimal::from(dias) + vhe * Decimal::from(horas) + extras - desc)
+        .max(Decimal::ZERO);
     // IVA solo si el formulario marcó «cobrar IVA» (checkbox por renta)
-    let imp = if d.cobra_iva { impuesto(cfg) } else { Decimal::ZERO };
+    let imp = if d.cobra_iva {
+        impuesto(cfg)
+    } else {
+        Decimal::ZERO
+    };
     let impuestos = (subtotal * imp).round_dp(2);
     let total = subtotal + impuestos;
     // Comisión (checkbox + valor del formulario): se resta del total para
     // obtener el valor neto (información financiera). El total que paga el
     // cliente NO cambia: la comisión es un costo de la empresa.
-    let comision = if d.tiene_comision { dec(&d.comision, "") } else { Decimal::ZERO };
+    let comision = if d.tiene_comision {
+        dec(&d.comision, "")
+    } else {
+        Decimal::ZERO
+    };
     let valor_neto = (total - comision).max(Decimal::ZERO);
     d.subtotal = subtotal.round_dp(2).to_string();
     d.impuestos = impuestos.to_string();
@@ -1015,8 +1149,7 @@ fn calcular_totales(d: &mut RentaDatos, cfg: &Arc<AppConfig>) {
 
 /// Porcentaje de impuesto de config.ini (business.impuesto_porcentaje, default 0)
 fn impuesto(cfg: &Arc<AppConfig>) -> Decimal {
-    Decimal::from_str(&cfg.impuesto_porcentaje.to_string())
-        .unwrap_or(Decimal::ZERO)
+    Decimal::from_str(&cfg.impuesto_porcentaje.to_string()).unwrap_or(Decimal::ZERO)
         / Decimal::from(100)
 }
 
@@ -1056,7 +1189,11 @@ fn calcular_dias_horas(
 /// Parsea `Option<&str>` (HH:MM o HH:MM:SS) → `NaiveTime`; `None`/vacío → None
 fn parse_hora_ref(v: Option<&str>) -> Option<NaiveTime> {
     let h = v.map(str::trim).filter(|s| !s.is_empty())?;
-    let h = if h.len() == 5 { format!("{h}:00") } else { h.to_string() };
+    let h = if h.len() == 5 {
+        format!("{h}:00")
+    } else {
+        h.to_string()
+    };
     NaiveTime::parse_from_str(&h, "%H:%M:%S").ok()
 }
 
@@ -1069,15 +1206,20 @@ fn parse_fecha_ref(v: Option<&str>) -> Option<NaiveDate> {
 /// Parsea un decimal desde un string, con fallback si está vacío
 fn dec(v: &str, fallback: &str) -> Decimal {
     let s = if v.trim().is_empty() { fallback } else { v };
-    Decimal::from_str(s).unwrap_or(Decimal::ZERO).max(Decimal::ZERO)
+    Decimal::from_str(s)
+        .unwrap_or(Decimal::ZERO)
+        .max(Decimal::ZERO)
 }
 
 fn dec_str(v: &str) -> Decimal {
-    Decimal::from_str(v).unwrap_or(Decimal::ZERO).max(Decimal::ZERO)
+    Decimal::from_str(v)
+        .unwrap_or(Decimal::ZERO)
+        .max(Decimal::ZERO)
 }
 
 fn sum_dec(vals: &[&str]) -> Decimal {
-    vals.iter().fold(Decimal::ZERO, |acc, v| acc + dec(v, "0.00"))
+    vals.iter()
+        .fold(Decimal::ZERO, |acc, v| acc + dec(v, "0.00"))
 }
 
 /// Valida los datos de la renta
@@ -1116,10 +1258,14 @@ fn validar(d: &RentaDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
     }
 
     if d.dias_calculados < 0 {
-        return Err(AppError::Validation("Los días calculados no pueden ser negativos.".into()));
+        return Err(AppError::Validation(
+            "Los días calculados no pueden ser negativos.".into(),
+        ));
     }
     if d.horas_extras < 0 {
-        return Err(AppError::Validation("Las horas extras no pueden ser negativas.".into()));
+        return Err(AppError::Validation(
+            "Las horas extras no pueden ser negativas.".into(),
+        ));
     }
 
     // Montos: todos deben ser números válidos ≥ 0 (no silenciar a 0)
@@ -1179,7 +1325,9 @@ fn validar(d: &RentaDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
     }
     // Referencias cruzadas
     if d.id_reserva.is_some() && d.id_reserva == Some(0) {
-        return Err(AppError::Validation("La reserva de origen no es válida.".into()));
+        return Err(AppError::Validation(
+            "La reserva de origen no es válida.".into(),
+        ));
     }
     let _ = cfg; // config se usa en calcular_totales
     Ok(())
@@ -1245,7 +1393,9 @@ fn es_hora_valida(h: &str) -> bool {
 
 /// Recorta un `Option<String>` y descarta vacíos (devuelve `None`).
 fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    v.as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// Parsea `Option<String>` → `Option<NaiveDate>` (formato AAAA-MM-DD).
@@ -1278,48 +1428,97 @@ mod tests {
     #[test]
     fn dias_horas_exacto_sin_excedente() {
         // 2026-01-01 10:00 → 2026-01-03 10:00 = 48 h = 2 días, 0 horas
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("10:00"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("10:00"),
+        );
         assert_eq!(r, Some((2, 0)));
     }
 
     #[test]
     fn excedente_menor_igual_3_horas_se_cobra_por_horas() {
         // 2 h de excedente → 2 horas extras
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("12:00"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("12:00"),
+        );
         assert_eq!(r, Some((2, 2)));
         // exactamente 3 h → horas extras (el día completo es solo si SUPERA 3 h)
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("13:00"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("13:00"),
+        );
         assert_eq!(r, Some((2, 3)));
         // 3 h y 1 minuto → día completo
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("13:01"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("13:01"),
+        );
         assert_eq!(r, Some((3, 0)));
     }
 
     #[test]
     fn excedente_mayor_3_horas_cobra_dia_completo() {
         // 6 h de excedente → 3 días, 0 horas extras
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("16:00"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("16:00"),
+        );
         assert_eq!(r, Some((3, 0)));
         // 25 h de excedente (73 h totales) → 3 días completos + 1 h; la 1 h
         // restante ≤ 3 h se cobra como 1 hora extra
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-04"), Some("11:00"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-04"),
+            Some("11:00"),
+        );
         assert_eq!(r, Some((3, 1)));
     }
 
     #[test]
     fn fracciones_de_hora_se_redondean_hacia_arriba() {
         // 30 min de excedente → 1 hora extra
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("10:30"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("10:30"),
+        );
         assert_eq!(r, Some((2, 1)));
         // 2 h 20 min → 3 horas extra
-        let r = calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), Some("12:20"));
+        let r = calcular_dias_horas(
+            "2026-01-01",
+            Some("10:00"),
+            Some("2026-01-03"),
+            Some("12:20"),
+        );
         assert_eq!(r, Some((2, 3)));
     }
 
     #[test]
     fn faltan_horas_o_fechas_devuelve_none() {
-        assert_eq!(calcular_dias_horas("2026-01-01", None, Some("2026-01-03"), Some("10:00")), None);
-        assert_eq!(calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), None), None);
-        assert_eq!(calcular_dias_horas("2026-01-01", Some("10:00"), None, Some("10:00")), None);
+        assert_eq!(
+            calcular_dias_horas("2026-01-01", None, Some("2026-01-03"), Some("10:00")),
+            None
+        );
+        assert_eq!(
+            calcular_dias_horas("2026-01-01", Some("10:00"), Some("2026-01-03"), None),
+            None
+        );
+        assert_eq!(
+            calcular_dias_horas("2026-01-01", Some("10:00"), None, Some("10:00")),
+            None
+        );
     }
 }

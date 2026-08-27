@@ -75,7 +75,12 @@ pub fn verify_password(stored: &str, provided: &str) -> VerifyResult {
             return VerifyResult::Invalid;
         };
         let mut output = vec![0u8; expected.len()];
-        pbkdf2_hmac::<Sha256>(provided.as_bytes(), salt_bytes, PBKDF2_ITERATIONS, &mut output);
+        pbkdf2_hmac::<Sha256>(
+            provided.as_bytes(),
+            salt_bytes,
+            PBKDF2_ITERATIONS,
+            &mut output,
+        );
         if output.ct_eq(&expected).into() {
             VerifyResult::ValidNeedsRehash
         } else {
@@ -92,8 +97,8 @@ pub fn verify_password(stored: &str, provided: &str) -> VerifyResult {
 
 /// Genera un token criptográficamente seguro (url-safe base64)
 pub fn generate_secure_token(bytes: usize) -> String {
-    use base64::Engine;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
     use rand::RngCore;
     let mut buf = vec![0u8; bytes];
     rand::rngs::OsRng.fill_bytes(&mut buf);
@@ -165,14 +170,23 @@ impl LoginAttemptTracker {
     pub fn record_failed_attempt(&mut self, username: &str, ip: Option<&str>) -> u32 {
         let now = (self.now)();
         let count = {
-            let c = self.failed_attempts.entry(username.to_string()).or_insert(0);
+            let c = self
+                .failed_attempts
+                .entry(username.to_string())
+                .or_insert(0);
             *c += 1;
             *c
         };
-        self.login_timestamps.entry(username.to_string()).or_default().push(now);
+        self.login_timestamps
+            .entry(username.to_string())
+            .or_default()
+            .push(now);
         self.clean_timestamps(username, now);
         if let Some(ip) = ip {
-            self.ip_timestamps.entry(ip.to_string()).or_default().push(now);
+            self.ip_timestamps
+                .entry(ip.to_string())
+                .or_default()
+                .push(now);
         }
         count
     }

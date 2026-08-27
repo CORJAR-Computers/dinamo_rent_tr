@@ -64,7 +64,8 @@ fn snapshot(conn: &mut PooledConnection) -> Result<Snapshot, Box<dyn std::error:
          FROM comparendos WHERE deleted_at IS NULL",
         (),
     )?;
-    let (total, pendientes, pagados, suma_raw, atribuidos) = row.unwrap_or((0, 0, 0, "0".into(), 0));
+    let (total, pendientes, pagados, suma_raw, atribuidos) =
+        row.unwrap_or((0, 0, 0, "0".into(), 0));
     let suma_pendiente = suma_raw.trim().parse::<f64>().unwrap_or(0.0);
     Ok(Snapshot {
         total,
@@ -96,7 +97,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let placas = AutoRepository::placas_activas(&mut conn)?;
     let snap = snapshot(&mut conn)?;
-    println!("== Placas activas ({}): {}", placas.len(), placas.join(", "));
+    println!(
+        "== Placas activas ({}): {}",
+        placas.len(),
+        placas.join(", ")
+    );
     println!(
         "== Comparendos: total={} pendientes={} pagados={} atribuidos={} suma_pendiente=${:.2}",
         snap.total, snap.pendientes, snap.pagados, snap.atribuidos, snap.suma_pendiente
@@ -119,7 +124,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (rentas,): (i64,) = conn
             .query_first("SELECT COUNT(*) FROM rentas WHERE deleted_at IS NULL", ())?
             .unwrap_or((0,));
-        println!("== Migración 0016 (backfill atribución): {}", if m16 > 0 { "APLICADA" } else { "pendiente" });
+        println!(
+            "== Migración 0016 (backfill atribución): {}",
+            if m16 > 0 { "APLICADA" } else { "pendiente" }
+        );
         println!("== Rentas activas (deleted_at nulo): {}", rentas);
         println!("(modo --solo-total: no se tocó el portal ni la BD)");
         return Ok(());

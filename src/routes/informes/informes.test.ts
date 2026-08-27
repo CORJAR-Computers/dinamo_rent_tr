@@ -22,9 +22,8 @@ const LISTS: BusinessLists = {
 	rolesConInformes: ['Administrador', 'Supervisor'],
 	rolesConUsuarios: ['Administrador'],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador']
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: ['Administrador', 'Supervisor', 'Operador'],
+	impuestoPorcentaje: 19
 };
 
 function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
@@ -97,7 +96,10 @@ beforeEach(() => {
 
 describe('página de Informes', () => {
 	it('muestra el balance mensual con ingresos, egresos y rentas', async () => {
-		tauri.register('informe_mensual', (args?: { sessionId: string; fechaInicio: string; fechaFin: string }) => informe());
+		tauri.register(
+			'informe_mensual',
+			(args?: { sessionId: string; fechaInicio: string; fechaFin: string }) => informe()
+		);
 
 		render(InformesPage);
 
@@ -152,13 +154,15 @@ describe('página de Informes', () => {
 	});
 
 	it('llama al backend con las fechas seleccionadas', async () => {
-		const mensual = vi.fn((_args: { sessionId: string; fechaInicio: string; fechaFin: string }) => informe());
+		const mensual = vi.fn((_args: { sessionId: string; fechaInicio: string; fechaFin: string }) =>
+			informe()
+		);
 		tauri.register('informe_mensual', mensual);
 
 		render(InformesPage);
 
 		const inputInicio = screen.getByLabelText('Fecha inicio');
-		
+
 		// Esperar a que el backend resuelva las llamadas iniciales
 		await waitFor(() => {
 			expect(mensual.mock.calls.length).toBeGreaterThanOrEqual(1);
@@ -167,9 +171,13 @@ describe('página de Informes', () => {
 
 		await fireEvent.input(inputInicio, { target: { value: '2026-07-01' } });
 		await fireEvent.change(inputInicio, { target: { value: '2026-07-01' } });
-		
+
 		await waitFor(() => expect(mensual).toHaveBeenCalledTimes(1));
-		const args = mensual.mock.calls[0][0] as { sessionId: string; fechaInicio: string; fechaFin: string };
+		const args = mensual.mock.calls[0][0] as {
+			sessionId: string;
+			fechaInicio: string;
+			fechaFin: string;
+		};
 		expect(args.fechaInicio).toBe('2026-07-01');
 	});
 

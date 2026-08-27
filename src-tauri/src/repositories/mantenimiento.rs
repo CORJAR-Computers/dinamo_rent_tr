@@ -124,7 +124,10 @@ impl MantenimientoRepository {
     }
 
     /// Historial por placa exacta
-    pub fn obtener_por_placa(conn: &mut PooledConnection, placa: &str) -> Result<Vec<Mantenimiento>, AppError> {
+    pub fn obtener_por_placa(
+        conn: &mut PooledConnection,
+        placa: &str,
+    ) -> Result<Vec<Mantenimiento>, AppError> {
         let rows: Vec<MantenimientoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
@@ -138,7 +141,10 @@ impl MantenimientoRepository {
     }
 
     /// Filtra por tipo de mantenimiento exacto
-    pub fn obtener_por_tipo(conn: &mut PooledConnection, tipo: &str) -> Result<Vec<Mantenimiento>, AppError> {
+    pub fn obtener_por_tipo(
+        conn: &mut PooledConnection,
+        tipo: &str,
+    ) -> Result<Vec<Mantenimiento>, AppError> {
         let rows: Vec<MantenimientoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
@@ -172,7 +178,10 @@ impl MantenimientoRepository {
     /// Último km de cambio de aceite programado para una placa (excluye km 0/NULL).
     /// Lo usa el servicio al eliminar un mantenimiento para recalcular
     /// `autos.proximo_aceite` desde el historial restante.
-    pub fn ultimo_km_aceite(conn: &mut PooledConnection, placa: &str) -> Result<Option<i64>, AppError> {
+    pub fn ultimo_km_aceite(
+        conn: &mut PooledConnection,
+        placa: &str,
+    ) -> Result<Option<i64>, AppError> {
         let row: Option<(Option<i64>,)> = conn.query_first(
             "SELECT first 1 km_proximo_cambio_aceite FROM mantenimiento_vehiculos \
              WHERE placa = ? AND pieza_varias_tipo = ? AND km_proximo_cambio_aceite > 0 \
@@ -201,7 +210,10 @@ impl MantenimientoRepository {
     }
 
     /// Mantenimientos recientes (los últimos `limit`)
-    pub fn obtener_recientes(conn: &mut PooledConnection, limit: i64) -> Result<Vec<Mantenimiento>, AppError> {
+    pub fn obtener_recientes(
+        conn: &mut PooledConnection,
+        limit: i64,
+    ) -> Result<Vec<Mantenimiento>, AppError> {
         let rows: Vec<MantenimientoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
@@ -215,7 +227,10 @@ impl MantenimientoRepository {
     }
 
     /// Obtiene un mantenimiento por id
-    pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Mantenimiento>, AppError> {
+    pub fn obtener_por_id(
+        conn: &mut PooledConnection,
+        id: i64,
+    ) -> Result<Option<Mantenimiento>, AppError> {
         let row: Option<MantenimientoRow> = conn.query_first(
             &format!(
                 "SELECT {SELECT_COLS} FROM mantenimiento_vehiculos m \
@@ -295,7 +310,10 @@ impl MantenimientoRepository {
 
     /// Total de mantenimientos registrados
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM mantenimiento_vehiculos WHERE deleted_at IS NULL", ())?;
+        let count: Option<(i64,)> = conn.query_first(
+            "SELECT COUNT(*) FROM mantenimiento_vehiculos WHERE deleted_at IS NULL",
+            (),
+        )?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
@@ -329,5 +347,3 @@ impl MantenimientoRepository {
         Ok(rows)
     }
 }
-
-

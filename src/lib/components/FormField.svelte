@@ -11,7 +11,15 @@
 		children?: import('svelte').Snippet;
 	}
 
-	let { label, required = false, hint, error, dense = false, class: klass = '', children }: Props = $props();
+	let {
+		label,
+		required = false,
+		hint,
+		error,
+		dense = false,
+		class: klass = '',
+		children
+	}: Props = $props();
 
 	// ── Accesibilidad (WCAG 2.1 SC 1.3.1, 3.3.2, 4.1.2) ──
 	// Generamos ids estables para (a) el input hijo y (b) el párrafo de hint/error,
@@ -70,7 +78,20 @@
 	{@render children?.()}
 	{#if error}
 		<p id={descId} class="mt-1 text-xs text-peligro flex items-center gap-1" aria-live="polite">
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-3.5 h-3.5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				aria-hidden="true"
+				><path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+				/></svg
+			>
 			{error}
 		</p>
 	{:else if hint}

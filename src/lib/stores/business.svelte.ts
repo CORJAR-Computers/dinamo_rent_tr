@@ -32,71 +32,71 @@ import { businessApi, type BusinessLists } from '$lib/api';
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 class BusinessListsStore {
-        /** Listas cacheadas (reactivo: el template puede leer directamente). */
-        lists = $state<BusinessLists | null>(null);
+	/** Listas cacheadas (reactivo: el template puede leer directamente). */
+	lists = $state<BusinessLists | null>(null);
 
-        /** Timestamp de la última carga exitosa (ms desde epoch). */
-        private cargadoEn = $state<number>(0);
+	/** Timestamp de la última carga exitosa (ms desde epoch). */
+	private cargadoEn = $state<number>(0);
 
-        /** TTL aplicado a este store (ms). Modificable en caliente. */
-        ttlMs = $state(DEFAULT_TTL_MS);
+	/** TTL aplicado a este store (ms). Modificable en caliente. */
+	ttlMs = $state(DEFAULT_TTL_MS);
 
-        /** Indica si hay una carga en vuelo (para no duplicar requests). */
-        private cargando: Promise<BusinessLists | null> | null = null;
+	/** Indica si hay una carga en vuelo (para no duplicar requests). */
+	private cargando: Promise<BusinessLists | null> | null = null;
 
-        /** ¿El cache es válido (no expirado y con datos)? */
-        get valido(): boolean {
-                return this.lists !== null && Date.now() - this.cargadoEn < this.ttlMs;
-        }
+	/** ¿El cache es válido (no expirado y con datos)? */
+	get valido(): boolean {
+		return this.lists !== null && Date.now() - this.cargadoEn < this.ttlMs;
+	}
 
-        /**
-         * Devuelve las listas desde el cache si es válido; si no, dispara una
-         * carga (sin await: la promesa resuelve con las listas cuando termine,
-         * pero `this.lists` se actualiza reactivamente para que el template
-         * muestre el spinner por defecto y se re-renderice al llegar).
-         *
-         * Si hay una carga en vuelo, reutiliza la misma promesa (deduplica).
-         */
-        async ensure(sessionId: string): Promise<BusinessLists | null> {
-                if (this.valido) return this.lists;
-                if (!sessionId) return null;
-                if (this.cargando) return this.cargando;
+	/**
+	 * Devuelve las listas desde el cache si es válido; si no, dispara una
+	 * carga (sin await: la promesa resuelve con las listas cuando termine,
+	 * pero `this.lists` se actualiza reactivamente para que el template
+	 * muestre el spinner por defecto y se re-renderice al llegar).
+	 *
+	 * Si hay una carga en vuelo, reutiliza la misma promesa (deduplica).
+	 */
+	async ensure(sessionId: string): Promise<BusinessLists | null> {
+		if (this.valido) return this.lists;
+		if (!sessionId) return null;
+		if (this.cargando) return this.cargando;
 
-                this.cargando = (async () => {
-                        try {
-                                const data = await businessApi.listas(sessionId);
-                                this.lists = data;
-                                this.cargadoEn = Date.now();
-                                return data;
-                        } catch (e) {
-                                console.warn('businessLists: no se pudieron cargar las listas:', e);
-                                return null;
-                        } finally {
-                                this.cargando = null;
-                        }
-                })();
-                return this.cargando;
-        }
+		this.cargando = (async () => {
+			try {
+				const data = await businessApi.listas(sessionId);
+				this.lists = data;
+				this.cargadoEn = Date.now();
+				return data;
+			} catch (e) {
+				console.warn('businessLists: no se pudieron cargar las listas:', e);
+				return null;
+			} finally {
+				this.cargando = null;
+			}
+		})();
+		return this.cargando;
+	}
 
-        /**
-         * Fuerza la recarga en la próxima lectura (o inmediatamente si se pasa
-         * `sessionId`). Las rutas que modifican datos del backend que afectan
-         * las listas (impuestoPorcentaje, roles_con_*, etc.) deben llamar a
-         * este método tras confirmar el cambio.
-         */
-        invalidate(sessionId?: string): void {
-                this.cargadoEn = 0;
-                if (sessionId) {
-                        void this.ensure(sessionId);
-                }
-        }
+	/**
+	 * Fuerza la recarga en la próxima lectura (o inmediatamente si se pasa
+	 * `sessionId`). Las rutas que modifican datos del backend que afectan
+	 * las listas (impuestoPorcentaje, roles_con_*, etc.) deben llamar a
+	 * este método tras confirmar el cambio.
+	 */
+	invalidate(sessionId?: string): void {
+		this.cargadoEn = 0;
+		if (sessionId) {
+			void this.ensure(sessionId);
+		}
+	}
 
-        /** Resetea el store (logout). */
-        clear(): void {
-                this.lists = null;
-                this.cargadoEn = 0;
-                this.cargando = null;
-        }
+	/** Resetea el store (logout). */
+	clear(): void {
+		this.lists = null;
+		this.cargadoEn = 0;
+		this.cargando = null;
+	}
 }
 
 export const businessLists = new BusinessListsStore();

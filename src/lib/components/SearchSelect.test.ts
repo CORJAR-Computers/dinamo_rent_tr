@@ -39,7 +39,9 @@ describe('SearchSelect', () => {
 		const { input } = await montar();
 		await fireEvent.focus(input);
 		await fireEvent.input(input, { target: { value: 'ana maria' } });
-		const visibles = screen.getAllByRole('option').filter((el) => el.textContent?.includes('López'));
+		const visibles = screen
+			.getAllByRole('option')
+			.filter((el) => el.textContent?.includes('López'));
 		expect(visibles.length).toBe(1);
 		expect(screen.getByText('Ana María López')).toBeTruthy();
 		expect(screen.queryByText('MARIA FERNANDA PEREZ')).toBeNull();

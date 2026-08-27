@@ -12,8 +12,8 @@
 
 use std::collections::HashMap;
 
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::error::AppError;
@@ -116,7 +116,16 @@ impl InformeService {
         let rentas = InformeRepository::rentas_del_mes(conn, fecha_inicio, fecha_fin)?
             .into_iter()
             .map(
-                |(id, placa, nombre_cliente, total, estado, comision, valor_neto, fecha_recogida)| {
+                |(
+                    id,
+                    placa,
+                    nombre_cliente,
+                    total,
+                    estado,
+                    comision,
+                    valor_neto,
+                    fecha_recogida,
+                )| {
                     RentaInforme {
                         id,
                         placa,
@@ -145,7 +154,11 @@ impl InformeService {
             total_comisiones: totales.total_comisiones,
             ingresos_netos: ingresos_netos.to_string(),
             balance_neto: balance_neto.to_string(),
-            gastos_por_categoria: InformeRepository::gastos_por_categoria(conn, fecha_inicio, fecha_fin)?,
+            gastos_por_categoria: InformeRepository::gastos_por_categoria(
+                conn,
+                fecha_inicio,
+                fecha_fin,
+            )?,
             rentas,
             utilidad_por_vehiculo: utilidad_por_vehiculo(conn, fecha_inicio, fecha_fin)?,
         })
@@ -158,9 +171,8 @@ fn utilidad_por_vehiculo(
     fin: &str,
 ) -> Result<Vec<UtilidadVehiculo>, AppError> {
     let mut mapa: HashMap<String, (Decimal, Decimal)> = HashMap::new();
-    let vehiculos: HashMap<String, String> = InformeRepository::vehiculos(conn)?
-        .into_iter()
-        .collect();
+    let vehiculos: HashMap<String, String> =
+        InformeRepository::vehiculos(conn)?.into_iter().collect();
 
     // 1 sola query (UNION ALL) en vez de 6 round-trips por separado.
     // Cada fila trae (placa, tipo, monto); INGRESO/ABONO suman a ingresos,

@@ -101,7 +101,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //    build) → el runner debe usar las MIGRACIONES_EMBEDIDAS.
     let dir_inexistente = std::env::temp_dir().join("dinamo_migrations_NO_EXISTE_EN_LIMPIO");
     let _ = std::fs::remove_dir_all(&dir_inexistente);
-    assert!(!dir_inexistente.exists(), "precondición: dir de migraciones ausente");
+    assert!(
+        !dir_inexistente.exists(),
+        "precondición: dir de migraciones ausente"
+    );
     run_migrations(&pool, &dir_inexistente)?;
     println!(
         "✓ Migraciones aplicadas (fallback de las {} embebidas en el binario)",
@@ -120,14 +123,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "falta registrar {name}; aplicadas: {aplicadas:?}"
         );
     }
-    println!("✓ schema_migrations: {} versiones registradas", aplicadas.len());
+    println!(
+        "✓ schema_migrations: {} versiones registradas",
+        aplicadas.len()
+    );
 
     // 6) seed_admin: crea el admin por defecto en una BD vacía (solo si no hay usuarios)
     if UsuarioRepository::contar(&mut conn)? == 0 {
         dinamo_rent_lib::seed_admin(&pool)?;
     }
     let n_admin = UsuarioRepository::contar(&mut conn)?;
-    assert_eq!(n_admin, 1, "debe existir exactamente 1 usuario tras el seed");
+    assert_eq!(
+        n_admin, 1,
+        "debe existir exactamente 1 usuario tras el seed"
+    );
     let admin = UsuarioRepository::obtener_para_autenticacion(&mut conn, "admin")?;
     assert!(admin.is_some(), "el usuario 'admin' debe existir");
     println!("✓ Usuario 'admin' sembrado (contraseña por defecto admin123)");

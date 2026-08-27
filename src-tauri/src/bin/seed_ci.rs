@@ -242,8 +242,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let total_clientes = ClienteRepository::contar(&mut conn)?;
     println!("  total clientes en BD: {total_clientes}");
 
-    assert!(total_autos >= 1, "seed_ci debe dejar ≥1 auto para los tests");
-    assert!(total_clientes >= 1, "seed_ci debe dejar ≥1 cliente para los tests");
+    assert!(
+        total_autos >= 1,
+        "seed_ci debe dejar ≥1 auto para los tests"
+    );
+    assert!(
+        total_clientes >= 1,
+        "seed_ci debe dejar ≥1 cliente para los tests"
+    );
     println!("\n✅ BD mínima lista para `cargo test --tests`");
     Ok(())
 }

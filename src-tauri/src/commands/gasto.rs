@@ -21,8 +21,13 @@ pub fn listar_gastos(
 ) -> Cmd<Vec<Gasto>> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    GastoService::listar(&mut c, busqueda.as_deref(), placa.as_deref(), categoria.as_deref())
-        .map_err(|e| e.to_payload())
+    GastoService::listar(
+        &mut c,
+        busqueda.as_deref(),
+        placa.as_deref(),
+        categoria.as_deref(),
+    )
+    .map_err(|e| e.to_payload())
 }
 
 /// Gastos recientes (para el inicio o un panel)

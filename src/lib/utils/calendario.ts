@@ -55,7 +55,10 @@ export function diasSemanaCorto(): string[] {
  * Celdas del mes visible (semana empieza en lunes). Devuelve una matriz de
  * semanas; cada celda tiene `dia` (ISO), `enMes` (bool) y `hoy` (bool).
  */
-export function celdasDelMes(anio: number, mes: number): { dia: string; enMes: boolean; hoy: boolean }[][] {
+export function celdasDelMes(
+	anio: number,
+	mes: number
+): { dia: string; enMes: boolean; hoy: boolean }[][] {
 	const hoy = new Date();
 	const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
 
@@ -67,7 +70,11 @@ export function celdasDelMes(anio: number, mes: number): { dia: string; enMes: b
 	const semanas: { dia: string; enMes: boolean; hoy: boolean }[][] = [];
 	const celdas: { dia: string; enMes: boolean; hoy: boolean }[] = [];
 	for (let i = 0; i < 42; i++) {
-		const d = new Date(inicioCelda.getFullYear(), inicioCelda.getMonth(), inicioCelda.getDate() + i);
+		const d = new Date(
+			inicioCelda.getFullYear(),
+			inicioCelda.getMonth(),
+			inicioCelda.getDate() + i
+		);
 		const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 		celdas.push({ dia: iso, enMes: d.getMonth() === mes, hoy: iso === hoyISO });
 	}

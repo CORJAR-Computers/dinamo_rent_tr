@@ -83,9 +83,7 @@ pub struct EmpresaRepository;
 impl EmpresaRepository {
     /// Lee la fila única (ID = 1); devuelve None si aún no existe.
     pub fn obtener(conn: &mut PooledConnection) -> Result<Option<EmpresaRow>, AppError> {
-        let sql = format!(
-            "SELECT {SELECT_COLS} FROM EMPRESA_CONFIG WHERE ID = 1"
-        );
+        let sql = format!("SELECT {SELECT_COLS} FROM EMPRESA_CONFIG WHERE ID = 1");
         let row = conn.query_first(&sql, ())?;
         Ok(row)
     }

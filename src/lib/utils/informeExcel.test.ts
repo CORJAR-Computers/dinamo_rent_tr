@@ -51,12 +51,16 @@ function informe(overrides: Partial<InformeMensual> = {}): InformeMensual {
 
 /** Devuelve el valor plano de una celda (desenvuelve estilo) */
 function valor(celda: unknown): string | number {
-	return typeof celda === 'object' && celda !== null ? (celda as { v: string | number }).v : (celda as string | number);
+	return typeof celda === 'object' && celda !== null
+		? (celda as { v: string | number }).v
+		: (celda as string | number);
 }
 
 /** Devuelve el estilo de una celda, si lo tiene */
 function estilo(celda: unknown): Record<string, unknown> | undefined {
-	return typeof celda === 'object' && celda !== null ? (celda as { estilo?: Record<string, unknown> }).estilo : undefined;
+	return typeof celda === 'object' && celda !== null
+		? (celda as { estilo?: Record<string, unknown> }).estilo
+		: undefined;
 }
 
 describe('filasInformeExcel', () => {
@@ -80,7 +84,9 @@ describe('filasInformeExcel', () => {
 		expect(estilo(balance![1])?.monto).toBe(true);
 
 		// Utilidad por vehículo como número
-		const util = filas.find((f) => String(valor(f[0])) === 'ABC123' && String(valor(f[1])).includes('Toyota'));
+		const util = filas.find(
+			(f) => String(valor(f[0])) === 'ABC123' && String(valor(f[1])).includes('Toyota')
+		);
 		expect(util).toBeDefined();
 		expect(valor(util![4])).toBe(850000);
 	});

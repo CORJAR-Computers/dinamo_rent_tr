@@ -4,7 +4,10 @@ import { calcularDiasHoras } from './calcularDiasHoras';
 
 describe('calcularDiasHoras', () => {
 	it('faltan fechas → (0, 0)', () => {
-		expect(calcularDiasHoras(undefined, '09:00', undefined, '18:00')).toEqual({ dias: 0, horas: 0 });
+		expect(calcularDiasHoras(undefined, '09:00', undefined, '18:00')).toEqual({
+			dias: 0,
+			horas: 0
+		});
 		expect(calcularDiasHoras('', '09:00', '2026-08-04', '18:00')).toEqual({ dias: 0, horas: 0 });
 	});
 

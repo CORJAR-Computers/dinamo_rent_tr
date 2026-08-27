@@ -6,13 +6,13 @@
 use std::sync::Arc;
 
 use chrono::{Local, NaiveDate};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
 use crate::repositories::auto::{Auto, AutoDatos, AutoRepository};
 
@@ -54,7 +54,8 @@ impl AutoService {
         let term = busqueda.unwrap_or("").trim();
         if !term.is_empty() {
             AutoRepository::buscar(conn, term)
-        } else if let Some(estado) = estado.filter(|e| !e.trim().is_empty() && e.trim() != "Todos") {
+        } else if let Some(estado) = estado.filter(|e| !e.trim().is_empty() && e.trim() != "Todos")
+        {
             AutoRepository::obtener_por_estado(conn, estado.trim())
         } else {
             AutoRepository::obtener_todos(conn)
@@ -63,9 +64,8 @@ impl AutoService {
 
     /// Obtiene un vehículo por placa
     pub fn obtener(conn: &mut PooledConnection, placa: &str) -> Result<Auto, AppError> {
-        AutoRepository::obtener_por_placa(conn, placa)?.ok_or_else(|| {
-            AppError::NotFound(format!("No existe un vehículo con placa {placa}"))
-        })
+        AutoRepository::obtener_por_placa(conn, placa)?
+            .ok_or_else(|| AppError::NotFound(format!("No existe un vehículo con placa {placa}")))
     }
 
     /// Crea un vehículo validando datos y placa única
@@ -84,7 +84,13 @@ impl AutoService {
             )));
         }
         AutoRepository::insertar(conn, &datos)?;
-        crate::core::audit::log_audit(conn, usuario, "CREAR VEHICULO", &format!("placa={}", datos.placa), "local")?;
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "CREAR VEHICULO",
+            &format!("placa={}", datos.placa),
+            "local",
+        )?;
         AutoRepository::obtener_por_placa(conn, &datos.placa)?.ok_or_else(|| {
             AppError::Generic("No se pudo recuperar el vehículo recién creado".into())
         })
@@ -99,23 +105,39 @@ impl AutoService {
         mut datos: AutoDatos,
     ) -> Result<Auto, AppError> {
         let placa = placa.trim().to_uppercase();
-        AutoRepository::obtener_por_placa(conn, &placa)?
-            .ok_or_else(|| AppError::NotFound(format!("No existe un vehículo con placa {placa}")))?;
+        AutoRepository::obtener_por_placa(conn, &placa)?.ok_or_else(|| {
+            AppError::NotFound(format!("No existe un vehículo con placa {placa}"))
+        })?;
         // La placa no cambia en edición
         datos.placa = placa.clone();
         normalizar(&mut datos);
         validar(&datos, cfg)?;
         AutoRepository::actualizar(conn, &placa, &datos)?;
-        crate::core::audit::log_audit(conn, usuario, "ACTUALIZAR VEHICULO", &format!("placa={placa}"), "local")?;
-        AutoRepository::obtener_por_placa(conn, &placa)?.ok_or_else(|| {
-            AppError::Generic("No se pudo recuperar el vehículo actualizado".into())
-        })
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "ACTUALIZAR VEHICULO",
+            &format!("placa={placa}"),
+            "local",
+        )?;
+        AutoRepository::obtener_por_placa(conn, &placa)?
+            .ok_or_else(|| AppError::Generic("No se pudo recuperar el vehículo actualizado".into()))
     }
 
     /// Elimina un vehículo por placa
-    pub fn eliminar(conn: &mut PooledConnection, usuario: &str, placa: &str) -> Result<(), AppError> {
+    pub fn eliminar(
+        conn: &mut PooledConnection,
+        usuario: &str,
+        placa: &str,
+    ) -> Result<(), AppError> {
         AutoRepository::eliminar(conn, placa)?;
-        crate::core::audit::log_audit(conn, usuario, "ELIMINAR VEHICULO", &format!("placa={placa}"), "local")
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "ELIMINAR VEHICULO",
+            &format!("placa={placa}"),
+            "local",
+        )
     }
 
     /// Total de vehículos (dashboard)
@@ -124,9 +146,7 @@ impl AutoService {
     }
 
     /// Conteo por estado (dashboard)
-    pub fn contar_por_estado(
-        conn: &mut PooledConnection,
-    ) -> Result<Vec<(String, i64)>, AppError> {
+    pub fn contar_por_estado(conn: &mut PooledConnection) -> Result<Vec<(String, i64)>, AppError> {
         AutoRepository::contar_por_estado(conn)
     }
 
@@ -256,7 +276,11 @@ fn validar(d: &AutoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
             "La placa es obligatoria (máx. 20 caracteres).".into(),
         ));
     }
-    if !d.placa.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+    if !d
+        .placa
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
         return Err(AppError::Validation(
             "La placa solo puede contener letras, números y guiones.".into(),
         ));
@@ -299,9 +323,7 @@ fn validar(d: &AutoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
         }
     }
     // Monto
-    if !d.costo_fijo_mensual.is_empty()
-        && Decimal::from_str(&d.costo_fijo_mensual).is_err()
-    {
+    if !d.costo_fijo_mensual.is_empty() && Decimal::from_str(&d.costo_fijo_mensual).is_err() {
         return Err(AppError::Validation(
             "El costo fijo mensual no es un número válido.".into(),
         ));
@@ -322,11 +344,12 @@ fn validar(d: &AutoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
         if let Some(v) = valor {
             if !v.is_empty() {
                 validate_no_xss(v, 2000).map_err(|_| {
-                    AppError::Validation(format!("El campo {campo} contiene caracteres no permitidos."))
+                    AppError::Validation(format!(
+                        "El campo {campo} contiene caracteres no permitidos."
+                    ))
                 })?;
             }
         }
     }
     Ok(())
 }
-

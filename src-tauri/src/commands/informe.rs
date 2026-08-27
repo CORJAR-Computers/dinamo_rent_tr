@@ -27,12 +27,10 @@ pub async fn informe_mensual(
 ) -> Cmd<InformeMensual> {
     require_informes(&state, &session_id)?;
     let pool = state.pool.clone();
-    tauri::async_runtime::spawn_blocking(
-        move || -> Result<InformeMensual, AppError> {
-            let mut c = pool.get().map_err(AppError::from)?;
-            InformeService::mensual(&mut c, &fecha_inicio, &fecha_fin)
-        },
-    )
+    tauri::async_runtime::spawn_blocking(move || -> Result<InformeMensual, AppError> {
+        let mut c = pool.get().map_err(AppError::from)?;
+        InformeService::mensual(&mut c, &fecha_inicio, &fecha_fin)
+    })
     .await
     .map_err(|e| AppError::Generic(format!("La tarea del informe falló: {e}")).to_payload())?
     .map_err(|e| e.to_payload())

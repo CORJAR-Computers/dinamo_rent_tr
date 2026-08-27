@@ -18,7 +18,9 @@ use super::{require_eliminacion, require_session};
 type Cmd<T> = Result<T, ErrorPayload>;
 
 /// Estado del agente gestionado por Tauri (inicializado en setup de lib.rs)
-fn estado_agente<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<std::sync::Arc<EstadoAgenteSimit>, ErrorPayload> {
+fn estado_agente<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<std::sync::Arc<EstadoAgenteSimit>, ErrorPayload> {
     app.try_state::<EstadoAgenteSimitManaged>()
         .map(|s| s.0.clone())
         .ok_or_else(|| {

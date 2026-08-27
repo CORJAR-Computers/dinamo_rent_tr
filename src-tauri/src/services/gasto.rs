@@ -6,13 +6,13 @@
 use std::sync::Arc;
 
 use chrono::NaiveDate;
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
 use crate::repositories::gasto::{Gasto, GastoDatos, GastoRepository};
 
@@ -187,7 +187,9 @@ fn validar(d: &GastoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
 
     // Descripción
     if d.descripcion.is_empty() {
-        return Err(AppError::Validation("La descripción es obligatoria.".into()));
+        return Err(AppError::Validation(
+            "La descripción es obligatoria.".into(),
+        ));
     }
     if d.descripcion.len() > 200 {
         return Err(AppError::Validation(
@@ -201,10 +203,14 @@ fn validar(d: &GastoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
     // Monto
     let monto = Decimal::from_str(&d.monto).unwrap_or_else(|_| Decimal::from(-1));
     if monto < Decimal::ZERO {
-        return Err(AppError::Validation("El monto no es un número válido.".into()));
+        return Err(AppError::Validation(
+            "El monto no es un número válido.".into(),
+        ));
     }
     if monto == Decimal::ZERO {
-        return Err(AppError::Validation("El monto debe ser mayor que cero.".into()));
+        return Err(AppError::Validation(
+            "El monto debe ser mayor que cero.".into(),
+        ));
     }
     if monto > Decimal::from(9_999_999_999i64) / Decimal::from(100) {
         return Err(AppError::Validation(

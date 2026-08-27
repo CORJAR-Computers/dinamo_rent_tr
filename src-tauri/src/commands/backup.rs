@@ -119,10 +119,10 @@ pub async fn backup_restaurar<R: tauri::Runtime>(
         let dir_canon = dir.canonicalize().unwrap_or(dir);
         let ruta_canon = ruta.canonicalize().unwrap_or(ruta);
         if !ruta_canon.starts_with(&dir_canon) {
-            return Err(
-                AppError::Generic("El backup está fuera del directorio de backups.".into())
-                    .to_payload(),
-            );
+            return Err(AppError::Generic(
+                "El backup está fuera del directorio de backups.".into(),
+            )
+            .to_payload());
         }
 
         // 2) Staging (descifra si aplica). Fallos aquí (contraseña incorrecta,

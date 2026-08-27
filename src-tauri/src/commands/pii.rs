@@ -21,14 +21,22 @@ pub fn get_pii_status(state: State<'_, AppState>, session_id: String) -> Cmd<Pii
 
 /// Prueba una clave candidata SIN guardarla (muestra cuántos clientes descifra)
 #[tauri::command]
-pub fn probar_clave_pii(state: State<'_, AppState>, session_id: String, clave: String) -> Cmd<PiiAnalisis> {
+pub fn probar_clave_pii(
+    state: State<'_, AppState>,
+    session_id: String,
+    clave: String,
+) -> Cmd<PiiAnalisis> {
     require_usuario_admin(&state, &session_id)?;
     PiiService::probar_clave(&state, &clave).map_err(|e| e.to_payload())
 }
 
 /// Guarda la clave en config.ini y la aplica en caliente
 #[tauri::command]
-pub fn guardar_clave_pii(state: State<'_, AppState>, session_id: String, clave: String) -> Cmd<ClaveGuardada> {
+pub fn guardar_clave_pii(
+    state: State<'_, AppState>,
+    session_id: String,
+    clave: String,
+) -> Cmd<ClaveGuardada> {
     require_usuario_admin(&state, &session_id)?;
     PiiService::guardar_clave(&state, &clave).map_err(|e| e.to_payload())
 }

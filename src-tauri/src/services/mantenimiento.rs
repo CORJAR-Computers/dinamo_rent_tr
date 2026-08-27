@@ -7,17 +7,19 @@
 use std::sync::Arc;
 
 use chrono::NaiveDate;
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromStr as _;
 use rsfbclient::{Execute, Queryable};
+use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
 use crate::repositories::auto::AutoRepository;
-use crate::repositories::mantenimiento::{Mantenimiento, MantenimientoDatos, MantenimientoRepository};
+use crate::repositories::mantenimiento::{
+    Mantenimiento, MantenimientoDatos, MantenimientoRepository,
+};
 
 /// Tipos de mantenimiento por defecto cuando config.ini no define `business.tipos_mantenimiento`
 const TIPOS_MANTENIMIENTO_FALLBACK: [&str; 8] = [
@@ -95,7 +97,10 @@ impl MantenimientoService {
     }
 
     /// Mantenimientos recientes
-    pub fn recientes(conn: &mut PooledConnection, limit: i64) -> Result<Vec<Mantenimiento>, AppError> {
+    pub fn recientes(
+        conn: &mut PooledConnection,
+        limit: i64,
+    ) -> Result<Vec<Mantenimiento>, AppError> {
         MantenimientoRepository::obtener_recientes(conn, limit.max(1))
     }
 
@@ -114,9 +119,14 @@ impl MantenimientoService {
         normalizar(&mut datos);
         validar(conn, &datos, cfg)?;
         // Pre-calcular antes de la tx
-        let es_cambio_aceite = datos.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
+        let es_cambio_aceite =
+            datos.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
         let placa_tx = datos.placa.clone();
-        let km_tx = if es_cambio_aceite { datos.km_proximo_cambio_aceite.filter(|&k| k > 0) } else { None };
+        let km_tx = if es_cambio_aceite {
+            datos.km_proximo_cambio_aceite.filter(|&k| k > 0)
+        } else {
+            None
+        };
 
         let id = conn.with_transaction(|tx| -> Result<i64, rsfbclient::FbError> {
             let id = MantenimientoRepository::insertar(tx, &datos)
@@ -143,9 +153,14 @@ impl MantenimientoService {
         normalizar(&mut datos);
         validar(conn, &datos, cfg)?;
         // Pre-calcular antes de la tx
-        let es_cambio_aceite = datos.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
+        let es_cambio_aceite =
+            datos.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
         let placa_tx = datos.placa.clone();
-        let km_tx = if es_cambio_aceite { datos.km_proximo_cambio_aceite.filter(|&k| k > 0) } else { None };
+        let km_tx = if es_cambio_aceite {
+            datos.km_proximo_cambio_aceite.filter(|&k| k > 0)
+        } else {
+            None
+        };
 
         conn.with_transaction(|tx| -> Result<(), rsfbclient::FbError> {
             MantenimientoRepository::actualizar(tx, id, &datos)
@@ -172,7 +187,8 @@ impl MantenimientoService {
     /// original de Grupo B se reemplazó por UPDATE ... SET deleted_at.)
     pub fn eliminar(conn: &mut PooledConnection, id: i64, usuario: &str) -> Result<(), AppError> {
         let actual = Self::obtener(conn, id)?;
-        let es_cambio_aceite = actual.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
+        let es_cambio_aceite =
+            actual.tipo.trim().to_uppercase() == TIPO_CAMBIO_ACEITE.to_uppercase();
         let placa = actual.placa.clone();
         let tipo = actual.tipo.clone();
 
@@ -241,7 +257,10 @@ impl MantenimientoService {
     /// Alertas por kilometraje: cambios de aceite y frenos próximos o vencidos,
     /// según `autos.proximo_aceite` / `autos.proximo_frenos` contra el kilometraje
     /// actual, con el margen `business.km_alert_aceite` de config.ini.
-    pub fn alertas_km(conn: &mut PooledConnection, cfg: &Arc<AppConfig>) -> Result<Vec<AlertaKm>, AppError> {
+    pub fn alertas_km(
+        conn: &mut PooledConnection,
+        cfg: &Arc<AppConfig>,
+    ) -> Result<Vec<AlertaKm>, AppError> {
         let autos = AutoRepository::obtener_todos(conn)?;
         let margen = cfg.km_alert_aceite.max(0);
         let mut alertas = Vec::new();
@@ -284,13 +303,25 @@ fn normalizar(d: &mut MantenimientoDatos) {
     d.placa = mayusculas(&d.placa);
     d.tipo = mayusculas(&d.tipo);
     d.fecha = d.fecha.trim().to_string(); // fecha se mantiene con formato
-    d.descripcion = d.descripcion.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.descripcion = d
+        .descripcion
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.observaciones = d
+        .observaciones
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
     d.costo = d.costo.trim().replace(',', ".");
 }
 
 /// Valida los datos del mantenimiento
-fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
+fn validar(
+    conn: &mut PooledConnection,
+    d: &MantenimientoDatos,
+    cfg: &Arc<AppConfig>,
+) -> Result<(), AppError> {
     // Placa (debe existir en autos)
     if d.placa.is_empty() || d.placa.len() > 20 {
         return Err(AppError::Validation(
@@ -310,7 +341,9 @@ fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppCon
         cfg.tipos_mantenimiento.iter().map(|s| s.as_str()).collect()
     };
     if d.tipo.is_empty() {
-        return Err(AppError::Validation("El tipo de mantenimiento es obligatorio.".into()));
+        return Err(AppError::Validation(
+            "El tipo de mantenimiento es obligatorio.".into(),
+        ));
     }
     let tipo_upper = d.tipo.trim().to_uppercase();
     let tipos_upper: Vec<String> = tipos.iter().map(|t| t.to_uppercase()).collect();
@@ -330,10 +363,14 @@ fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppCon
     // Costo
     let costo = Decimal::from_str(&d.costo).unwrap_or_else(|_| Decimal::from(-1));
     if costo < Decimal::ZERO {
-        return Err(AppError::Validation("El costo no es un número válido.".into()));
+        return Err(AppError::Validation(
+            "El costo no es un número válido.".into(),
+        ));
     }
     if costo == Decimal::ZERO {
-        return Err(AppError::Validation("El costo debe ser mayor que cero.".into()));
+        return Err(AppError::Validation(
+            "El costo debe ser mayor que cero.".into(),
+        ));
     }
     if costo > Decimal::from(9_999_999_999i64) / Decimal::from(100) {
         return Err(AppError::Validation(
@@ -365,4 +402,3 @@ fn validar(conn: &mut PooledConnection, d: &MantenimientoDatos, cfg: &Arc<AppCon
     }
     Ok(())
 }
-

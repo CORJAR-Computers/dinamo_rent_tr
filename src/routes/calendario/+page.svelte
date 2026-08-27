@@ -1,11 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		rentaApi,
-		reservaApi,
-		type Renta,
-		type Reserva
-	} from '$lib/api';
+	import { rentaApi, reservaApi, type Renta, type Reserva } from '$lib/api';
 	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { guardSesion } from '$lib/utils/guards';
@@ -52,9 +47,7 @@
 	const solapamientos = $derived(detectarSolapamientos(itemsConPlaca));
 
 	// Un id de renta o reserva está en conflicto
-	const idsEnConflicto = $derived(
-		new Set(solapamientos.flatMap((s) => [s.a, s.b]))
-	);
+	const idsEnConflicto = $derived(new Set(solapamientos.flatMap((s) => [s.a, s.b])));
 
 	// Rango visible actual (mes ± 6 meses). Se usa para acotar la consulta en backend
 	function limiteInferiorIso(): string {
@@ -114,18 +107,18 @@
 		mesActual = new Date();
 	}
 
-	const semanas = $derived(
-		celdasDelMes(mesActual.getFullYear(), mesActual.getMonth())
-	);
+	const semanas = $derived(celdasDelMes(mesActual.getFullYear(), mesActual.getMonth()));
 
-	const tituloMes = $derived(
-		nombreMes(mesActual.getFullYear(), mesActual.getMonth())
-	);
+	const tituloMes = $derived(nombreMes(mesActual.getFullYear(), mesActual.getMonth()));
 
 	// Items de un día: rentas (activas y cerradas en rango) + reservas (no canceladas)
 	function itemsDelDia(dia: string): { rentas: Renta[]; reservas: Reserva[] } {
-		const r = rentas.filter((x) => rangoCubreDia(x.fechaRecogida, x.fechaRetorno, dia) && x.estado !== 'Cancelada');
-		const rs = reservas.filter((x) => rangoCubreDia(x.fechaRecogida, x.fechaRetorno, dia) && x.estado !== 'Cancelada');
+		const r = rentas.filter(
+			(x) => rangoCubreDia(x.fechaRecogida, x.fechaRetorno, dia) && x.estado !== 'Cancelada'
+		);
+		const rs = reservas.filter(
+			(x) => rangoCubreDia(x.fechaRecogida, x.fechaRetorno, dia) && x.estado !== 'Cancelada'
+		);
 		return { rentas: r, reservas: rs };
 	}
 
@@ -193,18 +186,46 @@
 		<div>
 			<h2 class="text-2xl font-bold text-text-primary">Calendario de Rentas</h2>
 			<p class="text-sm text-text-secondary mt-0.5">
-				Ocupación mensual por vehículo · {solapamientos.length} conflicto{solapamientos.length === 1 ? '' : 's'} de fechas detectado{solapamientos.length === 1 ? '' : 's'}
+				Ocupación mensual por vehículo · {solapamientos.length} conflicto{solapamientos.length === 1
+					? ''
+					: 's'} de fechas detectado{solapamientos.length === 1 ? '' : 's'}
 			</p>
 		</div>
 		<div class="flex items-center gap-2">
 			<button class="btn-ghost" onclick={mesAnterior} aria-label="Mes anterior">
-				<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="w-4 h-4"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					><path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M15.75 19.5L8.25 12l7.5-7.5"
+					/></svg
+				>
 			</button>
 			<button class="btn-ghost" onclick={irAHoy}>Hoy</button>
 			<button class="btn-ghost" onclick={mesSiguiente} aria-label="Mes siguiente">
-				<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="w-4 h-4"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					><path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M8.25 4.5l7.5 7.5-7.5 7.5"
+					/></svg
+				>
 			</button>
-			<span class="text-lg font-black text-text-primary capitalize min-w-[160px] text-center">{tituloMes}</span>
+			<span class="text-lg font-black text-text-primary capitalize min-w-[160px] text-center"
+				>{tituloMes}</span
+			>
 		</div>
 	</div>
 
@@ -224,7 +245,18 @@
 	{#if loading}
 		<div class="card flex items-center justify-center py-16">
 			<div class="flex flex-col items-center gap-3">
-				<svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-8 w-8 text-primary"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				<p class="text-sm text-text-secondary">Cargando calendario...</p>
 			</div>
 		</div>
@@ -233,7 +265,12 @@
 		<div class="card overflow-hidden">
 			<div class="grid grid-cols-7 border-b border-border">
 				{#each diasSemanaCorto() as d, i}
-					<div class="px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wider text-text-secondary {i >= 5 ? 'text-alerta/80' : ''}">
+					<div
+						class="px-2 py-2 text-center text-[11px] font-bold uppercase tracking-wider text-text-secondary {i >=
+						5
+							? 'text-alerta/80'
+							: ''}"
+					>
 						{d}
 					</div>
 				{/each}
@@ -252,11 +289,19 @@
 							aria-label={`Día ${celda.dia}${nDia > 0 ? `, ${nDia} evento${nDia === 1 ? '' : 's'}` : ''}`}
 						>
 							<div class="flex items-center justify-between">
-								<span class="text-xs font-semibold tabular-nums {celda.enMes ? (celda.hoy ? 'text-primary' : 'text-text-primary') : 'text-text-secondary/50'}">
+								<span
+									class="text-xs font-semibold tabular-nums {celda.enMes
+										? celda.hoy
+											? 'text-primary'
+											: 'text-text-primary'
+										: 'text-text-secondary/50'}"
+								>
 									{Number(celda.dia.slice(8, 10))}
 								</span>
 								{#if nDia > 0}
-									<span class="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold tabular-nums px-1.5 py-0.5">
+									<span
+										class="inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold tabular-nums px-1.5 py-0.5"
+									>
 										{nDia}
 									</span>
 								{/if}
@@ -265,17 +310,31 @@
 								{@const { rentas: r, reservas: rs } = itemsDelDia(celda.dia)}
 								<div class="mt-1 space-y-1">
 									{#each r.slice(0, 3) as x}
-										<span class="block truncate rounded border px-1 py-0.5 text-[10px] font-semibold leading-tight {chipClases('renta', idsEnConflicto.has(x.id))}" title={`Renta #${x.id} · ${x.nombreCliente}`}>
+										<span
+											class="block truncate rounded border px-1 py-0.5 text-[10px] font-semibold leading-tight {chipClases(
+												'renta',
+												idsEnConflicto.has(x.id)
+											)}"
+											title={`Renta #${x.id} · ${x.nombreCliente}`}
+										>
 											R{x.id} · {x.nombreCliente.split(' ')[0]}
 										</span>
 									{/each}
 									{#each rs.slice(0, 3) as x}
-										<span class="block truncate rounded border px-1 py-0.5 text-[10px] font-semibold leading-tight {chipClases('reserva', idsEnConflicto.has(x.id))}" title={`Reserva #${x.id} · ${x.nombreCliente}`}>
+										<span
+											class="block truncate rounded border px-1 py-0.5 text-[10px] font-semibold leading-tight {chipClases(
+												'reserva',
+												idsEnConflicto.has(x.id)
+											)}"
+											title={`Reserva #${x.id} · ${x.nombreCliente}`}
+										>
 											Rv{x.id} · {x.nombreCliente.split(' ')[0]}
 										</span>
 									{/each}
 									{#if r.length + rs.length > 3}
-										<span class="block text-[10px] text-text-secondary font-medium">+{r.length + rs.length - 3} más</span>
+										<span class="block text-[10px] text-text-secondary font-medium"
+											>+{r.length + rs.length - 3} más</span
+										>
 									{/if}
 								</div>
 							{/if}
@@ -290,7 +349,9 @@
 <!-- Panel de detalle del día -->
 <Modal
 	open={detalleDia !== null}
-	title={detalleDia ? `Ocupación del ${new Date(detalleDia.dia + 'T00:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}` : ''}
+	title={detalleDia
+		? `Ocupación del ${new Date(detalleDia.dia + 'T00:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}`
+		: ''}
 	subtitle="Rentas y reservas que cubren este día. En rojo: vehículos con fechas solapadas."
 	onClose={() => (diaSeleccionado = null)}
 	width="max-w-2xl"
@@ -298,32 +359,61 @@
 	{#snippet children()}
 		{#if detalleDia}
 			{#if detalleDia.items.length === 0}
-				<p class="text-sm text-text-secondary py-6 text-center">Sin rentas ni reservas este día. <Icon name="sparkles" class="w-4 h-4 inline-block align-[-2px] text-primary" /></p>
+				<p class="text-sm text-text-secondary py-6 text-center">
+					Sin rentas ni reservas este día. <Icon
+						name="sparkles"
+						class="w-4 h-4 inline-block align-[-2px] text-primary"
+					/>
+				</p>
 			{:else}
 				<div class="space-y-2">
 					{#each detalleDia.items as it}
-						<div class="rounded-xl border p-3.5 flex items-start justify-between gap-3 transition-colors
-							{it.conflicto ? 'border-peligro/40 bg-peligro/5' : 'border-border bg-alt-row/40'}">
+						<div
+							class="rounded-xl border p-3.5 flex items-start justify-between gap-3 transition-colors
+							{it.conflicto ? 'border-peligro/40 bg-peligro/5' : 'border-border bg-alt-row/40'}"
+						>
 							<div class="min-w-0">
 								<p class="font-semibold text-text-primary flex items-center gap-2">
-									<span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {it.tipo === 'renta' ? 'bg-primary/10 text-primary' : 'bg-alerta/10 text-alerta'}">
+									<span
+										class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide {it.tipo ===
+										'renta'
+											? 'bg-primary/10 text-primary'
+											: 'bg-alerta/10 text-alerta'}"
+									>
 										{it.tipo === 'renta' ? `Renta #${it.id}` : `Reserva #${it.id}`}
 									</span>
 									<span class="truncate">{it.nombre}</span>
 								</p>
 								<p class="text-xs text-text-secondary mt-1 truncate">
-									<span class="font-mono">{it.placa}</span> · {it.vehiculo} · {fmtFecha(it.fechaRecogida)} → {fmtFecha(it.fechaRetorno)}
+									<span class="font-mono">{it.placa}</span> · {it.vehiculo} · {fmtFecha(
+										it.fechaRecogida
+									)} → {fmtFecha(it.fechaRetorno)}
 								</p>
 								{#if it.conflicto}
-									<p class="text-xs font-semibold text-peligro mt-1"><Icon name="alert" class="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Vehículo con fechas solapadas con otra renta/reserva</p>
+									<p class="text-xs font-semibold text-peligro mt-1">
+										<Icon name="alert" class="w-3.5 h-3.5 inline-block align-[-2px] mr-1" />Vehículo
+										con fechas solapadas con otra renta/reserva
+									</p>
 								{/if}
 							</div>
 							<div class="text-right shrink-0">
-								<p class="font-bold text-text-primary tabular-nums">{Number(it.total) > 0 ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(it.total)) : '—'}</p>
-								<span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold mt-1
-									{it.estado === 'Cancelada' ? 'border-peligro/30 text-peligro' :
-									it.estado === 'Cerrada' ? 'border-exito/30 text-exito' :
-									'border-primary/30 text-primary'}">
+								<p class="font-bold text-text-primary tabular-nums">
+									{Number(it.total) > 0
+										? new Intl.NumberFormat('es-CO', {
+												style: 'currency',
+												currency: 'COP',
+												maximumFractionDigits: 0
+											}).format(Number(it.total))
+										: '—'}
+								</p>
+								<span
+									class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold mt-1
+									{it.estado === 'Cancelada'
+										? 'border-peligro/30 text-peligro'
+										: it.estado === 'Cerrada'
+											? 'border-exito/30 text-exito'
+											: 'border-primary/30 text-primary'}"
+								>
 									{it.estado}
 								</span>
 							</div>

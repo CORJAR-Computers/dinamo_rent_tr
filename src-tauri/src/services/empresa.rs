@@ -86,11 +86,15 @@ impl EmpresaService {
     ) -> Result<EmpresaConfig, AppError> {
         // ── Validación básica (sin XSS: el frontend imprime como texto) ──
         let limpiar = |s: &Option<String>, max: usize| -> Option<String> {
-            s.as_ref().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+            s.as_ref()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
                 .map(|v| v.chars().take(max).collect())
         };
         let limpiar_upper = |s: &Option<String>, max: usize| -> Option<String> {
-            s.as_ref().map(|v| mayusculas(v)).filter(|v| !v.is_empty())
+            s.as_ref()
+                .map(|v| mayusculas(v))
+                .filter(|v| !v.is_empty())
                 .map(|v| v.chars().take(max).collect())
         };
         let nombre = limpiar_upper(&datos.nombre, 120);
@@ -108,14 +112,15 @@ impl EmpresaService {
             if !dir.exists() {
                 return Ok(());
             }
-            for ent in std::fs::read_dir(&dir).map_err(|e| {
-                AppError::Generic(format!("No se pudo leer la carpeta de logos: {e}"))
-            })? {
-                if let Ok(ent) = ent {
-                    let nombre_archivo = ent.file_name().to_string_lossy().to_string();
-                    if nombre_archivo.starts_with("empresa.") {
-                        let _ = std::fs::remove_file(ent.path());
-                    }
+            for ent in std::fs::read_dir(&dir)
+                .map_err(|e| {
+                    AppError::Generic(format!("No se pudo leer la carpeta de logos: {e}"))
+                })?
+                .flatten()
+            {
+                let nombre_archivo = ent.file_name().to_string_lossy().to_string();
+                if nombre_archivo.starts_with("empresa.") {
+                    let _ = std::fs::remove_file(ent.path());
                 }
             }
             Ok(())
@@ -129,8 +134,9 @@ impl EmpresaService {
             }
             Some(data_url) => {
                 let (mime, b64) = parse_data_url(data_url)?;
-                let ext = crate::repositories::empresa::logo_ext(&mime)
-                    .ok_or_else(|| AppError::Generic(format!("Formato de logo no soportado: {mime}")))?;
+                let ext = crate::repositories::empresa::logo_ext(&mime).ok_or_else(|| {
+                    AppError::Generic(format!("Formato de logo no soportado: {mime}"))
+                })?;
                 let bytes = base64::engine::general_purpose::STANDARD
                     .decode(b64)
                     .map_err(|_| AppError::Generic("Logo inválido: base64 corrupto".into()))?;
@@ -204,11 +210,7 @@ fn parse_data_url(data_url: &str) -> Result<(String, &str), AppError> {
     let (meta, b64) = resto
         .split_once(',')
         .ok_or_else(|| AppError::Generic("Logo inválido: falta base64".into()))?;
-    let mime = meta
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
+    let mime = meta.split(';').next().unwrap_or("").to_ascii_lowercase();
     if mime.is_empty() {
         return Err(AppError::Generic("Logo inválido: falta MIME".into()));
     }

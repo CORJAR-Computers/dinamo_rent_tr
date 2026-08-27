@@ -22,7 +22,10 @@ fn main() {
 
 #[cfg(all(windows, target_env = "msvc"))]
 fn embed_test_manifest() {
-    let manifest = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests-common-controls.manifest");
+    let manifest = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        r"\tests-common-controls.manifest"
+    );
     println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED");
     println!("cargo:rustc-link-arg-tests=/MANIFESTINPUT:{}", manifest);
 }

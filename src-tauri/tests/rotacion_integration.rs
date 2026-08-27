@@ -78,12 +78,9 @@ fn total_clientes(conn: &mut PooledConnection) -> i64 {
 
 /// PII cruda (cifrada) de un cliente: celular y email.
 fn leer_pii(conn: &mut PooledConnection, id: i64) -> (Option<String>, Option<String>) {
-    conn.query_first(
-        "SELECT celular, email FROM clientes WHERE id = ?",
-        (id,),
-    )
-    .expect("leer PII cruda")
-    .unwrap_or((None, None))
+    conn.query_first("SELECT celular, email FROM clientes WHERE id = ?", (id,))
+        .expect("leer PII cruda")
+        .unwrap_or((None, None))
 }
 
 /// Último evento PII_KEY_ROTATED: (usuario, accion, mensaje, ip).
@@ -117,7 +114,10 @@ fn rotacion_registra_pii_key_rotated_sin_exponer_la_clave() {
     let (path, _limpieza) = copia_bd_dev();
     let cfg = config_con_db(&path);
     let old_key = cfg.db_encryption_key.clone();
-    assert!(!old_key.trim().is_empty(), "la BD dev tiene clave PII configurada");
+    assert!(
+        !old_key.trim().is_empty(),
+        "la BD dev tiene clave PII configurada"
+    );
     let pool = create_pool(&cfg).expect("pool copia dev");
     let mut conn = pool.get().expect("conn");
 
@@ -225,16 +225,17 @@ fn rotacion_aborta_sin_escribir_si_la_clave_vieja_no_descifra() {
     );
     // …y los PII siguen descifrando con la clave real.
     let rows: Vec<(Option<String>,)> = conn
-        .query(
-            "SELECT celular FROM clientes WHERE celular IS NOT NULL",
-            (),
-        )
+        .query("SELECT celular FROM clientes WHERE celular IS NOT NULL", ())
         .expect("leer celulares");
     assert!(!rows.is_empty(), "la copia tiene clientes con celular");
     let cipher = PiiCipher::new(&old_key);
     let descifrados = rows
         .iter()
-        .filter(|(c,)| c.as_deref().map(|v| cipher.decrypt(v).is_ok()).unwrap_or(false))
+        .filter(|(c,)| {
+            c.as_deref()
+                .map(|v| cipher.decrypt(v).is_ok())
+                .unwrap_or(false)
+        })
         .count();
     assert!(
         descifrados == rows.len(),

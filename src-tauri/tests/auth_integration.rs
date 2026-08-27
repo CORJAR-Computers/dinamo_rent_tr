@@ -32,7 +32,11 @@ fn dev_state() -> AppState {
 fn login_ok_admin() {
     let state = dev_state();
     let result = AuthService::login(&state, "admin", "Admin123!", Some("127.0.0.1"));
-    assert!(result.is_ok(), "login debería funcionar: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "login debería funcionar: {:?}",
+        result.err()
+    );
     let login = result.unwrap();
     assert!(login.success);
     assert_eq!(login.username, "admin");
@@ -81,7 +85,10 @@ fn account_locks_after_5_failures() {
     }
     // El 6º intento con credenciales correctas debe estar bloqueado
     let result = AuthService::login(&state, "admin", "Admin123!", Some("10.0.0.1"));
-    assert!(result.is_err(), "la cuenta debe estar bloqueada tras 5 intentos");
+    assert!(
+        result.is_err(),
+        "la cuenta debe estar bloqueada tras 5 intentos"
+    );
     // Desbloquear para no dejar la BD de desarrollo bloqueada
     let _ = AuthService::unlock_account(&state, "admin");
 }

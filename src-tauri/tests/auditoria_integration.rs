@@ -39,7 +39,9 @@ fn insertar_evento(state: &AppState, usuario: &str, accion: &str, mensaje: &str)
     let mut conn = state.pool.get().expect("conn");
     log_audit(&mut conn, usuario, accion, mensaje, "127.0.0.1").expect("log_audit");
     // id del evento recién insertado (último)
-    let row: Option<(i64,)> = conn.query_first("SELECT MAX(id) FROM auditoria", ()).expect("max id");
+    let row: Option<(i64,)> = conn
+        .query_first("SELECT MAX(id) FROM auditoria", ())
+        .expect("max id");
     row.map(|(id,)| id).unwrap_or(0)
 }
 
@@ -61,7 +63,12 @@ fn auditoria_listar_y_filtrar() {
 
     // Insertar eventos temporales con marca clara
     let id1 = insertar_evento(&state, "testaudit", "LOGIN OK", "usuario=testaudit");
-    let id2 = insertar_evento(&state, "testaudit", "LOGIN FALLIDO", "usuario=testaudit, intentos=1");
+    let id2 = insertar_evento(
+        &state,
+        "testaudit",
+        "LOGIN FALLIDO",
+        "usuario=testaudit, intentos=1",
+    );
     let id3 = insertar_evento(&state, "otrouser", "USUARIO CREADO", "username=prueba");
 
     // Sin filtros → los incluye (paginación grande)
@@ -69,7 +76,9 @@ fn auditoria_listar_y_filtrar() {
         .expect("listar");
     assert!(r.total >= 3);
     assert!(
-        r.eventos.iter().any(|e| e.id == id1 || e.id == id2 || e.id == id3),
+        r.eventos
+            .iter()
+            .any(|e| e.id == id1 || e.id == id2 || e.id == id3),
         "los eventos temporales aparecen en la lista"
     );
 
@@ -135,7 +144,8 @@ fn auditoria_filtro_fechas_invalidas() {
         fecha_desde: Some("no-es-fecha".into()),
         ..Default::default()
     };
-    let err = AuditoriaService::listar(&mut conn, f, Some(1), Some(50)).expect_err("fecha inválida");
+    let err =
+        AuditoriaService::listar(&mut conn, f, Some(1), Some(50)).expect_err("fecha inválida");
     assert_eq!(err.kind(), "validation");
 
     // Desde > Hasta → validation
@@ -144,7 +154,8 @@ fn auditoria_filtro_fechas_invalidas() {
         fecha_hasta: Some("2026-01-01".into()),
         ..Default::default()
     };
-    let err = AuditoriaService::listar(&mut conn, f, Some(1), Some(50)).expect_err("rango invertido");
+    let err =
+        AuditoriaService::listar(&mut conn, f, Some(1), Some(50)).expect_err("rango invertido");
     assert_eq!(err.kind(), "validation");
 
     // Rango válido no falla (aunque devuelva 0 del pasado remoto)

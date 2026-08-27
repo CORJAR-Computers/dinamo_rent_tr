@@ -67,9 +67,8 @@ impl AuditoriaRepository {
         let (where_sql, params) = build_where(filtros);
 
         // ParamsType no es Clone: se reconstruye para cada consulta.
-        let to_params = |v: &[String]| {
-            ParamsType::Positional(v.iter().map(|p| p.into_param()).collect())
-        };
+        let to_params =
+            |v: &[String]| ParamsType::Positional(v.iter().map(|p| p.into_param()).collect());
 
         // COUNT con los parámetros como ParamsType
         let count_sql = format!("SELECT COUNT(*) FROM auditoria{where_sql}");
@@ -103,10 +102,8 @@ impl AuditoriaRepository {
 
     /// Acciones distintas existentes en el log (para el filtro del frontend)
     pub fn acciones(conn: &mut PooledConnection) -> Result<Vec<String>, AppError> {
-        let rows: Vec<(String,)> = conn.query(
-            "SELECT DISTINCT accion FROM auditoria ORDER BY accion",
-            (),
-        )?;
+        let rows: Vec<(String,)> =
+            conn.query("SELECT DISTINCT accion FROM auditoria ORDER BY accion", ())?;
         Ok(rows.into_iter().map(|(a,)| a).collect())
     }
 
@@ -127,23 +124,48 @@ fn build_where(filtros: &AuditoriaFiltros) -> (String, Vec<String>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<String> = Vec::new();
 
-    if let Some(u) = filtros.usuario.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(u) = filtros
+        .usuario
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         clauses.push("usuario = ?".into());
         params.push(u.to_string());
     }
-    if let Some(a) = filtros.accion.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(a) = filtros
+        .accion
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         clauses.push("accion = ?".into());
         params.push(a.to_string());
     }
-    if let Some(d) = filtros.fecha_desde.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(d) = filtros
+        .fecha_desde
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         clauses.push("CAST(fecha AS DATE) >= CAST(? AS DATE)".into());
         params.push(d.to_string());
     }
-    if let Some(h) = filtros.fecha_hasta.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(h) = filtros
+        .fecha_hasta
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         clauses.push("CAST(fecha AS DATE) <= CAST(? AS DATE)".into());
         params.push(h.to_string());
     }
-    if let Some(b) = filtros.busqueda.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(b) = filtros
+        .busqueda
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         let like = format!("%{b}%");
         clauses.push(
             "UPPER(COALESCE(usuario, '')) LIKE UPPER(?) \
@@ -158,5 +180,94 @@ fn build_where(filtros: &AuditoriaFiltros) -> (String, Vec<String>) {
         (String::new(), params)
     } else {
         (format!(" WHERE {}", clauses.join(" AND ")), params)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_where_filtros_vacios_produce_where_vacio() {
+        let filtros = AuditoriaFiltros::default();
+        let (sql, params) = build_where(&filtros);
+        assert_eq!(sql, "");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn build_where_ignora_cadenas_con_solo_espacios() {
+        let filtros = AuditoriaFiltros {
+            usuario: Some("   ".into()),
+            accion: Some("".into()),
+            fecha_desde: Some("  ".into()),
+            fecha_hasta: None,
+            busqueda: Some(" ".into()),
+        };
+        let (sql, params) = build_where(&filtros);
+        assert_eq!(sql, "");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn build_where_filtra_por_usuario_y_accion() {
+        let filtros = AuditoriaFiltros {
+            usuario: Some("admin".into()),
+            accion: Some("LOGIN".into()),
+            ..Default::default()
+        };
+        let (sql, params) = build_where(&filtros);
+        assert_eq!(sql, " WHERE usuario = ? AND accion = ?");
+        assert_eq!(params, vec!["admin", "LOGIN"]);
+    }
+
+    #[test]
+    fn build_where_filtra_por_rango_fechas() {
+        let filtros = AuditoriaFiltros {
+            fecha_desde: Some("2026-01-01".into()),
+            fecha_hasta: Some("2026-01-31".into()),
+            ..Default::default()
+        };
+        let (sql, params) = build_where(&filtros);
+        assert_eq!(
+            sql,
+            " WHERE CAST(fecha AS DATE) >= CAST(? AS DATE) AND CAST(fecha AS DATE) <= CAST(? AS DATE)"
+        );
+        assert_eq!(params, vec!["2026-01-01", "2026-01-31"]);
+    }
+
+    #[test]
+    fn build_where_busqueda_agrega_tres_parametros_like() {
+        let filtros = AuditoriaFiltros {
+            busqueda: Some("renta #123".into()),
+            ..Default::default()
+        };
+        let (sql, params) = build_where(&filtros);
+        assert!(sql.contains("UPPER(COALESCE(usuario, '')) LIKE UPPER(?)"));
+        assert!(sql.contains("UPPER(accion) LIKE UPPER(?)"));
+        assert!(sql.contains("UPPER(COALESCE(mensaje, '')) LIKE UPPER(?)"));
+        assert_eq!(params, vec!["%renta #123%", "%renta #123%", "%renta #123%"]);
+    }
+
+    #[test]
+    fn build_where_combina_todos_los_filtros() {
+        let filtros = AuditoriaFiltros {
+            usuario: Some("operador".into()),
+            accion: Some("CREAR RENTA".into()),
+            fecha_desde: Some("2026-02-01".into()),
+            fecha_hasta: Some("2026-02-28".into()),
+            busqueda: Some("auto ABC123".into()),
+        };
+        let (sql, params) = build_where(&filtros);
+        assert!(sql.starts_with(" WHERE usuario = ? AND accion = ? AND CAST(fecha AS DATE) >= CAST(? AS DATE) AND CAST(fecha AS DATE) <= CAST(? AS DATE) AND "));
+        assert_eq!(params.len(), 7);
+        assert_eq!(
+            &params[0..4],
+            &["operador", "CREAR RENTA", "2026-02-01", "2026-02-28"]
+        );
+        assert_eq!(
+            &params[4..7],
+            &["%auto ABC123%", "%auto ABC123%", "%auto ABC123%"]
+        );
     }
 }

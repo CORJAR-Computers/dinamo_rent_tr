@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serial_test::serial;
-use tauri::Manager;
 use tauri::test::{mock_builder, mock_context, noop_assets};
+use tauri::Manager;
 
 use dinamo_rent_lib::commands::auth::{guardar_tema, obtener_tema};
 use dinamo_rent_lib::core::config::AppConfig;
@@ -102,37 +102,45 @@ fn tema_comandos_roundtrip_y_validacion() {
     let sid = crear_sesion(&state, id, &username);
 
     let app = app_mock(state);
-    let st = app.state::<AppState>();	// ── 1) Sin configurar → None ──
-	let tema = obtener_tema(st.clone(), sid.clone()).expect("obtener_tema inicial");
-	assert_eq!(tema, None, "un usuario nuevo no tiene tema");
+    let st = app.state::<AppState>(); // ── 1) Sin configurar → None ──
+    let tema = obtener_tema(st.clone(), sid.clone()).expect("obtener_tema inicial");
+    assert_eq!(tema, None, "un usuario nuevo no tiene tema");
 
-	// ── 2) Guardar y leer cada valor válido ──
-	for v in ["light", "dark", "auto"] {
-		guardar_tema(st.clone(), sid.clone(), v.into()).expect("guardar_tema válido");
-		let leido = obtener_tema(st.clone(), sid.clone()).expect("obtener_tema tras guardar");
-		assert_eq!(leido.as_deref(), Some(v), "roundtrip de {v}");
-	}
+    // ── 2) Guardar y leer cada valor válido ──
+    for v in ["light", "dark", "auto"] {
+        guardar_tema(st.clone(), sid.clone(), v.into()).expect("guardar_tema válido");
+        let leido = obtener_tema(st.clone(), sid.clone()).expect("obtener_tema tras guardar");
+        assert_eq!(leido.as_deref(), Some(v), "roundtrip de {v}");
+    }
 
-	// ── 3) Valores inválidos → error validation y NO modifican la BD ──
-	let antes = obtener_tema(st.clone(), sid.clone()).expect("tema actual");
-	for invalido in ["neon", "DARK", "auto ", " light", "", "auto-light", "oscuro"] {
-		let err = guardar_tema(st.clone(), sid.clone(), invalido.into())
-			.expect_err("tema inválido debe rechazarse");
-		assert_eq!(err.kind, "validation", "kind para {invalido:?}");
-		let despues = obtener_tema(st.clone(), sid.clone()).expect("tema tras rechazo");
-		assert_eq!(
-			despues, antes,
-			"un tema inválido no debe alterar el valor persistido ({invalido:?})"
-		);
-	}
+    // ── 3) Valores inválidos → error validation y NO modifican la BD ──
+    let antes = obtener_tema(st.clone(), sid.clone()).expect("tema actual");
+    for invalido in [
+        "neon",
+        "DARK",
+        "auto ",
+        " light",
+        "",
+        "auto-light",
+        "oscuro",
+    ] {
+        let err = guardar_tema(st.clone(), sid.clone(), invalido.into())
+            .expect_err("tema inválido debe rechazarse");
+        assert_eq!(err.kind, "validation", "kind para {invalido:?}");
+        let despues = obtener_tema(st.clone(), sid.clone()).expect("tema tras rechazo");
+        assert_eq!(
+            despues, antes,
+            "un tema inválido no debe alterar el valor persistido ({invalido:?})"
+        );
+    }
 
-	// ── 4) Sesión inexistente → session_expired en ambos comandos ──
-	let err = obtener_tema(st.clone(), "token-inexistente".into())
-		.expect_err("obtener_tema sin sesión");
-	assert_eq!(err.kind, "session_expired");
-	let err = guardar_tema(st.clone(), "token-inexistente".into(), "light".into())
-		.expect_err("guardar_tema sin sesión");
-	assert_eq!(err.kind, "session_expired");
+    // ── 4) Sesión inexistente → session_expired en ambos comandos ──
+    let err =
+        obtener_tema(st.clone(), "token-inexistente".into()).expect_err("obtener_tema sin sesión");
+    assert_eq!(err.kind, "session_expired");
+    let err = guardar_tema(st.clone(), "token-inexistente".into(), "light".into())
+        .expect_err("guardar_tema sin sesión");
+    assert_eq!(err.kind, "session_expired");
 }
 
 #[test]
@@ -161,15 +169,15 @@ fn tema_comandos_aislan_por_usuario() {
     let sid2 = crear_sesion(&state, id2, &u2);
 
     let app = app_mock(state);
-    let st = app.state::<AppState>();	// u1 guarda 'dark'; u2 no ve su preferencia
-	guardar_tema(st.clone(), sid1.clone(), "dark".into()).expect("u1 guarda dark");
-	let t1 = obtener_tema(st.clone(), sid1.clone()).expect("tema u1");
-	let t2 = obtener_tema(st.clone(), sid2.clone()).expect("tema u2");
-	assert_eq!(t1.as_deref(), Some("dark"));
-	assert_eq!(t2, None, "la preferencia de u1 no debe filtrarse a u2");
+    let st = app.state::<AppState>(); // u1 guarda 'dark'; u2 no ve su preferencia
+    guardar_tema(st.clone(), sid1.clone(), "dark".into()).expect("u1 guarda dark");
+    let t1 = obtener_tema(st.clone(), sid1.clone()).expect("tema u1");
+    let t2 = obtener_tema(st.clone(), sid2.clone()).expect("tema u2");
+    assert_eq!(t1.as_deref(), Some("dark"));
+    assert_eq!(t2, None, "la preferencia de u1 no debe filtrarse a u2");
 
-	// u2 guarda 'auto' → no altera la de u1
-	guardar_tema(st.clone(), sid2, "auto".into()).expect("u2 guarda auto");
-	let t1 = obtener_tema(st, sid1).expect("tema u1 de nuevo");
-	assert_eq!(t1.as_deref(), Some("dark"), "u1 sigue en dark");
+    // u2 guarda 'auto' → no altera la de u1
+    guardar_tema(st.clone(), sid2, "auto".into()).expect("u2 guarda auto");
+    let t1 = obtener_tema(st, sid1).expect("tema u1 de nuevo");
+    assert_eq!(t1.as_deref(), Some("dark"), "u1 sigue en dark");
 }

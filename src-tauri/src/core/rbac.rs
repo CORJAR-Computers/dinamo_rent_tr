@@ -155,7 +155,9 @@ mod tests {
         let mut s = store();
         let token = s.create(1, "juan", "Operador", "Juan", false);
         assert!(s.validate_role(&token, &["Administrador"]).is_err());
-        assert!(s.validate_role(&token, &["Administrador", "Operador"]).is_ok());
+        assert!(s
+            .validate_role(&token, &["Administrador", "Operador"])
+            .is_ok());
         assert!(s.validate_role(&token, &[]).is_ok());
     }
 

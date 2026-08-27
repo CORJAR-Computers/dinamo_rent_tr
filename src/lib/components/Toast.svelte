@@ -14,14 +14,12 @@
 		success: {
 			border: 'border-exito/30',
 			icon: 'bg-exito/15 text-exito',
-			iconPath:
-				'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+			iconPath: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
 		},
 		error: {
 			border: 'border-peligro/30',
 			icon: 'bg-peligro/15 text-peligro',
-			iconPath:
-				'M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+			iconPath: 'M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
 		},
 		warning: {
 			border: 'border-alerta/30',
@@ -38,15 +36,29 @@
 	};
 </script>
 
-<div class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 w-[380px] max-w-[calc(100vw-2rem)]" aria-live="polite">
+<div
+	class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 w-[380px] max-w-[calc(100vw-2rem)]"
+	aria-live="polite"
+>
 	{#each toasts as t (t.id)}
 		<div
 			in:fly={reduced ? { y: 0, duration: 0 } : { y: 16, duration: 200 }}
-			class="pointer-events-auto flex items-start gap-3 rounded-xl border bg-surface shadow-lg px-4 py-3 {styles[t.type].border}"
+			class="pointer-events-auto flex items-start gap-3 rounded-xl border bg-surface shadow-lg px-4 py-3 {styles[
+				t.type
+			].border}"
 			role="status"
 		>
-			<span class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {styles[t.type].icon}">
-				<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+			<span
+				class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {styles[t.type].icon}"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="w-4 h-4"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+				>
 					<path stroke-linecap="round" stroke-linejoin="round" d={styles[t.type].iconPath} />
 				</svg>
 			</span>
@@ -56,7 +68,15 @@
 				class="text-text-secondary hover:text-text-primary transition-colors p-0.5 rounded"
 				aria-label="Cerrar notificación"
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="w-4 h-4"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg
+				>
 			</button>
 		</div>
 	{/each}

@@ -52,12 +52,13 @@ fn parse_args() -> Result<Args, String> {
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--endpoint" => {
-                endpoint =
-                    Some(it.next().ok_or("--endpoint requiere un URL como argumento")?);
+                endpoint = Some(
+                    it.next()
+                        .ok_or("--endpoint requiere un URL como argumento")?,
+                );
             }
             "--expect-version" => {
-                expect_version =
-                    Some(it.next().ok_or("--expect-version requiere un valor")?);
+                expect_version = Some(it.next().ok_or("--expect-version requiere un valor")?);
             }
             "--expect-none" => expect_none = true,
             "--expect-file" => {
@@ -161,8 +162,8 @@ fn main() -> Result<(), String> {
                 let bytes = tauri::async_runtime::block_on(u.download(|_, _| {}, || {}))
                     .map_err(|e| format!("download()/verificación de firma falló: {e}"))?;
 
-                let expected = std::fs::read(path)
-                    .map_err(|e| format!("no se pudo leer {path}: {e}"))?;
+                let expected =
+                    std::fs::read(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
                 if bytes.len() != expected.len() {
                     return Err(format!(
                         "[FAIL] tamaño del artifact distinto: descargado {} B vs servido {} B",

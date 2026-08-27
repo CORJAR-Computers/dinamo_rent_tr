@@ -3,7 +3,8 @@
 use crate::core::error::{AppError, ErrorPayload};
 use crate::repositories::extension::ExtensionRentaRepository;
 use crate::repositories::renta::{
-    ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos, RentaCierreEditDatos, RentaDatos,
+    ExtensionDatos, Inspeccion, InspeccionDatos, Pago, PagoDatos, Renta, RentaCierreDatos,
+    RentaCierreEditDatos, RentaDatos,
 };
 use crate::services::renta::{RentaCancelada, RentaService};
 use crate::services::AppState;
@@ -33,19 +34,17 @@ pub async fn listar_rentas(
 ) -> Cmd<Vec<Renta>> {
     require_session(&state, &session_id)?;
     let pool = state.pool.clone();
-    tauri::async_runtime::spawn_blocking(
-        move || -> Result<Vec<Renta>, AppError> {
-            let mut c = pool.get().map_err(AppError::from)?;
-            RentaService::listar(
-                &mut c,
-                busqueda.as_deref(),
-                estado.as_deref(),
-                placa.as_deref(),
-                fecha_desde.as_deref(),
-                fecha_hasta.as_deref(),
-            )
-        },
-    )
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<Renta>, AppError> {
+        let mut c = pool.get().map_err(AppError::from)?;
+        RentaService::listar(
+            &mut c,
+            busqueda.as_deref(),
+            estado.as_deref(),
+            placa.as_deref(),
+            fecha_desde.as_deref(),
+            fecha_hasta.as_deref(),
+        )
+    })
     .await
     .map_err(|e| AppError::Generic(format!("La tarea listar_rentas falló: {e}")).to_payload())?
     .map_err(|e| e.to_payload())
@@ -159,8 +158,7 @@ pub fn listar_extensiones(
 ) -> Cmd<Vec<crate::repositories::extension::ExtensionRenta>> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    ExtensionRentaRepository::listar_por_renta(&mut c, id_renta)
-        .map_err(|e| e.to_payload())
+    ExtensionRentaRepository::listar_por_renta(&mut c, id_renta).map_err(|e| e.to_payload())
 }
 
 /// Edita campos financieros de una renta cerrada (solo Administrador; ejecutado asíncronamente en spawn_blocking).
@@ -180,7 +178,9 @@ pub async fn editar_renta_cerrada(
         RentaService::editar_cerrada(&mut c, &config, id, &username, datos)
     })
     .await
-    .map_err(|e| AppError::Generic(format!("La tarea editar_renta_cerrada falló: {e}")).to_payload())?
+    .map_err(|e| {
+        AppError::Generic(format!("La tarea editar_renta_cerrada falló: {e}")).to_payload()
+    })?
     .map_err(|e| e.to_payload())
 }
 
@@ -202,7 +202,8 @@ pub fn registrar_pago_renta(
 ) -> Cmd<Pago> {
     let sesion = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    RentaService::registrar_pago(&mut c, id_renta, &sesion.username, datos).map_err(|e| e.to_payload())
+    RentaService::registrar_pago(&mut c, id_renta, &sesion.username, datos)
+        .map_err(|e| e.to_payload())
 }
 
 /// Registra una inspección (Salida/Entrada) de una renta

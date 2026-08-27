@@ -34,7 +34,14 @@ export function initErrorHandler(getSessionId: () => string | null) {
 
 		// Fire and forget — no bloqueamos la UI
 		logApi
-			.registrarError(sessionId, `[window.onerror] ${msg}`, stack, fuente || undefined, linea, columna)
+			.registrarError(
+				sessionId,
+				`[window.onerror] ${msg}`,
+				stack,
+				fuente || undefined,
+				linea,
+				columna
+			)
 			.catch(() => {});
 	};
 
@@ -62,8 +69,6 @@ export function initErrorHandler(getSessionId: () => string | null) {
 			stack = undefined;
 		}
 
-		logApi
-			.registrarError(sessionId, `[unhandledrejection] ${msg}`, stack)
-			.catch(() => {});
+		logApi.registrarError(sessionId, `[unhandledrejection] ${msg}`, stack).catch(() => {});
 	};
 }

@@ -273,21 +273,24 @@ impl AppConfig {
                 "max_login_attempts_in_window",
                 10,
             ),
-            db_encryption_key: get_str(&map, "security", "db_encryption_key", ""),
+            db_encryption_key: std::env::var("DINAMO_DB_ENCRYPTION_KEY")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| get_str(&map, "security", "db_encryption_key", "")),
             simit_enabled: get_bool(&map, "simit", "enabled", true),
             simit_interval_hours: get_u64(&map, "simit", "interval_hours", 2),
             simit_polite_delay_ms: get_u64(&map, "simit", "polite_delay_ms", 2500),
-            simit_report_dir: PathBuf::from(get_str(
-                &map,
-                "simit",
-                "report_dir",
-                "informes_simit",
-            )),
+            simit_report_dir: PathBuf::from(get_str(&map, "simit", "report_dir", "informes_simit")),
             simit_max_retries: get_u32(&map, "simit", "max_retries", 3),
             simit_retry_base_delay_ms: get_u64(&map, "simit", "retry_base_delay_ms", 1000),
             simit_timeout_seconds: get_u64(&map, "simit", "timeout_seconds", 30),
             simit_circuit_breaker_threshold: get_u32(&map, "simit", "circuit_breaker_threshold", 5),
-            simit_circuit_breaker_timeout_seconds: get_u64(&map, "simit", "circuit_breaker_timeout_seconds", 300),
+            simit_circuit_breaker_timeout_seconds: get_u64(
+                &map,
+                "simit",
+                "circuit_breaker_timeout_seconds",
+                300,
+            ),
             simit_start_delay_minutes: get_u64(&map, "simit", "start_delay_minutes", 10),
             roles_con_informes: get_set(&map, "business", "roles_con_informes"),
             roles_con_usuarios: get_set(&map, "business", "roles_con_usuarios"),
@@ -345,9 +348,8 @@ impl AppConfig {
         // Escritura atómica: temp + rename para no dejar el archivo truncado
         // si la app se cierra a mitad de la escritura.
         let tmp = path.with_extension("ini.tmp");
-        std::fs::write(&tmp, &content).map_err(|e| {
-            AppError::Generic(format!("No se pudo escribir config.ini: {e}"))
-        })?;
+        std::fs::write(&tmp, &content)
+            .map_err(|e| AppError::Generic(format!("No se pudo escribir config.ini: {e}")))?;
         std::fs::rename(&tmp, &path).map_err(|e| {
             let _ = std::fs::remove_file(&tmp);
             AppError::Generic(format!("No se pudo actualizar config.ini: {e}"))
@@ -377,20 +379,34 @@ impl AppConfig {
     }
 }
 
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self::load(&PathBuf::new(), &PathBuf::new(), &PathBuf::new())
+    }
+}
+
 /// Busca fbclient.dll: primero en resource_dir/firebird, luego en manifest_dir/resources/firebird
 fn find_fbclient(resource_dir: &Path, manifest_dir: &Path) -> PathBuf {
     for candidate in [
         resource_dir.join("firebird").join("fbclient.dll"),
         resource_dir.join("fbclient.dll"),
-        manifest_dir.join("resources").join("firebird").join("fbclient.dll"),
+        manifest_dir
+            .join("resources")
+            .join("firebird")
+            .join("fbclient.dll"),
     ] {
         if candidate.exists() {
             return candidate;
         }
     }
-    log::warn!("No se encontró fbclient.dll (se probaron: resources/firebird y manifest resources)");
+    log::warn!(
+        "No se encontró fbclient.dll (se probaron: resources/firebird y manifest resources)"
+    );
     // Fallback: devuelve la ruta más probable para dar un error claro al conectar
-    manifest_dir.join("resources").join("firebird").join("fbclient.dll")
+    manifest_dir
+        .join("resources")
+        .join("firebird")
+        .join("fbclient.dll")
 }
 
 /// Texto INI con todos los defaults (espejo de `_DEFAULTS`)
@@ -512,7 +528,12 @@ fn get_set(map: &IniMap, section: &str, key: &str) -> HashSet<String> {
 /// Los horarios inválidos se ignoran (con warn) y los duplicados se eliminan:
 /// un horario mal escrito no debe tumbar el scheduler ni la app.
 fn get_backup_minutes(map: &IniMap) -> Vec<u32> {
-    let raw = get_str(map, "backup", "schedule_times", "09:00, 13:00, 19:00, 23:00");
+    let raw = get_str(
+        map,
+        "backup",
+        "schedule_times",
+        "09:00, 13:00, 19:00, 23:00",
+    );
     let mut minutos: Vec<u32> = raw
         .split(',')
         .map(|s| s.trim())
@@ -549,7 +570,8 @@ mod tests {
 
     #[test]
     fn parse_basic_ini() {
-        let ini = parse_ini("[database]\nengine = firebird\npath = test.fdb\n\n[security]\nfoo=bar\n");
+        let ini =
+            parse_ini("[database]\nengine = firebird\npath = test.fdb\n\n[security]\nfoo=bar\n");
         assert_eq!(get_str(&ini, "database", "engine", ""), "firebird");
         assert_eq!(get_str(&ini, "database", "path", ""), "test.fdb");
         assert_eq!(get_str(&ini, "security", "foo", ""), "bar");
@@ -566,8 +588,14 @@ mod tests {
     fn defaults_roundtrip() {
         let text = build_default_ini_text();
         let ini = parse_ini(&text);
-        assert_eq!(get_str(&ini, "business", "roles_con_informes", ""), "Administrador");
-        assert_eq!(get_str(&ini, "business", "roles_con_eliminar", ""), "Administrador, Supervisor");
+        assert_eq!(
+            get_str(&ini, "business", "roles_con_informes", ""),
+            "Administrador"
+        );
+        assert_eq!(
+            get_str(&ini, "business", "roles_con_eliminar", ""),
+            "Administrador, Supervisor"
+        );
         assert_eq!(get_u64(&ini, "security", "session_timeout", 0), 3600);
         // Retraso inicial del Agente SIMIT (10 min): no debe competir con el arranque
         assert_eq!(get_u64(&ini, "simit", "start_delay_minutes", 0), 10);

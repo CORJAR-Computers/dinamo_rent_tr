@@ -29,6 +29,7 @@ pub struct ExtensionRentaRepository;
 
 impl ExtensionRentaRepository {
     /// Inserta una extensión en el historial
+    #[allow(clippy::too_many_arguments)]
     pub fn insertar(
         conn: &mut crate::core::PooledConnection,
         id_renta: i64,
@@ -58,11 +59,22 @@ impl ExtensionRentaRepository {
     }
 
     /// Lista extensiones de una renta (ordenadas por fecha ascendente)
+    #[allow(clippy::type_complexity)]
     pub fn listar_por_renta(
         conn: &mut crate::core::PooledConnection,
         id_renta: i64,
     ) -> Result<Vec<ExtensionRenta>, crate::core::error::AppError> {
-        let rows: Vec<(i64, i64, String, i64, String, String, Option<String>, Option<String>, Option<String>)> = conn
+        let rows: Vec<(
+            i64,
+            i64,
+            String,
+            i64,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = conn
             .query(
                 "SELECT id, id_renta, tipo, cantidad, \
                  CAST(valor_unitario AS VARCHAR(12)), CAST(valor_total AS VARCHAR(12)), \

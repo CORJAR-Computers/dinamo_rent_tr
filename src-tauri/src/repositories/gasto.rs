@@ -12,7 +12,7 @@
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
 use crate::core::error::AppError;
-use crate::core::repository::{map_fb_error_fk, opt_str, parse_fecha, params};
+use crate::core::repository::{map_fb_error_fk, opt_str, params, parse_fecha};
 use crate::core::PooledConnection;
 
 use serde::Serialize;
@@ -123,7 +123,10 @@ impl GastoRepository {
     }
 
     /// Filtra por placa exacta (totales y detalle de un vehículo)
-    pub fn obtener_por_placa(conn: &mut PooledConnection, placa: &str) -> Result<Vec<Gasto>, AppError> {
+    pub fn obtener_por_placa(
+        conn: &mut PooledConnection,
+        placa: &str,
+    ) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM gastos WHERE placa = ? AND deleted_at IS NULL \
@@ -135,7 +138,10 @@ impl GastoRepository {
     }
 
     /// Filtra por categoría exacta
-    pub fn obtener_por_categoria(conn: &mut PooledConnection, categoria: &str) -> Result<Vec<Gasto>, AppError> {
+    pub fn obtener_por_categoria(
+        conn: &mut PooledConnection,
+        categoria: &str,
+    ) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM gastos WHERE categoria = ? AND deleted_at IS NULL \
@@ -163,7 +169,10 @@ impl GastoRepository {
     }
 
     /// Gastos recientes (los últimos `limit`, por fecha de creación)
-    pub fn obtener_recientes(conn: &mut PooledConnection, limit: i64) -> Result<Vec<Gasto>, AppError> {
+    pub fn obtener_recientes(
+        conn: &mut PooledConnection,
+        limit: i64,
+    ) -> Result<Vec<Gasto>, AppError> {
         let rows: Vec<GastoRow> = conn.query(
             &format!(
                 "SELECT {SELECT_COLS} FROM gastos WHERE deleted_at IS NULL \
@@ -185,9 +194,17 @@ impl GastoRepository {
 
     /// Crea un gasto y devuelve el id nuevo (RETURNING evita races con MAX(id)).
     /// `usuario` registra al actor de la sesión para trazabilidad.
-    pub fn insertar(conn: &mut PooledConnection, d: &GastoDatos, usuario: &str) -> Result<i64, AppError> {
+    pub fn insertar(
+        conn: &mut PooledConnection,
+        d: &GastoDatos,
+        usuario: &str,
+    ) -> Result<i64, AppError> {
         let usuario = usuario.trim();
-        let usuario = if usuario.is_empty() { "Sistema" } else { usuario };
+        let usuario = if usuario.is_empty() {
+            "Sistema"
+        } else {
+            usuario
+        };
         let (id,): (i64,) = conn
             .execute_returnable(
                 "INSERT INTO gastos (placa, fecha, categoria, descripcion, monto, comprobante, usuario) \
@@ -207,7 +224,11 @@ impl GastoRepository {
     }
 
     /// Actualiza un gasto por id
-    pub fn actualizar(conn: &mut PooledConnection, id: i64, d: &GastoDatos) -> Result<(), AppError> {
+    pub fn actualizar(
+        conn: &mut PooledConnection,
+        id: i64,
+        d: &GastoDatos,
+    ) -> Result<(), AppError> {
         conn.execute(
             "UPDATE gastos SET placa = ?, fecha = ?, categoria = ?, descripcion = ?, \
              monto = CAST(? AS DECIMAL(12,2)), comprobante = ?, updated_at = CURRENT_TIMESTAMP \
@@ -239,7 +260,8 @@ impl GastoRepository {
 
     /// Total de gastos registrados
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM gastos WHERE deleted_at IS NULL", ())?;
+        let count: Option<(i64,)> =
+            conn.query_first("SELECT COUNT(*) FROM gastos WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
@@ -277,7 +299,9 @@ impl GastoRepository {
     }
 
     /// Suma de gastos agrupada por categoría
-    pub fn total_por_categoria(conn: &mut PooledConnection) -> Result<Vec<(String, String)>, AppError> {
+    pub fn total_por_categoria(
+        conn: &mut PooledConnection,
+    ) -> Result<Vec<(String, String)>, AppError> {
         let rows: Vec<(String, String)> = conn.query(
             "SELECT categoria, CAST(SUM(monto) AS VARCHAR(12)) FROM gastos \
              WHERE deleted_at IS NULL GROUP BY categoria ORDER BY SUM(monto) DESC",

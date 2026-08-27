@@ -137,7 +137,9 @@ describe('página de Calendario', () => {
 	it('detecta solapamiento de fechas del mismo vehículo', async () => {
 		// Renta y reserva del mismo vehículo con rangos cruzados
 		tauri.register('listar_rentas', () => [renta()]);
-		tauri.register('listar_reservas', () => [reserva({ placaAsignada: 'ABC123', fechaRecogida: diaDelMesActual(3) })]);
+		tauri.register('listar_reservas', () => [
+			reserva({ placaAsignada: 'ABC123', fechaRecogida: diaDelMesActual(3) })
+		]);
 
 		render(CalendarioPage);
 

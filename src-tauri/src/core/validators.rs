@@ -57,9 +57,7 @@ fn regex_light(pattern: &str, text: &str) -> bool {
                 if chars[i] == 'o' && chars[i + 1] == 'n' {
                     let mut j = i + 2;
                     // \w+ = letras/dígitos/underscore
-                    while j < chars.len()
-                        && (chars[j].is_alphanumeric() || chars[j] == '_')
-                    {
+                    while j < chars.len() && (chars[j].is_alphanumeric() || chars[j] == '_') {
                         j += 1;
                     }
                     // \s* = espacios opcionales
@@ -111,7 +109,10 @@ pub fn validate_password_strength(password: &str) -> Vec<String> {
     if !password.chars().any(|c| c.is_ascii_digit()) {
         errors.push("Debe contener al menos un número".into());
     }
-    if !password.chars().any(|c| "!@#$%^&*(),.?\":{}|<>".contains(c)) {
+    if !password
+        .chars()
+        .any(|c| "!@#$%^&*(),.?\":{}|<>".contains(c))
+    {
         errors.push("Debe contener al menos un carácter especial (!@#$%^&*(),.?\":{}|<>)".into());
     }
     errors

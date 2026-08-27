@@ -50,7 +50,10 @@ export interface TimelineVehiculo {
 }
 
 /** Construye la línea de tiempo de un vehículo a partir de sus rentas y comparendos. */
-export function construirTimelineVehiculo(rentas: Renta[], comparendos: Comparendo[]): TimelineVehiculo {
+export function construirTimelineVehiculo(
+	rentas: Renta[],
+	comparendos: Comparendo[]
+): TimelineVehiculo {
 	// Agrupa las multas por la renta que las cubre (cruce del backend)
 	const porRenta = new Map<number, Comparendo[]>();
 	for (const c of comparendos) {
@@ -76,7 +79,11 @@ export function construirTimelineVehiculo(rentas: Renta[], comparendos: Comparen
 
 	const eventos: EventoTimeline[] = [
 		...rentasTl.map((r) => ({ tipo: 'renta' as const, fecha: r.inicio, renta: r })),
-		...multasTl.map((m) => ({ tipo: 'multa' as const, fecha: m.comparendo.fechaInfraccion, multa: m }))
+		...multasTl.map((m) => ({
+			tipo: 'multa' as const,
+			fecha: m.comparendo.fechaInfraccion,
+			multa: m
+		}))
 	].sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.tipo === 'renta' ? -1 : 1));
 
 	const totalPendiente = comparendos

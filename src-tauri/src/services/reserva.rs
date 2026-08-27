@@ -7,13 +7,13 @@
 use std::sync::Arc;
 
 use chrono::NaiveDate;
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
 use crate::repositories::cliente::ClienteRepository;
 use crate::repositories::reserva::{Reserva, ReservaDatos, ReservaRepository};
@@ -66,7 +66,13 @@ impl ReservaService {
         calcular_total(&mut datos);
         validar(&datos, cfg)?;
         let id = ReservaRepository::insertar(conn, &datos)?;
-        crate::core::audit::log_audit(conn, usuario, "CREAR RESERVA", &format!("reserva={id}"), "local")?;
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "CREAR RESERVA",
+            &format!("reserva={id}"),
+            "local",
+        )?;
         Self::obtener(conn, id)
     }
 
@@ -84,7 +90,13 @@ impl ReservaService {
         calcular_total(&mut datos);
         validar(&datos, cfg)?;
         ReservaRepository::actualizar(conn, id, &datos)?;
-        crate::core::audit::log_audit(conn, usuario, "ACTUALIZAR RESERVA", &format!("reserva={id}"), "local")?;
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "ACTUALIZAR RESERVA",
+            &format!("reserva={id}"),
+            "local",
+        )?;
         Self::obtener(conn, id)
     }
 
@@ -92,7 +104,10 @@ impl ReservaService {
     pub fn cancelar(conn: &mut PooledConnection, id: i64) -> Result<ReservaCancelada, AppError> {
         let actual = Self::obtener(conn, id)?;
         if actual.estado == "Cancelada" {
-            return Ok(ReservaCancelada { reserva: actual, cancelada: false });
+            return Ok(ReservaCancelada {
+                reserva: actual,
+                cancelada: false,
+            });
         }
         if actual.estado == "Completada" {
             return Err(AppError::Business(
@@ -101,14 +116,23 @@ impl ReservaService {
         }
         ReservaRepository::cambiar_estado(&mut **conn, id, "Cancelada")?;
         let reserva = Self::obtener(conn, id)?;
-        Ok(ReservaCancelada { reserva, cancelada: true })
+        Ok(ReservaCancelada {
+            reserva,
+            cancelada: true,
+        })
     }
 
     /// Elimina una reserva (las rentas asociadas quedan con id_reserva NULL)
     pub fn eliminar(conn: &mut PooledConnection, usuario: &str, id: i64) -> Result<(), AppError> {
         Self::obtener(conn, id)?;
         ReservaRepository::eliminar(conn, id)?;
-        crate::core::audit::log_audit(conn, usuario, "ELIMINAR RESERVA", &format!("reserva={id}"), "local")
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "ELIMINAR RESERVA",
+            &format!("reserva={id}"),
+            "local",
+        )
     }
 
     /// Total de reservas (dashboard)
@@ -125,12 +149,36 @@ impl ReservaService {
 /// Normaliza campos (trim → mayúsculas, defaults)
 fn normalizar(d: &mut ReservaDatos) {
     d.nombre_cliente = mayusculas(&d.nombre_cliente);
-    d.nacionalidad = d.nacionalidad.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.categoria_vehiculo = d.categoria_vehiculo.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.placa_asignada = d.placa_asignada.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.ubicacion_recogida = d.ubicacion_recogida.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.ubicacion_retorno = d.ubicacion_retorno.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
-    d.observaciones = d.observaciones.as_ref().map(|s| mayusculas(s)).filter(|s| !s.is_empty());
+    d.nacionalidad = d
+        .nacionalidad
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.categoria_vehiculo = d
+        .categoria_vehiculo
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.placa_asignada = d
+        .placa_asignada
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.ubicacion_recogida = d
+        .ubicacion_recogida
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.ubicacion_retorno = d
+        .ubicacion_retorno
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
+    d.observaciones = d
+        .observaciones
+        .as_ref()
+        .map(|s| mayusculas(s))
+        .filter(|s| !s.is_empty());
     // Montos: vacío → "0.00" (evita SQLCODE -303 al enlazar '' a DECIMAL)
     for m in [&mut d.valor_dia, &mut d.valor_hora_adic, &mut d.abono] {
         *m = m.trim().replace(',', ".");
@@ -157,8 +205,12 @@ fn completar_cliente(conn: &mut PooledConnection, d: &mut ReservaDatos) {
 fn calcular_total(d: &mut ReservaDatos) {
     let dias = d.dias_calculados.max(0);
     let horas = d.horas_extras.max(0);
-    let vdia = Decimal::from_str(&d.valor_dia).unwrap_or(Decimal::ZERO).max(Decimal::ZERO);
-    let vha = Decimal::from_str(&d.valor_hora_adic).unwrap_or(Decimal::ZERO).max(Decimal::ZERO);
+    let vdia = Decimal::from_str(&d.valor_dia)
+        .unwrap_or(Decimal::ZERO)
+        .max(Decimal::ZERO);
+    let vha = Decimal::from_str(&d.valor_hora_adic)
+        .unwrap_or(Decimal::ZERO)
+        .max(Decimal::ZERO);
     let total = vdia * Decimal::from(dias) + vha * Decimal::from(horas);
     d.total = total.round_dp(2).to_string();
 }
@@ -202,24 +254,34 @@ fn validar(d: &ReservaDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
 
     // Días y horas
     if d.dias_calculados < 0 {
-        return Err(AppError::Validation("Los días calculados no pueden ser negativos.".into()));
+        return Err(AppError::Validation(
+            "Los días calculados no pueden ser negativos.".into(),
+        ));
     }
     if d.horas_extras < 0 {
-        return Err(AppError::Validation("Las horas extras no pueden ser negativas.".into()));
+        return Err(AppError::Validation(
+            "Las horas extras no pueden ser negativas.".into(),
+        ));
     }
 
     // Tarifas
     let vdia = Decimal::from_str(&d.valor_dia).unwrap_or_else(|_| Decimal::from(-1));
     let vha = Decimal::from_str(&d.valor_hora_adic).unwrap_or_else(|_| Decimal::from(-1));
     if vdia < Decimal::ZERO {
-        return Err(AppError::Validation("El valor del día no es un número válido.".into()));
+        return Err(AppError::Validation(
+            "El valor del día no es un número válido.".into(),
+        ));
     }
     if vha < Decimal::ZERO {
-        return Err(AppError::Validation("El valor de la hora adicional no es un número válido.".into()));
+        return Err(AppError::Validation(
+            "El valor de la hora adicional no es un número válido.".into(),
+        ));
     }
     let abono = Decimal::from_str(&d.abono).unwrap_or_else(|_| Decimal::from(-1));
     if abono < Decimal::ZERO {
-        return Err(AppError::Validation("El abono no es un número válido.".into()));
+        return Err(AppError::Validation(
+            "El abono no es un número válido.".into(),
+        ));
     }
     let total = Decimal::from_str(&d.total).unwrap_or_else(|_| Decimal::from(-1));
     if abono > total {

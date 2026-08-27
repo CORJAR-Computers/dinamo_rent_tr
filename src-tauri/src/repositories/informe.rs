@@ -213,6 +213,7 @@ impl InformeRepository {
     }
 
     /// Rentas con recogida en el rango (detalle de ingresos del período)
+    #[allow(clippy::type_complexity)]
     pub fn rentas_del_mes(
         conn: &mut PooledConnection,
         inicio: &str,

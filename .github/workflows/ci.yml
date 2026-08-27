@@ -55,6 +55,9 @@ jobs:
       - name: Lint (eslint)
         run: bun run lint
 
+      - name: Format check (prettier)
+        run: bun run format:check
+
       - name: Svelte check
         run: bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json
 
@@ -64,10 +67,12 @@ jobs:
       - name: Build producción del frontend (vite build)
         run: bun run build
 
-      # Unit tests de la lib Rust (no requieren BD).
-      - name: Rust unit tests + check
+      # Unit tests de la lib Rust + formateo + clippy (no requieren BD).
+      - name: Rust unit tests + check + clippy + fmt
         working-directory: src-tauri
         run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
           cargo test --lib
           cargo check --all-targets
 

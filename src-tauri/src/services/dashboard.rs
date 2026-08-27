@@ -9,9 +9,9 @@ use serde::Serialize;
 use crate::core::crypto::PiiCipher;
 use crate::core::error::AppError;
 use crate::repositories::cliente::Cliente;
-use crate::services::AppState;
 use crate::services::auto::{AlertaVencimiento, AutoService};
 use crate::services::cliente::ClienteService;
+use crate::services::AppState;
 
 /// Conteo por estado de vehículo
 #[derive(Debug, Clone, Serialize)]
@@ -40,7 +40,12 @@ pub struct DashboardService;
 impl DashboardService {
     pub fn get_dashboard_data(state: &AppState) -> Result<DashboardData, AppError> {
         let mut conn = state.pool.get()?;
-        Self::calcular_dashboard_data(&mut conn, &state.config, &state.pii_key(), state.pii_key_configurada())
+        Self::calcular_dashboard_data(
+            &mut conn,
+            &state.config,
+            &state.pii_key(),
+            state.pii_key_configurada(),
+        )
     }
 
     pub fn calcular_dashboard_data(

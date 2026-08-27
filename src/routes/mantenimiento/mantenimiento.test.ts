@@ -3,7 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { tauri } from '../../test/tauri';
 import { session } from '$lib/stores/session.svelte';
-import type { Mantenimiento, MantenimientoDatos, TotalesMantenimiento, Auto, BusinessLists } from '$lib/api';
+import type {
+	Mantenimiento,
+	MantenimientoDatos,
+	TotalesMantenimiento,
+	Auto,
+	BusinessLists
+} from '$lib/api';
 import MantenimientoPage from './+page.svelte';
 
 function mantenimiento(overrides: Partial<Mantenimiento> = {}): Mantenimiento {
@@ -24,7 +30,12 @@ function mantenimiento(overrides: Partial<Mantenimiento> = {}): Mantenimiento {
 	};
 }
 
-function auto(placa: string, marca = 'Toyota', modelo = 'Corolla', proximoAceite: number | null = null): Auto {
+function auto(
+	placa: string,
+	marca = 'Toyota',
+	modelo = 'Corolla',
+	proximoAceite: number | null = null
+): Auto {
 	return {
 		placa,
 		marca,
@@ -58,7 +69,8 @@ function auto(placa: string, marca = 'Toyota', modelo = 'Corolla', proximoAceite
 function totales(overrides: Partial<TotalesMantenimiento> = {}): TotalesMantenimiento {
 	return {
 		totalGeneral: '350000.00',
-		porPlaca: [{ clave: 'ABC123', total: '350000.00' }],			porTipo: [{ clave: 'CAMBIO ACEITE', total: '200000.00' }],
+		porPlaca: [{ clave: 'ABC123', total: '350000.00' }],
+		porTipo: [{ clave: 'CAMBIO ACEITE', total: '200000.00' }],
 		...overrides
 	};
 }
@@ -74,13 +86,21 @@ const LISTS: BusinessLists = {
 	estadosReserva: [],
 	tiposGasto: [],
 	nivelTanque: [],
-	tiposMantenimiento: ['Cambio Aceite', 'Frenos', 'Llantas', 'Batería', 'Tecno-Mecánica', 'Lavado General', 'Reparación Mecánica', 'Otro'],
+	tiposMantenimiento: [
+		'Cambio Aceite',
+		'Frenos',
+		'Llantas',
+		'Batería',
+		'Tecno-Mecánica',
+		'Lavado General',
+		'Reparación Mecánica',
+		'Otro'
+	],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 function setSesion(rol = 'Administrador') {
@@ -99,7 +119,10 @@ beforeEach(() => {
 	// El guard de sesión exige sesión activa para cargar la página
 	setSesion();
 	tauri.register('get_business_lists', () => LISTS);
-	tauri.register('listar_autos', () => [auto('ABC123', 'Toyota', 'Corolla', 50000), auto('XYZ987', 'Mazda', 'CX-5')]);
+	tauri.register('listar_autos', () => [
+		auto('ABC123', 'Toyota', 'Corolla', 50000),
+		auto('XYZ987', 'Mazda', 'CX-5')
+	]);
 	tauri.register('totales_mantenimiento', () => totales());
 	tauri.register('alertas_km_mantenimiento', () => []);
 });
@@ -108,7 +131,13 @@ describe('página de Mantenimiento', () => {
 	it('lista el historial de mantenimientos con totales', async () => {
 		tauri.register('listar_mantenimientos', () => [
 			mantenimiento({ id: 1, placa: 'ABC123', tipo: 'Cambio Aceite', costo: '200000.00' }),
-			mantenimiento({ id: 2, placa: 'XYZ987', tipo: 'FRENOS', costo: '150000.00', descripcion: 'Cambio de pastillas' })
+			mantenimiento({
+				id: 2,
+				placa: 'XYZ987',
+				tipo: 'FRENOS',
+				costo: '150000.00',
+				descripcion: 'Cambio de pastillas'
+			})
 		]);
 
 		render(MantenimientoPage);
@@ -250,7 +279,9 @@ describe('página de Mantenimiento', () => {
 		await fireEvent.click(screen.getByTitle('Eliminar'));
 		const dialogo = await screen.findByRole('dialog');
 		expect(dialogo).toHaveTextContent('Eliminar mantenimiento');
-		expect(screen.getByText(/eliminar el mantenimiento de tipo «CAMBIO ACEITE»/i)).toBeInTheDocument();
+		expect(
+			screen.getByText(/eliminar el mantenimiento de tipo «CAMBIO ACEITE»/i)
+		).toBeInTheDocument();
 
 		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar' }));
 
@@ -281,8 +312,7 @@ describe('página de Mantenimiento', () => {
 
 	it('filtra por placa con el selector', async () => {
 		const listar = vi.fn(
-			(_args: { sessionId: string; placa: string | null; tipo: string | null }) =>
-				[mantenimiento()]
+			(_args: { sessionId: string; placa: string | null; tipo: string | null }) => [mantenimiento()]
 		);
 		tauri.register('listar_mantenimientos', listar);
 

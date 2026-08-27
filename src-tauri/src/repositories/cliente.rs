@@ -172,7 +172,10 @@ impl ClienteRepository {
     }
 
     /// Filtra por estado (Activo / Inactivo / Lista Negra / VIP)
-    pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Cliente>, AppError> {
+    pub fn obtener_por_estado(
+        conn: &mut PooledConnection,
+        estado: &str,
+    ) -> Result<Vec<Cliente>, AppError> {
         let rows: Vec<ClienteRow> = conn.query(
             &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND estado = ? ORDER BY nombre_completo"),
             (estado.to_string(),),
@@ -181,7 +184,10 @@ impl ClienteRepository {
     }
 
     /// Obtiene un cliente por id
-    pub fn obtener_por_id(conn: &mut PooledConnection, id: i64) -> Result<Option<Cliente>, AppError> {
+    pub fn obtener_por_id(
+        conn: &mut PooledConnection,
+        id: i64,
+    ) -> Result<Option<Cliente>, AppError> {
         let row: Option<ClienteRow> = conn.query_first(
             &format!("SELECT {SELECT_COLS} FROM clientes WHERE deleted_at IS NULL AND id = ?"),
             (id,),
@@ -254,7 +260,11 @@ impl ClienteRepository {
     }
 
     /// Actualiza un cliente por id
-    pub fn actualizar(conn: &mut PooledConnection, id: i64, d: &ClienteDatos) -> Result<(), AppError> {
+    pub fn actualizar(
+        conn: &mut PooledConnection,
+        id: i64,
+        d: &ClienteDatos,
+    ) -> Result<(), AppError> {
         conn.execute(
             "UPDATE clientes SET \
                 tipo_doc = ?, no_doc = ?, nombres = ?, apellidos = ?, nombre_completo = ?, \
@@ -293,7 +303,10 @@ impl ClienteRepository {
 
     /// Soft-delete de un cliente (FKs de rentas/reservas/comparendos son SET NULL)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        match conn.execute("UPDATE clientes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (id,)) {
+        match conn.execute(
+            "UPDATE clientes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (id,),
+        ) {
             Ok(_) => Ok(()),
             Err(e) => {
                 let lower = e.to_string().to_lowercase();
@@ -314,9 +327,8 @@ impl ClienteRepository {
 
     /// Total de clientes
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM clientes WHERE deleted_at IS NULL", ())?;
+        let count: Option<(i64,)> =
+            conn.query_first("SELECT COUNT(*) FROM clientes WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 }
-
-

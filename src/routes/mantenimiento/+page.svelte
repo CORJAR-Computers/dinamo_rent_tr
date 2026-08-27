@@ -68,8 +68,17 @@
 	const tiposMantenimiento = $derived(
 		(lists?.tiposMantenimiento?.length
 			? lists.tiposMantenimiento
-			: ['Cambio Aceite', 'Frenos', 'Llantas', 'Batería', 'Tecno-Mecánica', 'Lavado General', 'Reparación Mecánica', 'Otro'])
-			.map(t => t.toUpperCase())
+			: [
+					'Cambio Aceite',
+					'Frenos',
+					'Llantas',
+					'Batería',
+					'Tecno-Mecánica',
+					'Lavado General',
+					'Reparación Mecánica',
+					'Otro'
+				]
+		).map((t) => t.toUpperCase())
 	);
 
 	function defaultForm(): MantenimientoDatos {
@@ -105,7 +114,12 @@
 	async function cargar() {
 		loading = true;
 		try {
-			registros = await mantenimientoApi.listar(sid(), busqueda.trim() || undefined, placaFiltro || undefined, tipoFiltro || undefined);
+			registros = await mantenimientoApi.listar(
+				sid(),
+				busqueda.trim() || undefined,
+				placaFiltro || undefined,
+				tipoFiltro || undefined
+			);
 		} catch (e) {
 			toast.error(e instanceof ApiError ? e.message : 'No se pudieron cargar los mantenimientos.');
 		} finally {
@@ -153,7 +167,8 @@
 	// un km ajeno al vehículo recién seleccionado).
 	function alCambiarPlacaForm() {
 		const auto = autos.find((a) => a.placa === form.placa);
-		form.kmProximoCambioAceite = auto && auto.proximoAceite && auto.proximoAceite > 0 ? auto.proximoAceite : null;
+		form.kmProximoCambioAceite =
+			auto && auto.proximoAceite && auto.proximoAceite > 0 ? auto.proximoAceite : null;
 	}
 
 	function abrirNuevo() {
@@ -268,14 +283,26 @@
 			</p>
 		</div>
 		<button class="btn-primary" onclick={abrirNuevo}>
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg
+			>
 			Registrar Mantenimiento
 		</button>
 	</div>
 
 	<!-- Alertas por kilometraje -->
 	{#if alertas.length > 0}
-		<div class="rounded-xl border {alertas.some((a) => a.critica) ? 'border-peligro/30 bg-peligro/5' : 'border-alerta/25 bg-alerta/5'} px-4 py-3">
+		<div
+			class="rounded-xl border {alertas.some((a) => a.critica)
+				? 'border-peligro/30 bg-peligro/5'
+				: 'border-alerta/25 bg-alerta/5'} px-4 py-3"
+		>
 			<div class="flex items-start gap-2">
 				<span class="shrink-0 {alertas.some((a) => a.critica) ? 'text-peligro' : 'text-alerta'}">
 					<Icon name="alert" class="w-5 h-5" />
@@ -297,9 +324,15 @@
 	<!-- Resumen de totales -->
 	<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 		<div class="card p-4">
-			<p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Total invertido</p>
-			<p class="text-2xl font-bold text-text-primary tabular-nums mt-1">{formatCOP(totales?.totalGeneral, true)}</p>
-			<p class="text-[11px] text-text-secondary mt-0.5">{registros.length} mantenimiento{registros.length === 1 ? '' : 's'}</p>
+			<p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+				Total invertido
+			</p>
+			<p class="text-2xl font-bold text-text-primary tabular-nums mt-1">
+				{formatCOP(totales?.totalGeneral, true)}
+			</p>
+			<p class="text-[11px] text-text-secondary mt-0.5">
+				{registros.length} mantenimiento{registros.length === 1 ? '' : 's'}
+			</p>
 		</div>
 		<div class="card p-4">
 			<p class="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Por placa</p>
@@ -336,7 +369,19 @@
 	<!-- Filtros -->
 	<div class="flex flex-wrap items-center gap-3">
 		<div class="relative grow max-w-sm">
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/></svg
+			>
 			<input
 				class="input pl-9"
 				type="search"
@@ -362,7 +407,18 @@
 	{#if loading}
 		<div class="card flex items-center justify-center py-16">
 			<div class="flex flex-col items-center gap-3">
-				<svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-8 w-8 text-primary"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				<p class="text-sm text-text-secondary">Cargando mantenimientos...</p>
 			</div>
 		</div>
@@ -386,7 +442,9 @@
 						{/if}
 					</div>
 				{:else if col.key === 'tipo'}
-					<span class="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary whitespace-nowrap">
+					<span
+						class="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary whitespace-nowrap"
+					>
 						{m.tipo}
 					</span>
 				{:else if col.key === 'descripcion'}
@@ -397,10 +455,14 @@
 						{/if}
 					</div>
 				{:else if col.key === 'costo'}
-					<span class="font-semibold tabular-nums text-text-primary whitespace-nowrap">{formatCOP(m.costo, true)}</span>
+					<span class="font-semibold tabular-nums text-text-primary whitespace-nowrap"
+						>{formatCOP(m.costo, true)}</span
+					>
 				{:else if col.key === 'kmAceite'}
 					{#if m.kmProximoCambioAceite && m.kmProximoCambioAceite > 0}
-						<span class="text-xs text-text-secondary tabular-nums whitespace-nowrap">{m.kmProximoCambioAceite.toLocaleString('es-CO')} km</span>
+						<span class="text-xs text-text-secondary tabular-nums whitespace-nowrap"
+							>{m.kmProximoCambioAceite.toLocaleString('es-CO')} km</span
+						>
 					{:else}
 						<span class="text-xs text-text-secondary/60">—</span>
 					{/if}
@@ -409,20 +471,22 @@
 						<button
 							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 							title="Editar"
+							aria-label={`Editar mantenimiento #${m.id} ${m.tipo} de placa ${m.placa}`}
 							onclick={() => abrirEditar(m)}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" /></svg>
+							<Icon name="pencil" class="w-4 h-4" />
 						</button>
 						{#if puedeEliminar}
 							<button
 								class="p-2 rounded-lg text-text-secondary hover:text-peligro hover:bg-peligro/10 transition-colors"
 								title="Eliminar"
+								aria-label={`Eliminar mantenimiento #${m.id} ${m.tipo} de placa ${m.placa}`}
 								onclick={() => {
 									eliminarId = m.id;
 									eliminarTipo = m.tipo;
 								}}
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+								<Icon name="trash" class="w-4 h-4" />
 							</button>
 						{/if}
 					</div>
@@ -444,7 +508,12 @@
 >
 	{#snippet children()}
 		{#if formError}
-			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
+			<div
+				class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro"
+				role="alert"
+			>
+				{formError}
+			</div>
 		{/if}
 
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
@@ -472,15 +541,28 @@
 				<input class="input" type="date" bind:value={form.fecha} />
 			</FormField>
 			<FormField label="Costo (COP)" required>
-				<input class="input tabular-nums" inputmode="decimal" placeholder="Ej: 350000" bind:value={form.costo} />
+				<input
+					class="input tabular-nums"
+					inputmode="decimal"
+					placeholder="Ej: 350000"
+					bind:value={form.costo}
+				/>
 			</FormField>
 			<div class="col-span-full">
 				<FormField label="Descripción">
-					<input class="input" placeholder="Ej: Cambio de aceite 15W-40 y filtro" bind:value={form.descripcion} maxlength="250" />
+					<input
+						class="input"
+						placeholder="Ej: Cambio de aceite 15W-40 y filtro"
+						bind:value={form.descripcion}
+						maxlength="250"
+					/>
 				</FormField>
 			</div>
 			<div class="col-span-full">
-				<FormField label="Km próximo cambio de aceite" hint="Se sincroniza con el vehículo para las alertas por kilometraje.">
+				<FormField
+					label="Km próximo cambio de aceite"
+					hint="Se sincroniza con el vehículo para las alertas por kilometraje."
+				>
 					<input
 						class="input tabular-nums"
 						type="number"
@@ -493,17 +575,35 @@
 			</div>
 			<div class="col-span-full">
 				<FormField label="Observaciones">
-					<textarea class="input min-h-[80px] resize-y" placeholder="Detalles adicionales (opcional)" bind:value={form.observaciones} maxlength="2000"></textarea>
+					<textarea
+						class="input min-h-[80px] resize-y"
+						placeholder="Detalles adicionales (opcional)"
+						bind:value={form.observaciones}
+						maxlength="2000"
+					></textarea>
 				</FormField>
 			</div>
 		</div>
 	{/snippet}
 
 	{#snippet footer()}
-		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
+		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}
+			>Cancelar</button
+		>
 		<button class="btn-primary" onclick={guardar} disabled={guardando}>
 			{#if guardando}
-				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-4 w-4"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				Guardando...
 			{:else}
 				{editando ? 'Guardar cambios' : 'Registrar mantenimiento'}

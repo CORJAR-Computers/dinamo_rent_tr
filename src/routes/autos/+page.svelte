@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { autoApi, ApiError, type Auto, type AutoDatos, type AlertaVencimiento, type BusinessLists } from '$lib/api';
+	import {
+		autoApi,
+		ApiError,
+		type Auto,
+		type AutoDatos,
+		type AlertaVencimiento,
+		type BusinessLists
+	} from '$lib/api';
 	import { sid, session } from '$lib/stores/session.svelte';
 	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -12,6 +19,7 @@
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import CopiarExistente from '$lib/components/CopiarExistente.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	// sid() viene del store (reemplaza `const sid = () => session.token ?? ''`). Ver TAREA E3.
 
@@ -112,10 +120,7 @@
 		//    cada navegación a /autos.
 		//  - `Promise.all` paraleliza `cargarAlertas` con la carga de listas
 		//    (la carga inicial de autos la dispara el $effect de filtros).
-		await Promise.all([
-			businessLists.ensure(sid()).catch(() => null),
-			cargarAlertas()
-		]);
+		await Promise.all([businessLists.ensure(sid()).catch(() => null), cargarAlertas()]);
 	});
 
 	// Carga inicial + filtros (debounce solo al escribir)
@@ -270,7 +275,15 @@
 			</p>
 		</div>
 		<button class="btn-primary" onclick={abrirNuevo}>
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg
+			>
 			Nuevo Auto
 		</button>
 	</div>
@@ -278,7 +291,19 @@
 	<!-- Filtros -->
 	<div class="flex flex-wrap items-center gap-3">
 		<div class="relative grow max-w-sm">
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/></svg
+			>
 			<input
 				class="input pl-9"
 				type="search"
@@ -288,7 +313,7 @@
 		</div>
 		<select class="input w-auto" bind:value={estadoFiltro} aria-label="Filtrar por estado">
 			<option value="">Todos los estados</option>
-			{#each (lists?.estadosAuto ?? ['Disponible', 'Rentado', 'Mantenimiento', 'Vendido', 'Baja']) as est}
+			{#each lists?.estadosAuto ?? ['Disponible', 'Rentado', 'Mantenimiento', 'Vendido', 'Baja'] as est}
 				<option value={est}>{est}</option>
 			{/each}
 		</select>
@@ -300,13 +325,17 @@
 			<div class="flex items-center gap-2 mb-2">
 				<span class="w-2 h-2 rounded-full bg-alerta animate-pulse"></span>
 				<h3 class="text-xs font-bold uppercase tracking-wider text-alerta">
-					{alertas.length} vencimiento{alertas.length === 1 ? '' : 's'} próximo{alertas.length === 1 ? '' : 's'}
+					{alertas.length} vencimiento{alertas.length === 1 ? '' : 's'} próximo{alertas.length === 1
+						? ''
+						: 's'}
 				</h3>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#each alertas.slice(0, 8) as a}
 					<span
-						class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold cursor-default transition-transform hover:scale-[1.03] {a.critica ? 'border-peligro/30 bg-peligro/10 text-peligro' : 'border-alerta/30 bg-surface text-alerta'}"
+						class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold cursor-default transition-transform hover:scale-[1.03] {a.critica
+							? 'border-peligro/30 bg-peligro/10 text-peligro'
+							: 'border-alerta/30 bg-surface text-alerta'}"
 						title={a.detalle}
 					>
 						<span class="w-1.5 h-1.5 rounded-full bg-current"></span>
@@ -321,7 +350,18 @@
 	{#if loading}
 		<div class="card flex items-center justify-center py-16">
 			<div class="flex flex-col items-center gap-3">
-				<svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-8 w-8 text-primary"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				<p class="text-sm text-text-secondary">Cargando flota...</p>
 			</div>
 		</div>
@@ -340,25 +380,28 @@
 				{:else if col.key === 'marca'}
 					<div>
 						<p class="font-semibold text-text-primary">{a.marca}</p>
-						<p class="text-xs text-text-secondary">{a.modelo}{a.version ? ` · ${a.version}` : ''}{a.color ? ` · ${a.color}` : ''}</p>
+						<p class="text-xs text-text-secondary">
+							{a.modelo}{a.version ? ` · ${a.version}` : ''}{a.color ? ` · ${a.color}` : ''}
+						</p>
 					</div>
 				{:else if col.key === 'estado'}
 					<StatusBadge estado={a.estado} />
 				{:else if col.key === 'kilometraje'}
-					<span class="tabular-nums text-text-secondary">{Math.round(a.kilometraje).toLocaleString('es-CO')} km</span>
+					<span class="tabular-nums text-text-secondary"
+						>{Math.round(a.kilometraje).toLocaleString('es-CO')} km</span
+					>
 				{:else if col.key === 'vencimientos'}
 					<div class="flex flex-wrap gap-1.5">
-						{#each [
-							{ tipo: 'SOAT', fecha: a.vencimientoSoat },
-							{ tipo: 'Téc.', fecha: a.vencimientoTecnico },
-							{ tipo: 'Ext.', fecha: a.vencimientoExtintor }
-						] as v}
+						{#each [{ tipo: 'SOAT', fecha: a.vencimientoSoat }, { tipo: 'Téc.', fecha: a.vencimientoTecnico }, { tipo: 'Ext.', fecha: a.vencimientoExtintor }] as v}
 							{@const d = diasRestantes(v.fecha)}
 							{#if d !== null}
 								<span
-									class="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold {venClases(d)}"
+									class="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold {venClases(
+										d
+									)}"
 									title={`${v.tipo}: ${formatDate(v.fecha)}`}
-								>{v.tipo} · {d < 0 ? `${-d}d venc` : `${d}d`}</span>
+									>{v.tipo} · {d < 0 ? `${-d}d venc` : `${d}d`}</span
+								>
 							{/if}
 						{/each}
 					</div>
@@ -370,22 +413,24 @@
 							title="Historial: rentas y multas del vehículo"
 							aria-label={`Historial de ${a.placa}`}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+							<Icon name="clock" class="w-4 h-4" />
 						</a>
 						<button
 							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 							title="Editar"
+							aria-label={`Editar auto ${a.placa}`}
 							onclick={() => abrirEditar(a)}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125" /></svg>
+							<Icon name="pencil" class="w-4 h-4" />
 						</button>
 						{#if puedeEliminar}
 							<button
 								class="p-2 rounded-lg text-text-secondary hover:text-peligro hover:bg-peligro/10 transition-colors"
 								title="Eliminar"
+								aria-label={`Eliminar auto ${a.placa}`}
 								onclick={() => (eliminarPlaca = a.placa)}
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+								<Icon name="trash" class="w-4 h-4" />
 							</button>
 						{/if}
 					</div>
@@ -401,14 +446,21 @@
 <Modal
 	open={modalOpen}
 	title={editando ? `Editar vehículo ${form.placa.toUpperCase()}` : 'Nuevo vehículo'}
-	subtitle={editando ? 'Modifica los datos y guarda los cambios.' : 'Registra un vehículo en la flota.'}
+	subtitle={editando
+		? 'Modifica los datos y guarda los cambios.'
+		: 'Registra un vehículo en la flota.'}
 	onClose={() => (modalOpen = false)}
 	width="max-w-2xl"
 	dismissible={!guardando}
 >
 	{#snippet children()}
 		{#if formError}
-			<div class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro" role="alert">{formError}</div>
+			<div
+				class="mb-4 rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2.5 text-sm text-peligro"
+				role="alert"
+			>
+				{formError}
+			</div>
 		{/if}
 
 		{#if !editando}
@@ -431,13 +483,30 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
 			<!-- Identificación -->
 			<div class="col-span-full mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">1</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>1</span
+					>
 					Identificación
 				</h3>
 			</div>
-			<FormField label="Placa" required hint="Sin espacios. Se guarda en mayúsculas." error={formError && !form.placa ? 'Obligatoria' : ''}>
-				<input class="input uppercase" placeholder="ABC123" bind:this={placaInput} bind:value={form.placa} maxlength="20" disabled={editando} />
+			<FormField
+				label="Placa"
+				required
+				hint="Sin espacios. Se guarda en mayúsculas."
+				error={formError && !form.placa ? 'Obligatoria' : ''}
+			>
+				<input
+					class="input uppercase"
+					placeholder="ABC123"
+					bind:this={placaInput}
+					bind:value={form.placa}
+					maxlength="20"
+					disabled={editando}
+				/>
 			</FormField>
 			<FormField label="Fecha de ingreso" required>
 				<input class="input" type="date" bind:value={form.fechaIngreso} />
@@ -456,24 +525,29 @@
 			</FormField>
 			<FormField label="Tipo">
 				<select class="input" bind:value={form.tipo}>
-					{#each (lists?.tiposAuto ?? ['Automóvil', 'Camioneta', 'Van', 'Lujo', 'Moto']) as t}
+					{#each lists?.tiposAuto ?? ['Automóvil', 'Camioneta', 'Van', 'Lujo', 'Moto'] as t}
 						<option value={t}>{t}</option>
 					{/each}
 				</select>
 			</FormField>
 			<FormField label="Cilindraje">
-				<input class="input" placeholder="Ej: 1800 cc" bind:value={form.cilindraje} maxlength="30" />
+				<input
+					class="input"
+					placeholder="Ej: 1800 cc"
+					bind:value={form.cilindraje}
+					maxlength="30"
+				/>
 			</FormField>
 			<FormField label="Transmisión">
 				<select class="input" bind:value={form.transmision}>
-					{#each (lists?.tiposTransmision ?? ['Automática', 'Mecánica']) as t}
+					{#each lists?.tiposTransmision ?? ['Automática', 'Mecánica'] as t}
 						<option value={t}>{t}</option>
 					{/each}
 				</select>
 			</FormField>
 			<FormField label="Combustible">
 				<select class="input" bind:value={form.combustible}>
-					{#each (lists?.tiposCombustible ?? ['Gasolina', 'Diesel', 'Híbrido', 'Eléctrico', 'Gas']) as t}
+					{#each lists?.tiposCombustible ?? ['Gasolina', 'Diesel', 'Híbrido', 'Eléctrico', 'Gas'] as t}
 						<option value={t}>{t}</option>
 					{/each}
 				</select>
@@ -481,14 +555,19 @@
 
 			<!-- Adquisición y estado -->
 			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">2</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>2</span
+					>
 					Estado y adquisición
 				</h3>
 			</div>
 			<FormField label="Estado">
 				<select class="input" bind:value={form.estado}>
-					{#each (lists?.estadosAuto ?? ['Disponible', 'Rentado', 'Mantenimiento', 'Vendido', 'Baja']) as e}
+					{#each lists?.estadosAuto ?? ['Disponible', 'Rentado', 'Mantenimiento', 'Vendido', 'Baja'] as e}
 						<option value={e}>{e}</option>
 					{/each}
 				</select>
@@ -496,22 +575,37 @@
 			<FormField label="Tipo de adquisición">
 				<select class="input" bind:value={form.tipoAdquisicion}>
 					<option value="">—</option>
-					{#each (lists?.tiposAdquisicion ?? ['Propio', 'Leasing', 'Subarrendado']) as t}
+					{#each lists?.tiposAdquisicion ?? ['Propio', 'Leasing', 'Subarrendado'] as t}
 						<option value={t}>{t}</option>
 					{/each}
 				</select>
 			</FormField>
 			<FormField label="Costo fijo mensual (COP)">
-				<input class="input" inputmode="decimal" placeholder="0" bind:value={form.costoFijoMensual} />
+				<input
+					class="input"
+					inputmode="decimal"
+					placeholder="0"
+					bind:value={form.costoFijoMensual}
+				/>
 			</FormField>
 			<FormField label="Kilometraje actual (km)">
 				<input class="input" type="number" min="0" step="1" bind:value={form.kilometraje} />
 			</FormField>
 			<FormField label="Ubicación">
-				<input class="input" placeholder="Ej: Parqueadero principal" bind:value={form.ubicacion} maxlength="150" />
+				<input
+					class="input"
+					placeholder="Ej: Parqueadero principal"
+					bind:value={form.ubicacion}
+					maxlength="150"
+				/>
 			</FormField>
 			<FormField label="Propietario">
-				<input class="input" placeholder="Nombre del propietario" bind:value={form.propietario} maxlength="150" />
+				<input
+					class="input"
+					placeholder="Nombre del propietario"
+					bind:value={form.propietario}
+					maxlength="150"
+				/>
 			</FormField>
 			<FormField label="No. motor">
 				<input class="input" bind:value={form.noMotor} maxlength="80" />
@@ -522,8 +616,13 @@
 
 			<!-- Vencimientos y mantenimiento -->
 			<div class="col-span-full mt-4 mb-1">
-				<h3 class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
-					<span class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]">3</span>
+				<h3
+					class="text-xs font-bold uppercase tracking-wider text-primary mb-3 flex items-center gap-2"
+				>
+					<span
+						class="w-4 h-4 rounded-md bg-primary/10 flex items-center justify-center text-[10px]"
+						>3</span
+					>
 					Vencimientos y mantenimiento
 				</h3>
 			</div>
@@ -540,22 +639,51 @@
 				<input class="input" type="date" bind:value={form.vencimientoBateria} />
 			</FormField>
 			<FormField label="Próximo cambio de aceite (km)">
-				<input class="input" type="number" min="0" placeholder="Ej: 20000" bind:value={form.proximoAceite} />
+				<input
+					class="input"
+					type="number"
+					min="0"
+					placeholder="Ej: 20000"
+					bind:value={form.proximoAceite}
+				/>
 			</FormField>
 			<FormField label="Próximo cambio de frenos (km)">
-				<input class="input" type="number" min="0" placeholder="Ej: 30000" bind:value={form.proximoFrenos} />
+				<input
+					class="input"
+					type="number"
+					min="0"
+					placeholder="Ej: 30000"
+					bind:value={form.proximoFrenos}
+				/>
 			</FormField>
 			<FormField label="Observaciones" hint="Máx. 2000 caracteres.">
-				<textarea class="input min-h-[80px] resize-y" bind:value={form.observaciones} maxlength="2000"></textarea>
+				<textarea
+					class="input min-h-[80px] resize-y"
+					bind:value={form.observaciones}
+					maxlength="2000"
+				></textarea>
 			</FormField>
 		</div>
 	{/snippet}
 
 	{#snippet footer()}
-		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}>Cancelar</button>
+		<button class="btn-ghost" onclick={() => (modalOpen = false)} disabled={guardando}
+			>Cancelar</button
+		>
 		<button class="btn-primary" onclick={guardar} disabled={guardando}>
 			{#if guardando}
-				<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-4 w-4"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				Guardando...
 			{:else}
 				{editando ? 'Guardar cambios' : 'Crear vehículo'}

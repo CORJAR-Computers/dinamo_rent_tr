@@ -54,9 +54,8 @@ const LISTS: BusinessLists = {
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: [],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -73,7 +72,9 @@ function renderModal() {
 }
 
 async function abrirPanel() {
-	await fireEvent.click(screen.getByRole('button', { name: /Copiar datos de un cliente existente/ }));
+	await fireEvent.click(
+		screen.getByRole('button', { name: /Copiar datos de un cliente existente/ })
+	);
 	return screen.getByPlaceholderText('Buscar por nombre, documento o celular…');
 }
 
@@ -215,7 +216,9 @@ describe('panel copiar cliente', () => {
 		expect(screen.getByText('Luis Gómez')).toBeInTheDocument();
 
 		// El cliente con PII oculta está deshabilitado (no se puede duplicar)
-		const botonAna = screen.getByTitle('Tiene datos cifrados con clave antigua: no se pueden copiar.');
+		const botonAna = screen.getByTitle(
+			'Tiene datos cifrados con clave antigua: no se pueden copiar.'
+		);
 		const botonLuis = screen.getByTitle('Copiar datos de Luis Gómez');
 		expect(botonAna).toBeDisabled();
 		expect(botonLuis).not.toBeDisabled();

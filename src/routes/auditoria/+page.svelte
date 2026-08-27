@@ -122,7 +122,8 @@
 	function badgeClass(accion: string): string {
 		const a = accion.toUpperCase();
 		if (a.includes('LOGIN OK')) return 'bg-exito/10 text-exito';
-		if (a.includes('LOGIN FALLIDO') || a.includes('ACCESO DENEGADO') || a.includes('BLOQUEADO')) return 'bg-peligro/10 text-peligro';
+		if (a.includes('LOGIN FALLIDO') || a.includes('ACCESO DENEGADO') || a.includes('BLOQUEADO'))
+			return 'bg-peligro/10 text-peligro';
 		if (a.includes('ELIMINADO')) return 'bg-peligro/10 text-peligro';
 		if (a.includes('CREADO')) return 'bg-exito/10 text-exito';
 		if (a.includes('CONTRASEÑA') || a.includes('PASSWORD')) return 'bg-alerta/10 text-alerta';
@@ -140,7 +141,9 @@
 		<div>
 			<h2 class="text-2xl font-bold text-text-primary">Auditoría</h2>
 			<p class="text-sm text-text-secondary mt-0.5">
-				{total.toLocaleString('es-CO')} evento{total === 1 ? '' : 's'} registrado{total === 1 ? '' : 's'}
+				{total.toLocaleString('es-CO')} evento{total === 1 ? '' : 's'} registrado{total === 1
+					? ''
+					: 's'}
 			</p>
 		</div>
 		<button class="btn-ghost !px-3 !py-1.5 text-xs" onclick={limpiarFiltros}>
@@ -151,7 +154,19 @@
 	<!-- Filtros -->
 	<div class="card p-3 flex flex-wrap items-end gap-3">
 		<div class="relative grow max-w-sm">
-			<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60 pointer-events-none"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				><path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/></svg
+			>
 			<input
 				class="input pl-9"
 				type="search"
@@ -185,7 +200,18 @@
 	{#if loading}
 		<div class="card flex items-center justify-center py-16">
 			<div class="flex flex-col items-center gap-3">
-				<svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+				<svg
+					class="animate-spin h-8 w-8 text-primary"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle><path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path></svg
+				>
 				<p class="text-sm text-text-secondary">Consultando auditoría...</p>
 			</div>
 		</div>
@@ -200,11 +226,17 @@
 			{#snippet children(col, item)}
 				{@const e = item as unknown as AuditoriaEvento}
 				{#if col.key === 'fecha'}
-					<span class="whitespace-nowrap text-text-secondary text-xs tabular-nums">{formatDateTime(e.fecha)}</span>
+					<span class="whitespace-nowrap text-text-secondary text-xs tabular-nums"
+						>{formatDateTime(e.fecha)}</span
+					>
 				{:else if col.key === 'usuario'}
 					<span class="font-mono text-xs font-semibold text-primary">{e.usuario || '—'}</span>
 				{:else if col.key === 'accion'}
-					<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap {badgeClass(e.accion)}">
+					<span
+						class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap {badgeClass(
+							e.accion
+						)}"
+					>
 						{e.accion}
 					</span>
 				{:else if col.key === 'mensaje'}
@@ -244,7 +276,9 @@
 					return inicio + i;
 				}) as p}
 					<button
-						class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors {p === pagina ? 'bg-primary text-white' : 'btn-ghost'}"
+						class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors {p === pagina
+							? 'bg-primary text-white'
+							: 'btn-ghost'}"
 						onclick={() => irPagina(p)}
 					>
 						{p}

@@ -35,7 +35,11 @@ pub fn listar_comparendos(
 
 /// Obtiene un comparendo por id
 #[tauri::command]
-pub fn obtener_comparendo(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<Comparendo> {
+pub fn obtener_comparendo(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: i64,
+) -> Cmd<Comparendo> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     ComparendoService::obtener(&mut c, id).map_err(|e| e.to_payload())
@@ -88,7 +92,10 @@ pub fn eliminar_comparendo(state: State<'_, AppState>, session_id: String, id: i
 
 /// Totales general, pendiente, por placa y por estado
 #[tauri::command]
-pub fn totales_comparendos(state: State<'_, AppState>, session_id: String) -> Cmd<TotalesComparendos> {
+pub fn totales_comparendos(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Cmd<TotalesComparendos> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     ComparendoService::totales(&mut c).map_err(|e| e.to_payload())

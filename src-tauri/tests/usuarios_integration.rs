@@ -15,9 +15,7 @@ use dinamo_rent_lib::core::rbac::SessionStore;
 use dinamo_rent_lib::core::security::{self, LoginAttemptTracker};
 use dinamo_rent_lib::repositories::usuario::UsuarioRepository;
 use dinamo_rent_lib::services::auth::AuthService;
-use dinamo_rent_lib::services::usuario::{
-    UsuarioDatos, UsuarioDatosActualizar, UsuarioService,
-};
+use dinamo_rent_lib::services::usuario::{UsuarioDatos, UsuarioDatosActualizar, UsuarioService};
 use dinamo_rent_lib::services::AppState;
 
 fn dev_state() -> AppState {
@@ -69,8 +67,13 @@ fn usuario_crud_roundtrip() {
     let username = format!("u{}", &suf[..suf.len().min(10)]);
 
     // Crear
-    let creado = UsuarioService::crear(&mut conn, cfg, "admin", datos_usuario(&username, "Operador"))
-        .expect("crear usuario");
+    let creado = UsuarioService::crear(
+        &mut conn,
+        cfg,
+        "admin",
+        datos_usuario(&username, "Operador"),
+    )
+    .expect("crear usuario");
     let id = creado.id;
     assert_eq!(creado.username, username);
     assert_eq!(creado.rol.as_deref(), Some("Operador"));
@@ -83,9 +86,8 @@ fn usuario_crud_roundtrip() {
     assert_eq!(obtenido.username, username);
 
     // Búsqueda
-    let encontrados =
-        UsuarioService::listar(&mut conn, Some(&username[..username.len() - 2]))
-            .expect("buscar usuario");
+    let encontrados = UsuarioService::listar(&mut conn, Some(&username[..username.len() - 2]))
+        .expect("buscar usuario");
     assert!(encontrados.iter().any(|u| u.id == id));
 
     // Duplicado (insensible a mayúsculas)
@@ -101,8 +103,8 @@ fn usuario_crud_roundtrip() {
         email: Some("nuevo@test.co".into()),
         activo: false,
     };
-    let actualizado = UsuarioService::actualizar(&mut conn, cfg, "admin", id, upd)
-        .expect("actualizar usuario");
+    let actualizado =
+        UsuarioService::actualizar(&mut conn, cfg, "admin", id, upd).expect("actualizar usuario");
     assert_eq!(actualizado.rol.as_deref(), Some("Supervisor"));
     assert!(!actualizado.activo);
     assert_eq!(actualizado.email.as_deref(), Some("nuevo@test.co"));
@@ -122,7 +124,10 @@ fn usuario_crud_roundtrip() {
 
     // Eliminar
     UsuarioService::eliminar(&mut conn, "admin", id).expect("eliminar usuario");
-    assert!(UsuarioService::obtener(&mut conn, id).is_err(), "usuario eliminado");
+    assert!(
+        UsuarioService::obtener(&mut conn, id).is_err(),
+        "usuario eliminado"
+    );
 }
 
 #[test]
@@ -176,9 +181,13 @@ fn usuario_no_elimina_la_propia_cuenta() {
     let suf = uniq();
     let username = format!("p{}", &suf[..suf.len().min(10)]);
 
-    let creado =
-        UsuarioService::crear(&mut conn, cfg, "admin", datos_usuario(&username, "Operador"))
-            .expect("crear usuario");
+    let creado = UsuarioService::crear(
+        &mut conn,
+        cfg,
+        "admin",
+        datos_usuario(&username, "Operador"),
+    )
+    .expect("crear usuario");
     let id = creado.id;
 
     // Mismo username que el actor → rechazado
@@ -195,48 +204,48 @@ fn usuario_no_elimina_la_propia_cuenta() {
 fn usuario_protege_ultimo_admin() {
     let state = dev_state();
     let cfg = &state.config;
-    let mut conn = state.pool.get().expect("conn");	// Precondición: la BD de dev solo tiene el admin del seed
-	let admins = UsuarioRepository::contar_admins(&mut conn).expect("contar admins");
-	assert!(admins >= 1);
-	let admin = UsuarioRepository::obtener_por_username(&mut conn, "admin")
-		.expect("query")
-		.expect("el admin del seed existe");
-	if admins > 1 || admin.rol.as_deref() != Some("Administrador") {
-		eprintln!("SKIP: hay {admins} admins activos; la protección de último admin no aplica.");
-		return;
-	}
+    let mut conn = state.pool.get().expect("conn"); // Precondición: la BD de dev solo tiene el admin del seed
+    let admins = UsuarioRepository::contar_admins(&mut conn).expect("contar admins");
+    assert!(admins >= 1);
+    let admin = UsuarioRepository::obtener_por_username(&mut conn, "admin")
+        .expect("query")
+        .expect("el admin del seed existe");
+    if admins > 1 || admin.rol.as_deref() != Some("Administrador") {
+        eprintln!("SKIP: hay {admins} admins activos; la protección de último admin no aplica.");
+        return;
+    }
 
-	// Eliminar al admin → Business
-	let err = UsuarioService::eliminar(&mut conn, "operador", admin.id)
-		.expect_err("no se elimina al admin");
-	assert_eq!(err.kind(), "business");
+    // Eliminar al admin → Business
+    let err = UsuarioService::eliminar(&mut conn, "operador", admin.id)
+        .expect_err("no se elimina al admin");
+    assert_eq!(err.kind(), "business");
 
-	// Despromover al admin → Business
-	let upd = UsuarioDatosActualizar {
-		nombre: "Admin".into(),
-		rol: "Operador".into(),
-		email: None,
-		activo: true,
-	};
-	let err = UsuarioService::actualizar(&mut conn, cfg, "admin", admin.id, upd)
-		.expect_err("no se despromueve al admin");
-	assert_eq!(err.kind(), "business");
+    // Despromover al admin → Business
+    let upd = UsuarioDatosActualizar {
+        nombre: "Admin".into(),
+        rol: "Operador".into(),
+        email: None,
+        activo: true,
+    };
+    let err = UsuarioService::actualizar(&mut conn, cfg, "admin", admin.id, upd)
+        .expect_err("no se despromueve al admin");
+    assert_eq!(err.kind(), "business");
 
-	// Desactivar al admin → Business
-	let upd = UsuarioDatosActualizar {
-		nombre: "Admin".into(),
-		rol: "Administrador".into(),
-		email: None,
-		activo: false,
-	};
-	let err = UsuarioService::actualizar(&mut conn, cfg, "admin", admin.id, upd)
-		.expect_err("no se desactiva al admin");
-	assert_eq!(err.kind(), "business");
+    // Desactivar al admin → Business
+    let upd = UsuarioDatosActualizar {
+        nombre: "Admin".into(),
+        rol: "Administrador".into(),
+        email: None,
+        activo: false,
+    };
+    let err = UsuarioService::actualizar(&mut conn, cfg, "admin", admin.id, upd)
+        .expect_err("no se desactiva al admin");
+    assert_eq!(err.kind(), "business");
 
-	// El admin sigue intacto
-	let admin2 = UsuarioService::obtener(&mut conn, admin.id).expect("admin sigue existiendo");
-	assert_eq!(admin2.username, "admin");
-	assert!(admin2.activo);
+    // El admin sigue intacto
+    let admin2 = UsuarioService::obtener(&mut conn, admin.id).expect("admin sigue existiendo");
+    assert_eq!(admin2.username, "admin");
+    assert!(admin2.activo);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,9 +261,13 @@ fn usuario_tema_roundtrip() {
     let suf = uniq();
     let username = format!("t{}", &suf[..suf.len().min(10)]);
 
-    let creado =
-        UsuarioService::crear(&mut conn, cfg, "admin", datos_usuario(&username, "Operador"))
-            .expect("crear usuario");
+    let creado = UsuarioService::crear(
+        &mut conn,
+        cfg,
+        "admin",
+        datos_usuario(&username, "Operador"),
+    )
+    .expect("crear usuario");
     let id = creado.id;
 
     // Sin configurar → NULL
@@ -291,28 +304,35 @@ fn usuario_desbloqueo_resetea_intentos() {
     let suf = uniq();
     let username = format!("d{}", &suf[..suf.len().min(10)]);
 
-    let creado =
-        UsuarioService::crear(&mut conn, cfg, "admin", datos_usuario(&username, "Operador"))
-            .expect("crear usuario");
-    let id = creado.id;	// Simular una cuenta bloqueada: intentos fallidos en BD + bloqueo en el tracker
-	UsuarioRepository::persistir_intentos(&mut conn, &username, 5).expect("persistir intentos");
-	{
-		let mut tracker = state.login_tracker.lock().unwrap();
-		for _ in 0..5 {
-			tracker.record_failed_attempt(&username, None);
-		}
-		tracker.lock_account(&username);
-		assert!(tracker.is_locked(&username), "cuenta bloqueada en el tracker");
-	}
+    let creado = UsuarioService::crear(
+        &mut conn,
+        cfg,
+        "admin",
+        datos_usuario(&username, "Operador"),
+    )
+    .expect("crear usuario");
+    let id = creado.id; // Simular una cuenta bloqueada: intentos fallidos en BD + bloqueo en el tracker
+    UsuarioRepository::persistir_intentos(&mut conn, &username, 5).expect("persistir intentos");
+    {
+        let mut tracker = state.login_tracker.lock().unwrap();
+        for _ in 0..5 {
+            tracker.record_failed_attempt(&username, None);
+        }
+        tracker.lock_account(&username);
+        assert!(
+            tracker.is_locked(&username),
+            "cuenta bloqueada en el tracker"
+        );
+    }
 
-	// Desbloqueo vía AuthService (mismo camino que el comando)
-	let fue_bloqueada = AuthService::unlock_account(&state, &username).expect("desbloquear");
-	assert!(fue_bloqueada, "el tracker la tenía bloqueada");
+    // Desbloqueo vía AuthService (mismo camino que el comando)
+    let fue_bloqueada = AuthService::unlock_account(&state, &username).expect("desbloquear");
+    assert!(fue_bloqueada, "el tracker la tenía bloqueada");
 
-	// Los intentos quedan en 0 en BD y el tracker ya no la bloquea
-	let u = UsuarioService::obtener(&mut conn, id).expect("obtener usuario");
-	assert_eq!(u.intentos_fallidos, 0);
-	assert!(!state.login_tracker.lock().unwrap().is_locked(&username));
+    // Los intentos quedan en 0 en BD y el tracker ya no la bloquea
+    let u = UsuarioService::obtener(&mut conn, id).expect("obtener usuario");
+    assert_eq!(u.intentos_fallidos, 0);
+    assert!(!state.login_tracker.lock().unwrap().is_locked(&username));
 
     // Cleanup
     UsuarioService::eliminar(&mut conn, "admin", id).expect("eliminar");

@@ -90,17 +90,25 @@ impl AuthService {
 
         // 1) Cuenta bloqueada
         {
-            let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+            let mut tracker = state
+                .login_tracker
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if tracker.is_locked(username) {
                 let remaining = tracker.get_lockout_remaining_seconds(username);
                 let minutes = remaining / 60;
                 log::warn!("Intento de login en cuenta bloqueada: {username} (restan {minutes}m)");
-                return Err(AppError::AccountLocked { remaining_seconds: remaining });
+                return Err(AppError::AccountLocked {
+                    remaining_seconds: remaining,
+                });
             }
 
             // 2) Rate limiting por IP y usuario
             if tracker.check_rate_limit(username, ip) {
-                log::warn!("Rate limit excedido: usuario={username} ip={}", ip.unwrap_or("-"));
+                log::warn!(
+                    "Rate limit excedido: usuario={username} ip={}",
+                    ip.unwrap_or("-")
+                );
                 return Err(AppError::RateLimited);
             }
         }
@@ -110,7 +118,10 @@ impl AuthService {
         let usuario = UsuarioRepository::obtener_para_autenticacion(&mut conn, username)?;
         let Some(usuario) = usuario else {
             // Usuario no existe → registrar intento fallido igualmente (anti-enumeración)
-            let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+            let mut tracker = state
+                .login_tracker
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let attempts = tracker.record_failed_attempt(username, ip);
             let remaining = tracker.get_remaining_attempts(username);
             log::warn!("Login fallido (usuario inexistente): {username}");
@@ -124,7 +135,9 @@ impl AuthService {
             if attempts >= 5 {
                 tracker.lock_account(username);
                 log::warn!("CUENTA BLOQUEADA: {username}");
-                return Err(AppError::AccountLocked { remaining_seconds: 0 });
+                return Err(AppError::AccountLocked {
+                    remaining_seconds: 0,
+                });
             }
             return Err(AppError::InvalidCredentials);
         };
@@ -136,23 +149,48 @@ impl AuthService {
         match security::verify_password(&usuario.password, password) {
             VerifyResult::Valid => {
                 // Argon2id válido — no necesita re-hash
-                Self::finish_login(state, conn, usuario.id, username, usuario.nombre.as_deref(), usuario.rol.as_deref(), usuario.debe_cambiar_password, ip, None)
+                Self::finish_login(
+                    state,
+                    conn,
+                    usuario.id,
+                    username,
+                    usuario.nombre.as_deref(),
+                    usuario.rol.as_deref(),
+                    usuario.debe_cambiar_password,
+                    ip,
+                    None,
+                )
             }
             VerifyResult::ValidNeedsRehash => {
                 // Legacy PBKDF2 válido → re-hash a Argon2id (write-back)
                 let new_hash = security::hash_password(password)?;
                 UsuarioRepository::actualizar_password(&mut conn, username, &new_hash)?;
                 log::info!("Re-hash Argon2id aplicado para: {username}");
-                Self::finish_login(state, conn, usuario.id, username, usuario.nombre.as_deref(), usuario.rol.as_deref(), usuario.debe_cambiar_password, ip, Some(&new_hash))
+                Self::finish_login(
+                    state,
+                    conn,
+                    usuario.id,
+                    username,
+                    usuario.nombre.as_deref(),
+                    usuario.rol.as_deref(),
+                    usuario.debe_cambiar_password,
+                    ip,
+                    Some(&new_hash),
+                )
             }
             VerifyResult::Invalid => {
                 // Credenciales incorrectas
-                let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+                let mut tracker = state
+                    .login_tracker
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 let attempts = tracker.record_failed_attempt(username, ip);
                 let remaining = tracker.get_remaining_attempts(username);
                 // Persistir contador en BD
                 let _ = UsuarioRepository::persistir_intentos(&mut conn, username, attempts as i64);
-                log::warn!("Login fallido: {username} (intentos={attempts}, restantes={remaining})");
+                log::warn!(
+                    "Login fallido: {username} (intentos={attempts}, restantes={remaining})"
+                );
                 crate::core::audit::log_audit(
                     &mut conn,
                     username,
@@ -163,7 +201,9 @@ impl AuthService {
                 if attempts >= 5 {
                     tracker.lock_account(username);
                     log::warn!("CUENTA BLOQUEADA: {username}");
-                    return Err(AppError::AccountLocked { remaining_seconds: 0 });
+                    return Err(AppError::AccountLocked {
+                        remaining_seconds: 0,
+                    });
                 }
                 Err(AppError::InvalidCredentials)
             }
@@ -184,7 +224,10 @@ impl AuthService {
     ) -> Result<LoginResult, AppError> {
         // Resetear intentos
         {
-            let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+            let mut tracker = state
+                .login_tracker
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             tracker.reset_attempts(username);
         }
         let _ = UsuarioRepository::persistir_intentos(&mut conn, username, 0);
@@ -200,7 +243,11 @@ impl AuthService {
             debe_cambiar,
         );
 
-        log::info!("Login exitoso: {username} (rol={}, ip={})", rol.unwrap_or("-"), ip.unwrap_or("-"));
+        log::info!(
+            "Login exitoso: {username} (rol={}, ip={})",
+            rol.unwrap_or("-"),
+            ip.unwrap_or("-")
+        );
         tracing::info!(
             rol = %rol.unwrap_or("-"),
             debe_cambiar_password = debe_cambiar,
@@ -226,7 +273,10 @@ impl AuthService {
 
     /// Estado de login de un usuario (intentos, bloqueo) — puerto de get_login_status
     pub fn get_login_status(state: &AppState, username: &str) -> LoginStatus {
-        let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+        let mut tracker = state
+            .login_tracker
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let is_locked = tracker.is_locked(username);
         LoginStatus {
             is_locked,
@@ -239,16 +289,25 @@ impl AuthService {
     /// Sincroniza el tracker desde la BD al iniciar la app
     pub fn sync_tracker_from_db(state: &AppState) {
         let attempts = match state.pool.get() {
-            Ok(mut conn) => UsuarioRepository::obtener_intentos_pendientes(&mut conn).unwrap_or_default(),
+            Ok(mut conn) => {
+                UsuarioRepository::obtener_intentos_pendientes(&mut conn).unwrap_or_default()
+            }
             Err(_) => std::collections::HashMap::new(),
         };
-        let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+        let mut tracker = state
+            .login_tracker
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         tracker.sync_from_db(attempts);
     }
 
     /// Cierra sesión
     pub fn logout(state: &AppState, session_id: &str) {
-        state.sessions.lock().unwrap_or_else(|e| e.into_inner()).destroy(session_id);
+        state
+            .sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .destroy(session_id);
     }
 
     /// Cambio de contraseña (obligatorio tras primer login o por solicitud)
@@ -259,7 +318,9 @@ impl AuthService {
         new_password: &str,
     ) -> Result<(), AppError> {
         if username.trim().is_empty() || current_password.is_empty() || new_password.is_empty() {
-            return Err(AppError::Validation("Todos los campos son obligatorios.".into()));
+            return Err(AppError::Validation(
+                "Todos los campos son obligatorios.".into(),
+            ));
         }
         if current_password == new_password {
             return Err(AppError::Validation(
@@ -291,7 +352,9 @@ impl AuthService {
                 "contraseña actual incorrecta",
                 "local",
             )?;
-            return Err(AppError::Validation("La contraseña actual no es correcta.".into()));
+            return Err(AppError::Validation(
+                "La contraseña actual no es correcta.".into(),
+            ));
         }
 
         let new_hash = security::hash_password(new_password)?;
@@ -310,7 +373,10 @@ impl AuthService {
     pub fn unlock_account(state: &AppState, username: &str) -> Result<bool, AppError> {
         let mut conn = state.pool.get()?;
         let _ = UsuarioRepository::reset_intentos(&mut conn, username);
-        let mut tracker = state.login_tracker.lock().unwrap_or_else(|e| e.into_inner());
+        let mut tracker = state
+            .login_tracker
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let was_locked = tracker.is_locked(username);
         tracker.reset_attempts(username);
         if was_locked {

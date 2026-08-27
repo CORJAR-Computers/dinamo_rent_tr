@@ -74,7 +74,16 @@ impl Usuario {
 /// Fila de usuarios para SELECT de gestión (tupla larga)
 #[allow(clippy::type_complexity)]
 /// Fila de SELECT de autenticación: id, username, password, nombre, rol, activo, debe_cambiar, intentos
-pub type UsuarioAuthRow = (i64, String, String, Option<String>, Option<String>, i16, i16, i64);
+pub type UsuarioAuthRow = (
+    i64,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    i16,
+    i16,
+    i64,
+);
 
 /// Fila de SELECT de gestión: id, username, nombre, rol, email, activo, debe_cambiar,
 /// intentos, ultimo_acceso (varchar), created_at (varchar)
@@ -129,26 +138,40 @@ impl UsuarioRepository {
     pub fn obtener_por_username(
         conn: &mut PooledConnection,
         username: &str,
-    ) -> Result<Option<Usuario>, AppError> {        let row: Option<UsuarioRow> = conn.query_first(
-            &format!("SELECT {SELECT_COLS} FROM usuarios WHERE username = ? AND deleted_at IS NULL"),
+    ) -> Result<Option<Usuario>, AppError> {
+        let row: Option<UsuarioRow> = conn.query_first(
+            &format!(
+                "SELECT {SELECT_COLS} FROM usuarios WHERE username = ? AND deleted_at IS NULL"
+            ),
             (username.trim().to_string(),),
         )?;
         Ok(row.map(
             |(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
-                Usuario::from_row(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)
+                Usuario::from_row(
+                    id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado,
+                )
             },
-        ))   
+        ))
     }
 
     /// Lista todos los usuarios (orden alfabético)
-    pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Usuario>, AppError> {        let rows: Vec<UsuarioRow> =
-            conn.query(&format!("SELECT {SELECT_COLS} FROM usuarios WHERE deleted_at IS NULL ORDER BY username"), ())?;
+    pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Usuario>, AppError> {
+        let rows: Vec<UsuarioRow> = conn.query(
+            &format!(
+                "SELECT {SELECT_COLS} FROM usuarios WHERE deleted_at IS NULL ORDER BY username"
+            ),
+            (),
+        )?;
         Ok(rows
             .into_iter()
-            .map(|(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
-                Usuario::from_row(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)
-            })
-            .collect())   
+            .map(
+                |(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
+                    Usuario::from_row(
+                        id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado,
+                    )
+                },
+            )
+            .collect())
     }
 
     /// Obtiene un usuario por id (gestión)
@@ -162,7 +185,9 @@ impl UsuarioRepository {
         )?;
         Ok(row.map(
             |(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
-                Usuario::from_row(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)
+                Usuario::from_row(
+                    id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado,
+                )
             },
         ))
     }
@@ -180,9 +205,13 @@ impl UsuarioRepository {
         )?;
         Ok(rows
             .into_iter()
-            .map(|(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
-                Usuario::from_row(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)
-            })
+            .map(
+                |(id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado)| {
+                    Usuario::from_row(
+                        id, username, nombre, rol, email, activo, debe, intentos, ultimo, creado,
+                    )
+                },
+            )
             .collect())
     }
 
@@ -251,8 +280,11 @@ impl UsuarioRepository {
 
     /// Elimina un usuario (soft-delete; sin FKs que lo impidan)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
-        conn.execute("UPDATE usuarios SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", (id,))
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        conn.execute(
+            "UPDATE usuarios SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (id,),
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
 
@@ -339,26 +371,22 @@ impl UsuarioRepository {
 
     /// Cuenta usuarios (para seed)
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM usuarios WHERE deleted_at IS NULL", ())?;
+        let count: Option<(i64,)> =
+            conn.query_first("SELECT COUNT(*) FROM usuarios WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
     /// Obtiene la preferencia de tema del usuario ('light' | 'dark' | 'auto' | NULL)
-    pub fn obtener_tema(
-        conn: &mut PooledConnection,
-        id: i64,
-    ) -> Result<Option<String>, AppError> {
-        let row: Option<(Option<String>,)> =
-            conn.query_first("SELECT tema FROM usuarios WHERE id = ? AND deleted_at IS NULL", (id,))?;
+    pub fn obtener_tema(conn: &mut PooledConnection, id: i64) -> Result<Option<String>, AppError> {
+        let row: Option<(Option<String>,)> = conn.query_first(
+            "SELECT tema FROM usuarios WHERE id = ? AND deleted_at IS NULL",
+            (id,),
+        )?;
         Ok(row.and_then(|(t,)| t))
     }
 
     /// Guarda la preferencia de tema del usuario
-    pub fn guardar_tema(
-        conn: &mut PooledConnection,
-        id: i64,
-        tema: &str,
-    ) -> Result<(), AppError> {
+    pub fn guardar_tema(conn: &mut PooledConnection, id: i64, tema: &str) -> Result<(), AppError> {
         conn.execute(
             "UPDATE usuarios SET tema = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
             (tema.to_string(), id),

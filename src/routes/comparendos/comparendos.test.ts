@@ -88,9 +88,8 @@ const LISTS: BusinessLists = {
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 function setSesion(rol = 'Administrador') {
@@ -115,7 +114,13 @@ describe('página de Comparendos', () => {
 	it('lista los comparendos con su estado', async () => {
 		tauri.register('listar_comparendos', () => [
 			comparendo(),
-			comparendo({ id: 2, placa: 'XYZ987', monto: '320000.00', estado: 'Pagado', observaciones: 'Foto-detección' })
+			comparendo({
+				id: 2,
+				placa: 'XYZ987',
+				monto: '320000.00',
+				estado: 'Pagado',
+				observaciones: 'Foto-detección'
+			})
 		]);
 
 		render(ComparendosPage);
@@ -320,7 +325,13 @@ describe('página de Comparendos', () => {
 			}
 			return [
 				comparendo({ id: 1, origen: 'SIMIT', ultimoVistoSimit: null }),
-				comparendo({ id: 3, placa: 'LMN456', origen: 'SIMIT', ultimoVistoSimit: null, observaciones: 'Histórica sin confirmar' }),
+				comparendo({
+					id: 3,
+					placa: 'LMN456',
+					origen: 'SIMIT',
+					ultimoVistoSimit: null,
+					observaciones: 'Histórica sin confirmar'
+				}),
 				comparendo({ id: 2, placa: 'XYZ987', origen: 'Manual', observaciones: 'Foto-detección' })
 			];
 		});
@@ -414,7 +425,9 @@ describe('página de Comparendos', () => {
 		const dialogo = await screen.findByRole('dialog');
 		expect(within(dialogo).getByText('Ana Martínez')).toBeInTheDocument();
 		expect(within(dialogo).getByText(/2026-042/)).toBeInTheDocument();
-		expect(within(dialogo).getByText(/Tenía el vehículo el día de la infracción/)).toBeInTheDocument();
+		expect(
+			within(dialogo).getByText(/Tenía el vehículo el día de la infracción/)
+		).toBeInTheDocument();
 	});
 
 	it('muestra el estado vacío cuando no hay comparendos', async () => {
@@ -428,7 +441,9 @@ describe('página de Comparendos', () => {
 
 	it('registra un comparendo desde el modal', async () => {
 		tauri.register('listar_comparendos', () => []);
-		const crear = vi.fn((_args: { sessionId: string; datos: ComparendoDatos }) => comparendo({ id: 9 }));
+		const crear = vi.fn((_args: { sessionId: string; datos: ComparendoDatos }) =>
+			comparendo({ id: 9 })
+		);
 		tauri.register('crear_comparendo', crear);
 
 		render(ComparendosPage);
@@ -449,9 +464,12 @@ describe('página de Comparendos', () => {
 		await fireEvent.input(screen.getByPlaceholderText('HH:MM'), {
 			target: { value: '14:30' }
 		});
-		await fireEvent.input(screen.getByPlaceholderText('Ej: Exceso de velocidad, foto-detección...'), {
-			target: { value: 'Exceso de velocidad' }
-		});
+		await fireEvent.input(
+			screen.getByPlaceholderText('Ej: Exceso de velocidad, foto-detección...'),
+			{
+				target: { value: 'Exceso de velocidad' }
+			}
+		);
 
 		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Registrar comparendo' }));
 
@@ -521,7 +539,11 @@ describe('página de Comparendos', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
 		await waitFor(() => expect(actualizar).toHaveBeenCalledTimes(1));
-		const args = actualizar.mock.calls[0][0] as { sessionId: string; id: number; datos: ComparendoDatos };
+		const args = actualizar.mock.calls[0][0] as {
+			sessionId: string;
+			id: number;
+			datos: ComparendoDatos;
+		};
 		expect(args.id).toBe(7);
 		expect(args.datos.monto).toBe('650000');
 	});
@@ -566,7 +588,9 @@ describe('página de Comparendos', () => {
 	});
 
 	it('filtra por estado con el selector', async () => {
-		const listar = vi.fn((_args: { sessionId: string; estado: string | null; placa: string | null }) => [comparendo()]);
+		const listar = vi.fn(
+			(_args: { sessionId: string; estado: string | null; placa: string | null }) => [comparendo()]
+		);
 		tauri.register('listar_comparendos', listar);
 
 		render(ComparendosPage);

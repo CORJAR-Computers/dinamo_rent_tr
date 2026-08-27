@@ -33,11 +33,7 @@ pub fn obtener_auto(state: State<'_, AppState>, session_id: String, placa: Strin
 
 /// Crea un vehículo
 #[tauri::command]
-pub fn crear_auto(
-    state: State<'_, AppState>,
-    session_id: String,
-    datos: AutoDatos,
-) -> Cmd<Auto> {
+pub fn crear_auto(state: State<'_, AppState>, session_id: String, datos: AutoDatos) -> Cmd<Auto> {
     let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     AutoService::crear(&mut c, &state.config, &session.username, datos).map_err(|e| e.to_payload())
@@ -53,7 +49,8 @@ pub fn actualizar_auto(
 ) -> Cmd<Auto> {
     let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    AutoService::actualizar(&mut c, &state.config, &session.username, &placa, datos).map_err(|e| e.to_payload())
+    AutoService::actualizar(&mut c, &state.config, &session.username, &placa, datos)
+        .map_err(|e| e.to_payload())
 }
 
 /// Elimina un vehículo por placa
@@ -66,7 +63,10 @@ pub fn eliminar_auto(state: State<'_, AppState>, session_id: String, placa: Stri
 
 /// Alertas de vencimientos (SOAT, técnico, extintor, batería, aceite)
 #[tauri::command]
-pub fn alertas_autos(state: State<'_, AppState>, session_id: String) -> Cmd<Vec<AlertaVencimiento>> {
+pub fn alertas_autos(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Cmd<Vec<AlertaVencimiento>> {
     require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
     AutoService::alertas_vencimiento(&mut c, &state.config).map_err(|e| e.to_payload())

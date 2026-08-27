@@ -57,7 +57,8 @@ function totales(overrides: Partial<TotalesGastos> = {}): TotalesGastos {
 	return {
 		totalGeneral: '250000.00',
 		totalMes: '80000.00',
-		porPlaca: [{ clave: 'ABC123', total: '150000.00' }],			porCategoria: [{ clave: 'COMBUSTIBLE', total: '200000.00' }],
+		porPlaca: [{ clave: 'ABC123', total: '150000.00' }],
+		porCategoria: [{ clave: 'COMBUSTIBLE', total: '200000.00' }],
 		...overrides
 	};
 }
@@ -71,15 +72,25 @@ const LISTS: BusinessLists = {
 	tiposDoc: [],
 	estadosCliente: [],
 	estadosReserva: [],
-	tiposGasto: ['Combustible', 'Peajes', 'Lavado', 'Mantenimiento', 'Repuestos', 'Parqueadero', 'Seguros', 'Multas', 'Papelería', 'Otros'],
+	tiposGasto: [
+		'Combustible',
+		'Peajes',
+		'Lavado',
+		'Mantenimiento',
+		'Repuestos',
+		'Parqueadero',
+		'Seguros',
+		'Multas',
+		'Papelería',
+		'Otros'
+	],
 	nivelTanque: [],
 	tiposMantenimiento: [],
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 function setSesion(rol = 'Administrador') {
@@ -106,7 +117,13 @@ describe('página de Gastos', () => {
 	it('lista los gastos registrados con totales', async () => {
 		tauri.register('listar_gastos', () => [
 			gasto({ id: 1, placa: 'ABC123', descripcion: 'Tanqueo vehículo' }),
-			gasto({ id: 2, placa: 'XYZ987', categoria: 'PEAJES', monto: '45000.00', descripcion: 'Peaje Barranquilla' })
+			gasto({
+				id: 2,
+				placa: 'XYZ987',
+				categoria: 'PEAJES',
+				monto: '45000.00',
+				descripcion: 'Peaje Barranquilla'
+			})
 		]);
 
 		render(GastosPage);
@@ -185,7 +202,9 @@ describe('página de Gastos', () => {
 	});
 
 	it('edita un gasto existente', async () => {
-		tauri.register('listar_gastos', () => [gasto({ id: 7, descripcion: 'Tanqueo vehículo', monto: '120000.00' })]);
+		tauri.register('listar_gastos', () => [
+			gasto({ id: 7, descripcion: 'Tanqueo vehículo', monto: '120000.00' })
+		]);
 		const actualizar = vi.fn((_args: { sessionId: string; id: number; datos: GastoDatos }) =>
 			gasto({ id: 7, monto: '130000.00' })
 		);
@@ -204,7 +223,11 @@ describe('página de Gastos', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
 		await waitFor(() => expect(actualizar).toHaveBeenCalledTimes(1));
-		const args = actualizar.mock.calls[0][0] as { sessionId: string; id: number; datos: GastoDatos };
+		const args = actualizar.mock.calls[0][0] as {
+			sessionId: string;
+			id: number;
+			datos: GastoDatos;
+		};
 		expect(args.id).toBe(7);
 		expect(args.datos.monto).toBe('130000');
 	});
@@ -250,7 +273,9 @@ describe('página de Gastos', () => {
 	});
 
 	it('filtra por placa con el selector', async () => {
-		const listar = vi.fn((_args: { sessionId: string; placa: string | null; categoria: string | null }) => [gasto()]);
+		const listar = vi.fn(
+			(_args: { sessionId: string; placa: string | null; categoria: string | null }) => [gasto()]
+		);
 		tauri.register('listar_gastos', listar);
 
 		render(GastosPage);

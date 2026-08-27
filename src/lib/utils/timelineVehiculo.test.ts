@@ -85,7 +85,17 @@ function comparendo(overrides: Partial<Comparendo> = {}): Comparendo {
 describe('construirTimelineVehiculo', () => {
 	it('cruza la multa con la renta del día (responsable.idRenta)', () => {
 		const r = renta();
-		const m = comparendo({ responsable: { idRenta: 1, nombreCliente: 'Ana Martínez', noContrato: 42, anioContrato: 2026, fechaRecogida: '2026-07-01', fechaRetorno: '2026-07-10', estadoRenta: 'Cerrada' } });
+		const m = comparendo({
+			responsable: {
+				idRenta: 1,
+				nombreCliente: 'Ana Martínez',
+				noContrato: 42,
+				anioContrato: 2026,
+				fechaRecogida: '2026-07-01',
+				fechaRetorno: '2026-07-10',
+				estadoRenta: 'Cerrada'
+			}
+		});
 
 		const tl = construirTimelineVehiculo([r], [m]);
 
@@ -132,6 +142,11 @@ describe('construirTimelineVehiculo', () => {
 
 		const tl = construirTimelineVehiculo([r2, r1], [m2, m1]);
 
-		expect(tl.eventos.map((e) => e.fecha)).toEqual(['2026-07-01', '2026-07-03', '2026-07-15', '2026-07-25']);
+		expect(tl.eventos.map((e) => e.fecha)).toEqual([
+			'2026-07-01',
+			'2026-07-03',
+			'2026-07-15',
+			'2026-07-25'
+		]);
 	});
 });

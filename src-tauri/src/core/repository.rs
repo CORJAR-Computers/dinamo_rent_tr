@@ -116,7 +116,11 @@ pub fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError
 /// Si la hora viene sin segundos (`HH:MM`, 5 chars) se le añade `:00` antes de parsear.
 pub fn parse_hora(v: &str) -> Result<NaiveTime, AppError> {
     let h = v.trim();
-    let h = if h.len() == 5 { format!("{h}:00") } else { h.to_string() };
+    let h = if h.len() == 5 {
+        format!("{h}:00")
+    } else {
+        h.to_string()
+    };
     NaiveTime::parse_from_str(&h, "%H:%M:%S")
         .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
 }
@@ -242,7 +246,7 @@ mod tests {
         assert!(parse_fecha("2026-1-5").is_ok());
         assert!(parse_fecha("no-fecha").is_err());
         assert!(parse_fecha("2026-13-01").is_err()); // mes 13 inválido
-        // Acepta con espacios
+                                                     // Acepta con espacios
         assert!(parse_fecha("  2026-01-15  ").is_ok());
     }
 
@@ -251,7 +255,9 @@ mod tests {
         assert_eq!(parse_fecha_opt(&None).unwrap(), None);
         assert_eq!(parse_fecha_opt(&Some("".into())).unwrap(), None);
         assert_eq!(parse_fecha_opt(&Some("   ".into())).unwrap(), None);
-        assert!(parse_fecha_opt(&Some("2026-01-15".into())).unwrap().is_some());
+        assert!(parse_fecha_opt(&Some("2026-01-15".into()))
+            .unwrap()
+            .is_some());
     }
 
     #[test]

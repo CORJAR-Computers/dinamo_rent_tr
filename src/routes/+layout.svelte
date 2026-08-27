@@ -152,7 +152,10 @@
 		roles?: string[];
 	}
 	const menu: { section: string; items: ItemMenu[] }[] = [
-		{ section: 'PRINCIPAL', items: [{ label: 'Dashboard', href: '/dashboard', icon: 'dashboard' }] },
+		{
+			section: 'PRINCIPAL',
+			items: [{ label: 'Dashboard', href: '/dashboard', icon: 'dashboard' }]
+		},
 		{
 			section: 'OPERACIÓN',
 			items: [
@@ -170,8 +173,8 @@
 				{ label: 'Usuarios', href: '/usuarios', icon: 'usuarios', adminOnly: true },
 				{ label: 'Auditoría', href: '/auditoria', icon: 'auditoria', adminOnly: true },
 				{ label: 'Backups', href: '/backups', icon: 'backups', adminOnly: true },
-					{ label: 'Logs', href: '/logs', icon: 'logs', adminOnly: true },
-					{ label: 'Comparendos', href: '/comparendos', icon: 'comparendos' },
+				{ label: 'Logs', href: '/logs', icon: 'logs', adminOnly: true },
+				{ label: 'Comparendos', href: '/comparendos', icon: 'comparendos' },
 				{ label: 'Alertas', href: '/alertas', icon: 'alertas' }
 			]
 		},
@@ -192,7 +195,7 @@
 	];
 
 	const current = $derived(page.url.pathname);
-const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.pathname));
+	const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.pathname));
 
 	async function handleLogout() {
 		await session.logout();
@@ -240,9 +243,9 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			'/mantenimiento': 'Mantenimiento',
 			'/usuarios': 'Usuarios',
 			'/auditoria': 'Auditoría',
-				'/backups': 'Backups',
-				'/logs': 'Logs',
-				'/comparendos': 'Comparendos',
+			'/backups': 'Backups',
+			'/logs': 'Logs',
+			'/comparendos': 'Comparendos',
 			'/alertas': 'Alertas',
 			'/informes': 'Informes',
 			'/gastos': 'Caja Menor (Gastos)'
@@ -272,16 +275,29 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 {:else if checking}
 	<div class="min-h-screen flex items-center justify-center bg-fondo">
 		<div class="flex flex-col items-center gap-3">
-			<svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+			<svg
+				class="animate-spin h-8 w-8 text-primary"
+				xmlns="http://www.w3.org/2000/svg"
+				fill="none"
+				viewBox="0 0 24 24"
+			>
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+				></circle>
+				<path
+					class="opacity-75"
+					fill="currentColor"
+					d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+				></path>
 			</svg>
 			<p class="text-sm text-text-secondary">Verificando sesión...</p>
 		</div>
 	</div>
 {:else if ready && session.isAuthenticated}
 	<!-- Skip-link de accesibilidad: primer elemento enfocable. Salta al contenido principal. -->
-	<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-surface focus:text-primary focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary-focus">
+	<a
+		href="#main-content"
+		class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-surface focus:text-primary focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary-focus"
+	>
 		Saltar al contenido
 	</a>
 	<div class="flex h-screen overflow-hidden">
@@ -293,7 +309,9 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 		>
 			<!-- Logo -->
 			<div class="flex items-center gap-3 px-4 py-5 h-16 border-b border-white/10">
-				<div class="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0 overflow-hidden p-1">
+				<div
+					class="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0 overflow-hidden p-1"
+				>
 					<img src={empresa.logoSrc} alt="Logo" class="w-full h-full object-contain" />
 				</div>
 				{#if sidebarOpen}
@@ -308,7 +326,9 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 			<nav class="flex-1 overflow-y-auto py-4 px-2 space-y-5" aria-label="Navegación principal">
 				{#each menu as group}
 					{#if sidebarOpen}
-						<p class="px-3 text-[10px] font-bold tracking-widest text-white/40 uppercase">{group.section}</p>
+						<p class="px-3 text-[10px] font-bold tracking-widest text-white/40 uppercase">
+							{group.section}
+						</p>
 					{/if}
 					<div class="space-y-1">
 						{#each group.items as item}
@@ -341,11 +361,35 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 					>
 						<span class="relative shrink-0">
 							{#if tema === 'dark'}
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="w-5 h-5"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="1.8"
+									><path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"
+									/></svg
+								>
 							{:else if tema === 'auto'}
 								<Icon name="computer" class="w-5 h-5" />
 							{:else}
-								<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="w-5 h-5"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="1.8"
+									><path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"
+									/></svg
+								>
 							{/if}
 							<span
 								class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-primary {colorIndicador} transition-colors"
@@ -356,12 +400,16 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 							<span class="text-[10px] font-bold uppercase tracking-wider">{etiquetaCorta}</span>
 						{/if}
 					</button>
-					<div class="w-9 h-9 rounded-full bg-primary-focus flex items-center justify-center text-sm font-bold shrink-0 uppercase">
+					<div
+						class="w-9 h-9 rounded-full bg-primary-focus flex items-center justify-center text-sm font-bold shrink-0 uppercase"
+					>
 						{(session.user?.nombre || session.user?.username || '?').slice(0, 2)}
 					</div>
 					{#if sidebarOpen}
 						<div class="flex-1 overflow-hidden">
-							<p class="text-sm font-semibold truncate">{session.user?.nombre || session.user?.username}</p>
+							<p class="text-sm font-semibold truncate">
+								{session.user?.nombre || session.user?.username}
+							</p>
 							<p class="text-[11px] text-white/60 truncate">{session.user?.rol}</p>
 						</div>
 						<button
@@ -369,7 +417,19 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 							class="text-white/60 hover:text-white transition-colors p-1 rounded"
 							title="Cerrar sesión"
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="w-5 h-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="1.8"
+								><path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+								/></svg
+							>
 						</button>
 					{/if}
 				</div>
@@ -385,7 +445,19 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 					class="p-2 rounded-lg text-text-secondary hover:bg-alt-row hover:text-text-primary transition-colors"
 					title={sidebarOpen ? 'Contraer menú' : 'Expandir menú'}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="w-5 h-5"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1.8"
+						><path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+						/></svg
+					>
 				</button>
 				<h1 class="text-lg font-semibold text-text-primary">
 					{pageTitle(current)}
@@ -399,7 +471,10 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 				>
 					<Icon name="search" class="w-4 h-4" />
 					<span class="hidden md:inline text-xs">Buscar</span>
-					<kbd class="hidden md:inline-flex items-center rounded border border-border bg-alt-row/60 px-1.5 py-0.5 text-[10px] font-mono leading-none">Ctrl K</kbd>
+					<kbd
+						class="hidden md:inline-flex items-center rounded border border-border bg-alt-row/60 px-1.5 py-0.5 text-[10px] font-mono leading-none"
+						>Ctrl K</kbd
+					>
 				</button>
 				<button
 					onclick={() => updateRef?.()}
@@ -417,7 +492,9 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 				>
 					<Icon name="lightbulb" class="w-5 h-5" />
 				</button>
-				<span class="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium">{session.user?.rol}</span>
+				<span class="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium"
+					>{session.user?.rol}</span
+				>
 			</header>
 
 			<!-- Vista actual -->
@@ -434,11 +511,10 @@ const isFullscreen = $derived(['/login', '/cambiar-password'].includes(page.url.
 	<PaletaComandos
 		open={paletaOpen}
 		onClose={() => (paletaOpen = false)}
-		menu={menu}
+		{menu}
 		rol={session.user?.rol}
 		actualPath={current}
 	/>
 {:else}
 	{@render children()}
 {/if}
-

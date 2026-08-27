@@ -12,7 +12,8 @@ use super::config::AppConfig;
 use super::error::AppError;
 
 /// Tipo de conexión del pool: builder nativo embedded con carga dinámica
-pub type ConnBuilder = rsfbclient::NativeConnectionBuilder<rsfbclient::DynLoad, rsfbclient::ConnEmbedded>;
+pub type ConnBuilder =
+    rsfbclient::NativeConnectionBuilder<rsfbclient::DynLoad, rsfbclient::ConnEmbedded>;
 pub type Pool = r2d2::Pool<FirebirdConnectionManager<ConnBuilder>>;
 pub type PooledConnection = r2d2::PooledConnection<FirebirdConnectionManager<ConnBuilder>>;
 
@@ -58,19 +59,17 @@ pub fn create_pool(cfg: &Arc<AppConfig>) -> Result<Pool, AppError> {
         );
         if let Some(parent) = cfg.db_path.parent() {
             if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| AppError::Database(format!(
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    AppError::Database(format!(
                         "No se pudo crear el directorio de la BD {:?}: {e}",
                         parent
-                    )))?;
+                    ))
+                })?;
             }
         }
-        builder_embedded(cfg)
-            .create_database()
-            .map_err(|e| AppError::Database(format!(
-                "No se pudo crear la BD {:?}: {e}",
-                cfg.db_path
-            )))?;
+        builder_embedded(cfg).create_database().map_err(|e| {
+            AppError::Database(format!("No se pudo crear la BD {:?}: {e}", cfg.db_path))
+        })?;
     }
 
     let manager = FirebirdConnectionManager::new(builder_embedded(cfg));
@@ -98,7 +97,9 @@ fn add_firebird_dir_to_dll_search(fbclient_path: &std::path::Path) {
     use std::sync::Once;
 
     static ONCE: Once = Once::new();
-    let Some(dir) = fbclient_path.parent() else { return };
+    let Some(dir) = fbclient_path.parent() else {
+        return;
+    };
     ONCE.call_once(|| {
         extern "system" {
             fn SetDllDirectoryW(lpPathName: *const u16) -> i32;

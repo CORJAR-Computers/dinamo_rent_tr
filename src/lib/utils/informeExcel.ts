@@ -67,7 +67,12 @@ export function filasInformeExcel(informe: InformeMensual, periodo: string): Fil
 	const filas: FilaInforme[] = [];
 
 	// Título y periodo
-	filas.push([{ v: 'DINAMO RENT A CAR — INFORME FINANCIERO', estilo: { bold: true, fill: AZUL, color: 'FFFFFF', fontSize: 14 } }]);
+	filas.push([
+		{
+			v: 'DINAMO RENT A CAR — INFORME FINANCIERO',
+			estilo: { bold: true, fill: AZUL, color: 'FFFFFF', fontSize: 14 }
+		}
+	]);
 	filas.push([{ v: `Periodo: ${periodo}`, estilo: { color: '444444' } }]);
 	filas.push([{ v: ' ' }]);
 

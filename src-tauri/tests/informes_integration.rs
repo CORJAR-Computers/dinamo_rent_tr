@@ -41,7 +41,8 @@ fn informe_mensual_balance_consistente() {
     let mut conn = state.pool.get().expect("conn");
 
     // Mes por defecto (actual)
-    let informe = InformeService::mensual(&mut conn, "2026-08-01", "2026-08-31").expect("informe mes actual");
+    let informe =
+        InformeService::mensual(&mut conn, "2026-08-01", "2026-08-31").expect("informe mes actual");
     assert_eq!(informe.fecha_inicio, "2026-08-01", "fecha de inicio");
     assert_eq!(informe.fecha_fin, "2026-08-31", "fecha fin");
 
@@ -49,17 +50,18 @@ fn informe_mensual_balance_consistente() {
     let ingresos: rust_decimal::Decimal = informe.total_ingresos.parse().expect("numérico");
     let egresos: rust_decimal::Decimal = informe.total_egresos.parse().expect("numérico");
     let balance: rust_decimal::Decimal = informe.balance.parse().expect("numérico");
-    assert_eq!(
-        balance,
-        ingresos - egresos,
-        "balance = ingresos − egresos"
-    );
+    assert_eq!(balance, ingresos - egresos, "balance = ingresos − egresos");
 
     // Netos: ingresos_netos = total_ingresos − total_comisiones;
     // balance_neto = balance − total_comisiones (consistencia interna)
-    let comisiones: rust_decimal::Decimal = informe.total_comisiones.parse().expect("comisiones numérico");
-    let ingresos_netos: rust_decimal::Decimal = informe.ingresos_netos.parse().expect("netos numérico");
-    let balance_neto: rust_decimal::Decimal = informe.balance_neto.parse().expect("balance neto numérico");
+    let comisiones: rust_decimal::Decimal = informe
+        .total_comisiones
+        .parse()
+        .expect("comisiones numérico");
+    let ingresos_netos: rust_decimal::Decimal =
+        informe.ingresos_netos.parse().expect("netos numérico");
+    let balance_neto: rust_decimal::Decimal =
+        informe.balance_neto.parse().expect("balance neto numérico");
     assert_eq!(
         ingresos_netos,
         ingresos - comisiones,
@@ -74,7 +76,11 @@ fn informe_mensual_balance_consistente() {
     // Los totales parciales suman el total
     let pagos: rust_decimal::Decimal = informe.ingresos_pagos.parse().expect("numérico");
     let reservas: rust_decimal::Decimal = informe.ingresos_reservas.parse().expect("numérico");
-    assert_eq!(ingresos, pagos + reservas, "total ingresos = pagos + reservas");
+    assert_eq!(
+        ingresos,
+        pagos + reservas,
+        "total ingresos = pagos + reservas"
+    );
 
     // La estructura de rentas del mes es válida
     for r in &informe.rentas {
@@ -97,7 +103,12 @@ fn informe_utilidad_por_vehiculo() {
         let ingresos: rust_decimal::Decimal = v.ingresos.parse().expect("ingresos numérico");
         let costos: rust_decimal::Decimal = v.costos.parse().expect("costos numérico");
         let utilidad: rust_decimal::Decimal = v.utilidad.parse().expect("utilidad numérico");
-        assert_eq!(utilidad, ingresos - costos, "utilidad = ingresos − costos ({})", v.placa);
+        assert_eq!(
+            utilidad,
+            ingresos - costos,
+            "utilidad = ingresos − costos ({})",
+            v.placa
+        );
     }
 
     // Ordenadas de mayor a menor utilidad
@@ -106,7 +117,10 @@ fn informe_utilidad_por_vehiculo() {
         .iter()
         .map(|v| v.utilidad.parse().expect("numérico"))
         .collect();
-    assert!(utilidades.windows(2).all(|w| w[0] >= w[1]), "orden descendente");
+    assert!(
+        utilidades.windows(2).all(|w| w[0] >= w[1]),
+        "orden descendente"
+    );
 }
 
 #[test]
@@ -116,7 +130,8 @@ fn informe_mensual_especifico() {
     let mut conn = state.pool.get().expect("conn");
 
     // Un mes con datos mínimos esperados (2026-08 tiene tablas de prueba)
-    let informe = InformeService::mensual(&mut conn, "2026-08-01", "2026-08-31").expect("informe 2026-08");
+    let informe =
+        InformeService::mensual(&mut conn, "2026-08-01", "2026-08-31").expect("informe 2026-08");
     assert_eq!(informe.fecha_inicio, "2026-08-01");
     assert_eq!(informe.fecha_fin, "2026-08-31");
 
@@ -134,7 +149,10 @@ fn informe_mensual_especifico() {
         &informe.ingresos_netos,
         &informe.balance_neto,
     ] {
-        assert!(m.parse::<rust_decimal::Decimal>().is_ok(), "monto numérico: {m}");
+        assert!(
+            m.parse::<rust_decimal::Decimal>().is_ok(),
+            "monto numérico: {m}"
+        );
     }
     // Gastos por categoría: claves no vacías
     for (cat, total) in &informe.gastos_por_categoria {
@@ -163,7 +181,8 @@ fn informe_comisiones_y_balance_neto() {
     // Baseline del día antes de crear la renta con comisión
     let antes = InformeService::mensual(&mut conn, &dia, &dia).expect("informe antes");
     let comisiones_antes: rust_decimal::Decimal = antes.total_comisiones.parse().expect("numérico");
-    let ingresos_netos_antes: rust_decimal::Decimal = antes.ingresos_netos.parse().expect("numérico");
+    let ingresos_netos_antes: rust_decimal::Decimal =
+        antes.ingresos_netos.parse().expect("numérico");
     let balance_neto_antes: rust_decimal::Decimal = antes.balance_neto.parse().expect("numérico");
 
     // Renta de hoy con comisión de 120.000: total 178.500 (1 día × 150.000
@@ -186,9 +205,12 @@ fn informe_comisiones_y_balance_neto() {
     assert_eq!(creada.valor_neto, "58500.00", "neto = 178.500 − 120.000");
 
     let despues = InformeService::mensual(&mut conn, &dia, &dia).expect("informe después");
-    let comisiones_despues: rust_decimal::Decimal = despues.total_comisiones.parse().expect("numérico");
-    let ingresos_netos_despues: rust_decimal::Decimal = despues.ingresos_netos.parse().expect("numérico");
-    let balance_neto_despues: rust_decimal::Decimal = despues.balance_neto.parse().expect("numérico");
+    let comisiones_despues: rust_decimal::Decimal =
+        despues.total_comisiones.parse().expect("numérico");
+    let ingresos_netos_despues: rust_decimal::Decimal =
+        despues.ingresos_netos.parse().expect("numérico");
+    let balance_neto_despues: rust_decimal::Decimal =
+        despues.balance_neto.parse().expect("numérico");
 
     assert_eq!(
         comisiones_despues - comisiones_antes,

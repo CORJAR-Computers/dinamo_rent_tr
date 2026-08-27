@@ -11,7 +11,12 @@ function rejectPayload(payload: { kind: string; message: string }) {
 	throw JSON.stringify(payload);
 }
 
-const OK_STATUS = { isLocked: false, lockoutRemainingSeconds: 0, failedAttempts: 0, remainingAttempts: 5 };
+const OK_STATUS = {
+	isLocked: false,
+	lockoutRemainingSeconds: 0,
+	failedAttempts: 0,
+	remainingAttempts: 5
+};
 
 beforeEach(() => {
 	session.clear();
@@ -74,7 +79,9 @@ describe('página de login', () => {
 	});
 
 	it('muestra el mensaje de error del backend cuando el login falla', async () => {
-		tauri.register('login', () => rejectPayload({ kind: 'auth', message: 'Usuario o contraseña incorrectos.' }));
+		tauri.register('login', () =>
+			rejectPayload({ kind: 'auth', message: 'Usuario o contraseña incorrectos.' })
+		);
 		tauri.register('get_login_status', () => OK_STATUS);
 
 		render(LoginPage);

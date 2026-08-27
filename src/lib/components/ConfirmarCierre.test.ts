@@ -60,9 +60,7 @@ describe('ConfirmarCierre', () => {
 		await emitirCierre();
 
 		expect(screen.getByRole('dialog')).toHaveTextContent('Cerrar aplicación');
-		expect(
-			screen.getByText('¿Está seguro de cerrar la aplicación?')
-		).toBeInTheDocument();
+		expect(screen.getByText('¿Está seguro de cerrar la aplicación?')).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Sí' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
 	});

@@ -41,7 +41,11 @@ export function useDebouncedSearch<T>(getter: () => T, delay = 350): { debounced
 		if (timer) clearTimeout(timer);
 	});
 
-	return { get debounced() { return debounced; } };
+	return {
+		get debounced() {
+			return debounced;
+		}
+	};
 }
 
 /**

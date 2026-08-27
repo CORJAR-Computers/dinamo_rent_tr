@@ -61,7 +61,9 @@ fn datos_reserva(nombre: &str, dias: i64) -> ReservaDatos {
         fecha_recogida: (hoy + Duration::days(7)).format("%Y-%m-%d").to_string(),
         hora_recogida: Some("09:00".into()),
         ubicacion_recogida: Some("Oficina principal".into()),
-        fecha_retorno: (hoy + Duration::days(7 + dias)).format("%Y-%m-%d").to_string(),
+        fecha_retorno: (hoy + Duration::days(7 + dias))
+            .format("%Y-%m-%d")
+            .to_string(),
         hora_retorno: Some("18:00".into()),
         ubicacion_retorno: Some("Oficina principal".into()),
         dias_calculados: dias,
@@ -92,12 +94,19 @@ fn reserva_crud_roundtrip() {
     datos.nombre_cliente = "NOMBRE EQUIVOCADO".into();
 
     // Crear
-    let creada = ReservaService::crear(&mut conn, cfg, "test", datos.clone()).expect("crear reserva");
+    let creada =
+        ReservaService::crear(&mut conn, cfg, "test", datos.clone()).expect("crear reserva");
     let id = creada.id;
-    assert_eq!(creada.nombre_cliente, nombre_cliente, "nombre autocompletado del cliente");
+    assert_eq!(
+        creada.nombre_cliente, nombre_cliente,
+        "nombre autocompletado del cliente"
+    );
     assert_eq!(creada.dias_calculados, 3);
     // total = 3 × 150000 + 2 × 20000 = 490000
-    assert_eq!(creada.total, "490000.00", "total recalculado por el backend");
+    assert_eq!(
+        creada.total, "490000.00",
+        "total recalculado por el backend"
+    );
     assert_eq!(creada.placa_asignada.as_deref(), Some(placa.as_str()));
     assert_eq!(creada.estado, "Confirmada");
 
@@ -114,7 +123,10 @@ fn reserva_crud_roundtrip() {
 
     // Eliminar
     ReservaService::eliminar(&mut conn, "test", id).expect("eliminar reserva");
-    assert!(ReservaService::obtener(&mut conn, id).is_err(), "reserva eliminada");
+    assert!(
+        ReservaService::obtener(&mut conn, id).is_err(),
+        "reserva eliminada"
+    );
 }
 
 #[test]
@@ -179,8 +191,10 @@ fn reserva_cancelar() {
     // Completada no se puede cancelar
     let mut datos = datos_reserva("Cliente Completar", 1);
     datos.estado = "Completada".into();
-    let completada = ReservaService::crear(&mut conn, cfg, "test", datos).expect("crear completada");
-    let err = ReservaService::cancelar(&mut conn, completada.id).expect_err("no cancelar completada");
+    let completada =
+        ReservaService::crear(&mut conn, cfg, "test", datos).expect("crear completada");
+    let err =
+        ReservaService::cancelar(&mut conn, completada.id).expect_err("no cancelar completada");
     assert_eq!(err.kind(), "business");
 
     // Limpieza

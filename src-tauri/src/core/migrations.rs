@@ -83,32 +83,114 @@ use super::db::Pool;
 /// no puede leer el directorio. El test `embebidas_cubren_todos_los_sql`
 /// evita que la lista se desincronice al añadir una migración.
 pub const MIGRACIONES_EMBEDIDAS: &[(&str, &str)] = &[
-    ("0001_initial_schema.sql", include_str!("../../migrations/0001_initial_schema.sql")),
-    ("0002_indices_optimizacion.sql", include_str!("../../migrations/0002_indices_optimizacion.sql")),
-    ("0003_no_contrato.sql", include_str!("../../migrations/0003_no_contrato.sql")),
-    ("0004_no_contrato_anual.sql", include_str!("../../migrations/0004_no_contrato_anual.sql")),
-    ("0005_tema_usuario.sql", include_str!("../../migrations/0005_tema_usuario.sql")),
-    ("0006_soft_deletes.sql", include_str!("../../migrations/0006_soft_deletes.sql")),
-    ("0007_triggers_updated_at.sql", include_str!("../../migrations/0007_triggers_updated_at.sql")),
-    ("0008_check_constraints.sql", include_str!("../../migrations/0008_check_constraints.sql")),
-    ("0009_indices.sql", include_str!("../../migrations/0009_indices.sql")),
-    ("0010_dedup_indices.sql", include_str!("../../migrations/0010_dedup_indices.sql")),
-    ("0011_consolidar_indices.sql", include_str!("../../migrations/0011_consolidar_indices.sql")),
-    ("0012_consolidar_indices_simples.sql", include_str!("../../migrations/0012_consolidar_indices_simples.sql")),
-    ("0013_consolidar_indices_auditoria.sql", include_str!("../../migrations/0013_consolidar_indices_auditoria.sql")),
-    ("0014_limpiar_tablas_tests.sql", include_str!("../../migrations/0014_limpiar_tablas_tests.sql")),
-    ("0015_comparendo_numero_simit.sql", include_str!("../../migrations/0015_comparendo_numero_simit.sql")),
-    ("0016_atribucion_comparendo_renta.sql", include_str!("../../migrations/0016_atribucion_comparendo_renta.sql")),
-    ("0017_empresa_config.sql", include_str!("../../migrations/0017_empresa_config.sql")),
-    ("0018_empresa_ciudad.sql", include_str!("../../migrations/0018_empresa_ciudad.sql")),
-    ("0019_renta_cobra_iva.sql", include_str!("../../migrations/0019_renta_cobra_iva.sql")),
-    ("0020_renta_valor_gasolina.sql", include_str!("../../migrations/0020_renta_valor_gasolina.sql")),
-    ("0021_comparendo_origen_simit.sql", include_str!("../../migrations/0021_comparendo_origen_simit.sql")),
-    ("0022_agente_simit_ultimo_resultado.sql", include_str!("../../migrations/0022_agente_simit_ultimo_resultado.sql")),
-    ("0023_renta_comision.sql", include_str!("../../migrations/0023_renta_comision.sql")),
-    ("0024_extensiones_renta.sql", include_str!("../../migrations/0024_extensiones_renta.sql")),
-    ("0025_audit_inmutable.sql", include_str!("../../migrations/0025_audit_inmutable.sql")),
-    ("0026_cobrar_horas_extra.sql", include_str!("../../migrations/0026_cobrar_horas_extra.sql")),    ("0027_soft_delete_entities.sql", include_str!("../../migrations/0027_soft_delete_entities.sql")),
+    (
+        "0001_initial_schema.sql",
+        include_str!("../../migrations/0001_initial_schema.sql"),
+    ),
+    (
+        "0002_indices_optimizacion.sql",
+        include_str!("../../migrations/0002_indices_optimizacion.sql"),
+    ),
+    (
+        "0003_no_contrato.sql",
+        include_str!("../../migrations/0003_no_contrato.sql"),
+    ),
+    (
+        "0004_no_contrato_anual.sql",
+        include_str!("../../migrations/0004_no_contrato_anual.sql"),
+    ),
+    (
+        "0005_tema_usuario.sql",
+        include_str!("../../migrations/0005_tema_usuario.sql"),
+    ),
+    (
+        "0006_soft_deletes.sql",
+        include_str!("../../migrations/0006_soft_deletes.sql"),
+    ),
+    (
+        "0007_triggers_updated_at.sql",
+        include_str!("../../migrations/0007_triggers_updated_at.sql"),
+    ),
+    (
+        "0008_check_constraints.sql",
+        include_str!("../../migrations/0008_check_constraints.sql"),
+    ),
+    (
+        "0009_indices.sql",
+        include_str!("../../migrations/0009_indices.sql"),
+    ),
+    (
+        "0010_dedup_indices.sql",
+        include_str!("../../migrations/0010_dedup_indices.sql"),
+    ),
+    (
+        "0011_consolidar_indices.sql",
+        include_str!("../../migrations/0011_consolidar_indices.sql"),
+    ),
+    (
+        "0012_consolidar_indices_simples.sql",
+        include_str!("../../migrations/0012_consolidar_indices_simples.sql"),
+    ),
+    (
+        "0013_consolidar_indices_auditoria.sql",
+        include_str!("../../migrations/0013_consolidar_indices_auditoria.sql"),
+    ),
+    (
+        "0014_limpiar_tablas_tests.sql",
+        include_str!("../../migrations/0014_limpiar_tablas_tests.sql"),
+    ),
+    (
+        "0015_comparendo_numero_simit.sql",
+        include_str!("../../migrations/0015_comparendo_numero_simit.sql"),
+    ),
+    (
+        "0016_atribucion_comparendo_renta.sql",
+        include_str!("../../migrations/0016_atribucion_comparendo_renta.sql"),
+    ),
+    (
+        "0017_empresa_config.sql",
+        include_str!("../../migrations/0017_empresa_config.sql"),
+    ),
+    (
+        "0018_empresa_ciudad.sql",
+        include_str!("../../migrations/0018_empresa_ciudad.sql"),
+    ),
+    (
+        "0019_renta_cobra_iva.sql",
+        include_str!("../../migrations/0019_renta_cobra_iva.sql"),
+    ),
+    (
+        "0020_renta_valor_gasolina.sql",
+        include_str!("../../migrations/0020_renta_valor_gasolina.sql"),
+    ),
+    (
+        "0021_comparendo_origen_simit.sql",
+        include_str!("../../migrations/0021_comparendo_origen_simit.sql"),
+    ),
+    (
+        "0022_agente_simit_ultimo_resultado.sql",
+        include_str!("../../migrations/0022_agente_simit_ultimo_resultado.sql"),
+    ),
+    (
+        "0023_renta_comision.sql",
+        include_str!("../../migrations/0023_renta_comision.sql"),
+    ),
+    (
+        "0024_extensiones_renta.sql",
+        include_str!("../../migrations/0024_extensiones_renta.sql"),
+    ),
+    (
+        "0025_audit_inmutable.sql",
+        include_str!("../../migrations/0025_audit_inmutable.sql"),
+    ),
+    (
+        "0026_cobrar_horas_extra.sql",
+        include_str!("../../migrations/0026_cobrar_horas_extra.sql"),
+    ),
+    (
+        "0027_soft_delete_entities.sql",
+        include_str!("../../migrations/0027_soft_delete_entities.sql"),
+    ),
 ];
 
 /// Aplica las migraciones pendientes. `migrations_dir` = src-tauri/migrations
@@ -277,9 +359,7 @@ pub fn split_sql_statements(sql: &str) -> Vec<String> {
             if clean == "BEGIN" {
                 block_depth += 1;
             } else if clean == "END" {
-                if block_depth > 0 {
-                    block_depth -= 1;
-                }
+                block_depth = block_depth.saturating_sub(1);
             }
         }
 
@@ -324,8 +404,10 @@ mod tests {
             .collect();
         en_disco.sort();
 
-        let mut embebidas: Vec<String> =
-            MIGRACIONES_EMBEDIDAS.iter().map(|(n, _)| n.to_string()).collect();
+        let mut embebidas: Vec<String> = MIGRACIONES_EMBEDIDAS
+            .iter()
+            .map(|(n, _)| n.to_string())
+            .collect();
         embebidas.sort();
 
         assert_eq!(
@@ -337,7 +419,9 @@ mod tests {
             "las embebidas deben estar en orden lexicográfico"
         );
         assert!(
-            MIGRACIONES_EMBEDIDAS.iter().all(|(_, s)| !s.trim().is_empty()),
+            MIGRACIONES_EMBEDIDAS
+                .iter()
+                .all(|(_, s)| !s.trim().is_empty()),
             "ninguna migración embebida debe estar vacía"
         );
     }

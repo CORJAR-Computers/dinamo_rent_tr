@@ -61,7 +61,8 @@ pub fn crear_reserva(
 ) -> Cmd<Reserva> {
     let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    ReservaService::crear(&mut c, &state.config, &session.username, datos).map_err(|e| e.to_payload())
+    ReservaService::crear(&mut c, &state.config, &session.username, datos)
+        .map_err(|e| e.to_payload())
 }
 
 /// Actualiza una reserva por id
@@ -74,7 +75,8 @@ pub fn actualizar_reserva(
 ) -> Cmd<Reserva> {
     let session = require_session(&state, &session_id)?;
     let mut c = conn(&state)?;
-    ReservaService::actualizar(&mut c, &state.config, &session.username, id, datos).map_err(|e| e.to_payload())
+    ReservaService::actualizar(&mut c, &state.config, &session.username, id, datos)
+        .map_err(|e| e.to_payload())
 }
 
 /// Cancela una reserva (no se puede cancelar una ya completada)

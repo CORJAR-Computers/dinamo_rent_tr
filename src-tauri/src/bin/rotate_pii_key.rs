@@ -29,7 +29,10 @@ use dinamo_rent_lib::services::rotacion::rotar_clave_pii;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     let get = |flag: &str| -> Option<String> {
-        args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned()
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
     };
     let old_key = get("--old-key").ok_or("Falta --old-key <CLAVE_VIEJA>")?;
     let new_key = get("--new-key").ok_or("Falta --new-key <CLAVE_NUEVA>")?;

@@ -35,6 +35,7 @@ data/informes_simit/
 # Config con secretos (usar config.ini.example)
 /config.ini
 data/config.ini
+src-tauri/config.ini
 
 # Backups y logs
 Backups/

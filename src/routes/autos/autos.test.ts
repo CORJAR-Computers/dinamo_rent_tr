@@ -53,9 +53,8 @@ const LISTS: BusinessLists = {
 	rolesConInformes: [],
 	rolesConUsuarios: [],
 	rolesConEliminar: ['Administrador', 'Supervisor'],
-	rolesDisponibles: []
-,
-	impuestoPorcentaje: 19,
+	rolesDisponibles: [],
+	impuestoPorcentaje: 19
 };
 
 function setSesion(rol = 'Administrador') {
@@ -117,8 +116,12 @@ describe('página de Autos', () => {
 		expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
 		await fireEvent.input(screen.getByPlaceholderText('ABC123'), { target: { value: 'abc123' } });
-		await fireEvent.input(screen.getByPlaceholderText('Ej: Toyota'), { target: { value: 'Toyota' } });
-		await fireEvent.input(screen.getByPlaceholderText('Ej: Corolla'), { target: { value: 'Corolla' } });
+		await fireEvent.input(screen.getByPlaceholderText('Ej: Toyota'), {
+			target: { value: 'Toyota' }
+		});
+		await fireEvent.input(screen.getByPlaceholderText('Ej: Corolla'), {
+			target: { value: 'Corolla' }
+		});
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Crear vehículo' }));
 
@@ -145,7 +148,9 @@ describe('página de Autos', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Crear vehículo' }));
 
 		await waitFor(() => {
-			expect(screen.getByRole('alert')).toHaveTextContent('La placa, marca y modelo son obligatorios.');
+			expect(screen.getByRole('alert')).toHaveTextContent(
+				'La placa, marca y modelo son obligatorios.'
+			);
 		});
 		expect(crear).not.toHaveBeenCalled();
 	});
@@ -171,7 +176,11 @@ describe('página de Autos', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
 		await waitFor(() => expect(actualizar).toHaveBeenCalledTimes(1));
-		const args = actualizar.mock.calls[0][0] as { sessionId: string; placa: string; datos: AutoDatos };
+		const args = actualizar.mock.calls[0][0] as {
+			sessionId: string;
+			placa: string;
+			datos: AutoDatos;
+		};
 		expect(args.placa).toBe('ABC123');
 		expect(args.datos.estado).toBe('Mantenimiento');
 	});
@@ -218,7 +227,9 @@ describe('página de Autos', () => {
 	});
 
 	it('filtra por búsqueda con debounce', async () => {
-		const listar = vi.fn((_args: { sessionId: string; busqueda: string | null }) => [auto({ placa: 'ABC123' })]);
+		const listar = vi.fn((_args: { sessionId: string; busqueda: string | null }) => [
+			auto({ placa: 'ABC123' })
+		]);
 		tauri.register('listar_autos', listar);
 
 		render(AutosPage);

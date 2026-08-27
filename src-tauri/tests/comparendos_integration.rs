@@ -76,7 +76,10 @@ fn comparendo_crud_y_marcar_pagado() {
     let creado = ComparendoService::crear(&mut conn, cfg, datos.clone()).expect("crear comparendo");
     let id = creado.id;
     assert_eq!(creado.placa, placa);
-    assert_eq!(creado.monto, "580000.00", "monto normalizado con 2 decimales");
+    assert_eq!(
+        creado.monto, "580000.00",
+        "monto normalizado con 2 decimales"
+    );
     assert_eq!(creado.estado, "Pendiente");
     assert_eq!(creado.hora_infraccion, "14:30", "hora recortada a HH:MM");
     assert!(!creado.vehiculo.is_empty(), "JOIN con autos para la UI");
@@ -107,7 +110,10 @@ fn comparendo_crud_y_marcar_pagado() {
 
     // Eliminar
     ComparendoService::eliminar(&mut conn, id).expect("eliminar");
-    assert!(ComparendoService::obtener(&mut conn, id).is_err(), "eliminado");
+    assert!(
+        ComparendoService::obtener(&mut conn, id).is_err(),
+        "eliminado"
+    );
 }
 
 #[test]
@@ -192,7 +198,10 @@ fn comparendo_totales() {
 
     let totales = ComparendoService::totales(&mut conn).expect("totales");
     let monto_total: rust_decimal::Decimal = totales.total_general.parse().expect("numérico");
-    assert!(monto_total >= rust_decimal::Decimal::from(240_000), "total >= 240000");
+    assert!(
+        monto_total >= rust_decimal::Decimal::from(240_000),
+        "total >= 240000"
+    );
     assert!(
         totales.por_placa.iter().any(|t| t.clave == placa),
         "la placa aparece en los totales por placa"
@@ -258,13 +267,8 @@ fn comparendo_numero_oficial_y_dedup() {
         "misma placa/fecha/monto → duplicado"
     );
     assert!(
-        !ComparendoRepository::existe_duplicado(
-            &mut conn,
-            &placa,
-            &datos.fecha_infraccion,
-            "1.00"
-        )
-        .expect("dup 2"),
+        !ComparendoRepository::existe_duplicado(&mut conn, &placa, &datos.fecha_infraccion, "1.00")
+            .expect("dup 2"),
         "monto distinto → no duplicado"
     );
 
@@ -283,7 +287,10 @@ fn comparendo_numero_oficial_y_dedup() {
     ComparendoRepository::marcar_pagado_por_numero(&mut conn, "TEST-250010000000999")
         .expect("marcar por número");
     let obtenido = ComparendoService::obtener(&mut conn, creado.id).expect("obtener");
-    assert_eq!(obtenido.estado, "Pagado", "estado sincronizado desde el número");
+    assert_eq!(
+        obtenido.estado, "Pagado",
+        "estado sincronizado desde el número"
+    );
 
     ComparendoService::eliminar(&mut conn, creado.id).expect("eliminar");
     assert!(
@@ -351,7 +358,10 @@ fn comparendo_origen_simit_y_ultimo_visto() {
     // 4) Un comparendo manual que el SIMIT reporta converge a SIMIT al tocarlo
     ComparendoRepository::marcar_visto_simit_por_id(&mut conn, manual.id).expect("marcar visto");
     let convergido = ComparendoService::obtener(&mut conn, manual.id).expect("obtener convergido");
-    assert_eq!(convergido.origen, "SIMIT", "confirmado por SIMIT ya no es manual");
+    assert_eq!(
+        convergido.origen, "SIMIT",
+        "confirmado por SIMIT ya no es manual"
+    );
     assert!(
         convergido.ultimo_visto_simit.is_some(),
         "toca la confirmación al re-verlo"
@@ -410,9 +420,8 @@ fn comparendo_no_confirmados_simit() {
         .expect("confirmar reciente");
 
     // d) Manual (nunca lo confirma el SIMIT) → NO entra
-    let manual =
-        ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "334000"))
-            .expect("crear manual");
+    let manual = ComparendoService::crear(&mut conn, cfg, datos_comparendo(&placa, "334000"))
+        .expect("crear manual");
 
     let ids: Vec<i64> = ComparendoService::listar(&mut conn, None, None, None, true)
         .expect("listar no confirmados")
@@ -424,7 +433,10 @@ fn comparendo_no_confirmados_simit() {
         ids.contains(&id_sin_confirmar),
         "SIMIT nunca visto → entra (ids: {ids:?})"
     );
-    assert!(ids.contains(&id_viejo), "confirmado hace {DIAS_SIN_CONFIRMAR_SIMIT}+ días → entra");
+    assert!(
+        ids.contains(&id_viejo),
+        "confirmado hace {DIAS_SIN_CONFIRMAR_SIMIT}+ días → entra"
+    );
     assert!(
         !ids.contains(&id_reciente),
         "recién confirmado → no entra (ids: {ids:?})"
@@ -437,7 +449,10 @@ fn comparendo_no_confirmados_simit() {
         .into_iter()
         .map(|c| c.id)
         .collect();
-    assert!(todos.contains(&id_reciente), "sin filtro incluye el reciente");
+    assert!(
+        todos.contains(&id_reciente),
+        "sin filtro incluye el reciente"
+    );
 
     // Limpieza
     ComparendoService::eliminar(&mut conn, id_sin_confirmar).expect("limpiar a");
@@ -507,10 +522,17 @@ fn persistencia_ultimo_resultado_simit() {
     assert_eq!(cargado.registros.len(), 1);
     let reg = &cargado.registros[0];
     assert!(reg.nuevo, "el registro nuevo conserva su flag");
-    assert_eq!(reg.id, Some(42), "el id del comparendo sobrevive (filtro «Solo nuevos»)");
+    assert_eq!(
+        reg.id,
+        Some(42),
+        "el id del comparendo sobrevive (filtro «Solo nuevos»)"
+    );
     assert_eq!(reg.numero.as_deref(), Some("TEST-0022"));
     assert_eq!(cargado.errores[0].placa, "ZZZ111");
-    assert_eq!(cargado.reporte_html.as_deref(), Some("C:\\tmp\\reporte.html"));
+    assert_eq!(
+        cargado.reporte_html.as_deref(),
+        Some("C:\\tmp\\reporte.html")
+    );
 
     // Upsert: una segunda corrida reemplaza (sigue siendo una sola fila)
     let mut segunda = resultado.clone();
@@ -521,7 +543,11 @@ fn persistencia_ultimo_resultado_simit() {
     let filas: Option<(i64,)> = conn
         .query_first("SELECT COUNT(*) FROM agente_simit_ultimo_resultado", ())
         .expect("contar filas");
-    assert_eq!(filas.map(|r| r.0), Some(1), "el upsert mantiene una sola fila");
+    assert_eq!(
+        filas.map(|r| r.0),
+        Some(1),
+        "el upsert mantiene una sola fila"
+    );
 
     let cargado2 = cargar_ultimo_resultado(&mut conn)
         .expect("cargar 2")
@@ -622,7 +648,10 @@ fn comparendo_cruce_responsable_renta() {
         Some(renta.id),
         "el alta resuelve y guarda la renta del día"
     );
-    assert_eq!(c1.id_cliente, renta.id_cliente, "id_cliente heredado de la renta");
+    assert_eq!(
+        c1.id_cliente, renta.id_cliente,
+        "id_cliente heredado de la renta"
+    );
 
     // Comparendo FUERA del rango (30 días después del retorno) → sin responsable
     let mut c2 = datos_comparendo(&placa, "450001");

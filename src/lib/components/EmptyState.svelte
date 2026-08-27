@@ -14,7 +14,9 @@
 </script>
 
 <div class="flex flex-col items-center justify-center text-center py-14 px-6">
-	<div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 text-primary">
+	<div
+		class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 text-primary"
+	>
 		<Icon name={icon} class="w-8 h-8" />
 	</div>
 	<h3 class="text-base font-semibold text-text-primary">{title}</h3>

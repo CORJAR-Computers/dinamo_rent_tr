@@ -49,7 +49,11 @@ function parseDate(value: string): Date {
 		const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 		// Fechas imposibles (p. ej. 2026-02-30) no deben "rodar" a otra fecha:
 		// devuelven un Date inválido para que el caller muestre '—' como antes.
-		if (d.getFullYear() !== Number(m[1]) || d.getMonth() !== Number(m[2]) - 1 || d.getDate() !== Number(m[3])) {
+		if (
+			d.getFullYear() !== Number(m[1]) ||
+			d.getMonth() !== Number(m[2]) - 1 ||
+			d.getDate() !== Number(m[3])
+		) {
 			return new Date(Number.NaN);
 		}
 		return d;
@@ -79,7 +83,10 @@ export function truncate(text: string, max = 40): string {
 }
 
 /** Formatea el número de contrato anual: 2026-001 (secuencia reiniciada por año) */
-export function formatContrato(anio: number | null | undefined, secuencia: number | null | undefined): string {
+export function formatContrato(
+	anio: number | null | undefined,
+	secuencia: number | null | undefined
+): string {
 	if (anio == null || secuencia == null) return '—';
 	return `${anio}-${String(secuencia).padStart(3, '0')}`;
 }

@@ -6,16 +6,16 @@
 use std::sync::Arc;
 
 use chrono::{Local, NaiveDate};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromStr as _;
+use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
-use crate::core::validators::{validate_no_xss, mayusculas};
+use crate::core::validators::{mayusculas, validate_no_xss};
 use crate::core::PooledConnection;
-use crate::repositories::comparendo::{Comparendo, ComparendoDatos, ComparendoRepository};
 use crate::repositories::auto::AutoRepository;
+use crate::repositories::comparendo::{Comparendo, ComparendoDatos, ComparendoRepository};
 
 /// Estados válidos de un comparendo
 pub const ESTADOS_COMPARENDO: [&str; 2] = ["Pendiente", "Pagado"];
@@ -60,9 +60,10 @@ impl ComparendoService {
         no_confirmados: bool,
     ) -> Result<Vec<Comparendo>, AppError> {
         if no_confirmados {
-            let corte = (Local::now().date_naive() - chrono::Duration::days(DIAS_SIN_CONFIRMAR_SIMIT))
-                .format("%Y-%m-%d")
-                .to_string();
+            let corte = (Local::now().date_naive()
+                - chrono::Duration::days(DIAS_SIN_CONFIRMAR_SIMIT))
+            .format("%Y-%m-%d")
+            .to_string();
             return ComparendoRepository::obtener_no_confirmados_simit(conn, &corte);
         }
         let term = busqueda.unwrap_or("").trim();
@@ -175,17 +176,22 @@ fn normalizar(d: &mut ComparendoDatos) {
 }
 
 /// Valida los datos del comparendo (requiere conn para verificar la placa)
-fn validar(conn: &mut PooledConnection, d: &ComparendoDatos, cfg: &Arc<AppConfig>) -> Result<(), AppError> {
+fn validar(
+    conn: &mut PooledConnection,
+    d: &ComparendoDatos,
+    cfg: &Arc<AppConfig>,
+) -> Result<(), AppError> {
     // Placa: obligatoria y existente en autos
     if d.placa.is_empty() {
         return Err(AppError::Validation("La placa es obligatoria.".into()));
     }
     if d.placa.len() > 20 {
-        return Err(AppError::Validation("La placa no puede superar 20 caracteres.".into()));
+        return Err(AppError::Validation(
+            "La placa no puede superar 20 caracteres.".into(),
+        ));
     }
-    validate_no_xss(&d.placa, 20).map_err(|_| {
-        AppError::Validation("La placa contiene caracteres no permitidos.".into())
-    })?;
+    validate_no_xss(&d.placa, 20)
+        .map_err(|_| AppError::Validation("La placa contiene caracteres no permitidos.".into()))?;
     let existe = AutoRepository::obtener_por_placa(conn, &d.placa)?.is_some();
     if !existe {
         return Err(AppError::Business(
@@ -206,10 +212,14 @@ fn validar(conn: &mut PooledConnection, d: &ComparendoDatos, cfg: &Arc<AppConfig
     // Monto
     let monto = Decimal::from_str(&d.monto).unwrap_or_else(|_| Decimal::from(-1));
     if monto < Decimal::ZERO {
-        return Err(AppError::Validation("El monto no es un número válido.".into()));
+        return Err(AppError::Validation(
+            "El monto no es un número válido.".into(),
+        ));
     }
     if monto == Decimal::ZERO {
-        return Err(AppError::Validation("El monto debe ser mayor que cero.".into()));
+        return Err(AppError::Validation(
+            "El monto debe ser mayor que cero.".into(),
+        ));
     }
     if monto > Decimal::from(9_999_999_999i64) / Decimal::from(100) {
         return Err(AppError::Validation(

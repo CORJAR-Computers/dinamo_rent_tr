@@ -141,7 +141,10 @@ pub fn rotar(cfg: &AppConfig) -> Result<usize, AppError> {
     for p in archivos.iter().take(excedentes) {
         // Reintentos por la misma carrera de Defender sobre archivos recientes.
         if let Err(e) = reintentar_io(|| std::fs::remove_file(p), 4, 200) {
-            log::warn!("Backup: no se pudo eliminar la copia vieja {}: {e}", p.display());
+            log::warn!(
+                "Backup: no se pudo eliminar la copia vieja {}: {e}",
+                p.display()
+            );
         }
     }
     Ok(excedentes)
@@ -168,7 +171,14 @@ fn crear_con_gbak(cfg: &AppConfig, destino: &Path) -> Result<(), AppError> {
     let firebird_dir = gbak.parent().unwrap_or(Path::new("."));
     let salida = Command::new(&gbak)
         .current_dir(firebird_dir)
-        .args(["-b", "-user", &cfg.db_user, "-password", &cfg.db_password, "-v"])
+        .args([
+            "-b",
+            "-user",
+            &cfg.db_user,
+            "-password",
+            &cfg.db_password,
+            "-v",
+        ])
         .arg(&cfg.db_path)
         .arg(destino)
         .output()
@@ -407,7 +417,10 @@ pub fn crear_backup(cfg: &AppConfig) -> Result<PathBuf, AppError> {
         }
         cifrar_archivo(&temporal, &destino, password)?;
         let _ = reintentar_io(|| std::fs::remove_file(&temporal), 8, 250);
-        log::info!("Backup: cifrado AES-256-GCM aplicado a {}", destino.display());
+        log::info!(
+            "Backup: cifrado AES-256-GCM aplicado a {}",
+            destino.display()
+        );
     } else {
         // Reintentos: el `.tmp` recién escrito por gbak puede estar siendo
         // escaneado por Defender (sharing violation transitoria en Windows).
@@ -514,7 +527,14 @@ pub fn restaurar_fdb_desde_fbk(
     let firebird_dir = gbak.parent().unwrap_or(Path::new("."));
     let salida = Command::new(&gbak)
         .current_dir(firebird_dir)
-        .args(["-r", "-user", &cfg.db_user, "-password", &cfg.db_password, "-v"])
+        .args([
+            "-r",
+            "-user",
+            &cfg.db_user,
+            "-password",
+            &cfg.db_password,
+            "-v",
+        ])
         .arg(staging_fbk)
         .arg(&destino_tmp)
         .output()
@@ -563,8 +583,10 @@ pub fn preparar_staging(
         )));
     }
     let dir = dir_backups(cfg);
-    let mut staging =
-        dir.join(format!("{PREFIJO_STAGING}{}.fbk", Local::now().format("%Y%m%d_%H%M%S")));
+    let mut staging = dir.join(format!(
+        "{PREFIJO_STAGING}{}.fbk",
+        Local::now().format("%Y%m%d_%H%M%S")
+    ));
     let mut sufijo = 2u32;
     while staging.exists() {
         staging = dir.join(format!(
@@ -764,7 +786,8 @@ impl EstadoBackup {
                 &cfg.backup_schedule_minutes,
             )
             .map(|t| {
-                Local.from_local_datetime(&t)
+                Local
+                    .from_local_datetime(&t)
                     .single()
                     .map(|dt| dt.to_rfc3339())
                     // Ambiguidad de DST (no aplica en Colombia): fallback sin offset
@@ -829,7 +852,12 @@ fn proxima_corrida_desde(ahora: NaiveDateTime, minutos: &[u32]) -> Option<NaiveD
     let minuto_actual = ahora.hour() * 60 + ahora.minute();
     for &m in minutos {
         if m > minuto_actual {
-            return Some(ahora.date().and_hms_opt(m / 60, m % 60, 0).expect("hora válida"));
+            return Some(
+                ahora
+                    .date()
+                    .and_hms_opt(m / 60, m % 60, 0)
+                    .expect("hora válida"),
+            );
         }
     }
     minutos.first().map(|&m| {
@@ -842,6 +870,7 @@ fn proxima_corrida_desde(ahora: NaiveDateTime, minutos: &[u32]) -> Option<NaiveD
 /// Decide si el scheduler debe ejecutar un backup en `ahora`:
 /// - el minuto actual está en `schedule_minutes`, y
 /// - ese (fecha, minuto) aún no se ejecutó (marca `ultimo`).
+///
 /// Evita duplicar la corrida si `check_interval_ms` < 60 s y permite volver a
 /// ejecutar el horario al día siguiente.
 fn debe_ejecutar(
@@ -941,7 +970,10 @@ mod tests {
         // Timestamp YYYYMMDD_HHMMSS (8+1+6 = 15 caracteres) entre prefijo y extensión
         let ts = &nombre[PREFIJO_BACKUP.len()..nombre.len() - 4];
         assert_eq!(ts.len(), 15, "{nombre}");
-        assert!(ts.chars().all(|c| c.is_ascii_digit() || c == '_'), "{nombre}");
+        assert!(
+            ts.chars().all(|c| c.is_ascii_digit() || c == '_'),
+            "{nombre}"
+        );
     }
 
     #[test]
@@ -965,10 +997,18 @@ mod tests {
         assert_eq!(borrados, 2);
         let restantes = listar_backups(&cfg);
         assert_eq!(restantes.len(), 3);
-        assert!(!dir.join(format!("{PREFIJO_BACKUP}20260817_010000.fbk")).exists());
-        assert!(!dir.join(format!("{PREFIJO_BACKUP}20260817_020000.fbk")).exists());
-        assert!(dir.join(format!("{PREFIJO_BACKUP}20260817_030000.fbk")).exists());
-        assert!(dir.join(format!("{PREFIJO_BACKUP}20260817_050000.fbk")).exists());
+        assert!(!dir
+            .join(format!("{PREFIJO_BACKUP}20260817_010000.fbk"))
+            .exists());
+        assert!(!dir
+            .join(format!("{PREFIJO_BACKUP}20260817_020000.fbk"))
+            .exists());
+        assert!(dir
+            .join(format!("{PREFIJO_BACKUP}20260817_030000.fbk"))
+            .exists());
+        assert!(dir
+            .join(format!("{PREFIJO_BACKUP}20260817_050000.fbk"))
+            .exists());
         fs::remove_dir_all(&tmp).unwrap();
     }
 
@@ -1030,7 +1070,9 @@ mod tests {
         let t2 = fecha.and_hms_opt(9, 1, 0).unwrap();
         assert!(!debe_ejecutar(t2, &minutos, None));
         // Día siguiente, mismo horario → ejecuta (la marca de ayer no bloquea)
-        let manana = (fecha + chrono::Duration::days(1)).and_hms_opt(9, 0, 0).unwrap();
+        let manana = (fecha + chrono::Duration::days(1))
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
         assert!(debe_ejecutar(manana, &minutos, Some((fecha, 540))));
         // Horarios vacíos → nunca ejecuta
         assert!(!debe_ejecutar(t, &[], None));
@@ -1130,7 +1172,11 @@ mod tests {
 
         let p = crear_backup(&cfg).unwrap();
         let enc = fs::read(&p).unwrap();
-        assert!(enc.starts_with(MAGIC_CIFRADO), "backup cifrado: {}", p.display());
+        assert!(
+            enc.starts_with(MAGIC_CIFRADO),
+            "backup cifrado: {}",
+            p.display()
+        );
         // Round-trip: descifrar reproduce el .fdb original
         let rest = tmp.join("restaurado.fbk");
         descifrar_archivo(&p, &rest, "clave-del-backup").unwrap();
@@ -1163,7 +1209,10 @@ mod tests {
                     .collect()
             })
             .unwrap_or_default();
-        assert!(sobras.is_empty(), "temporales en claro sobrantes: {sobras:?}");
+        assert!(
+            sobras.is_empty(),
+            "temporales en claro sobrantes: {sobras:?}"
+        );
         fs::remove_dir_all(&tmp).unwrap();
     }
 
@@ -1189,7 +1238,11 @@ mod tests {
         let t3 = fecha.and_hms_opt(23, 30, 0).unwrap();
         assert_eq!(
             proxima_corrida_desde(t3, &minutos),
-            Some((fecha + chrono::Duration::days(1)).and_hms_opt(9, 0, 0).unwrap())
+            Some(
+                (fecha + chrono::Duration::days(1))
+                    .and_hms_opt(9, 0, 0)
+                    .unwrap()
+            )
         );
         // Sin horarios → None
         assert_eq!(proxima_corrida_desde(t, &[]), None);
@@ -1219,7 +1272,10 @@ mod tests {
         assert_eq!(info.ultimo_error, None);
         // El estado expone la copia
         assert_eq!(info.copias.len(), 1);
-        assert_eq!(info.copias[0].nombre, p.file_name().unwrap().to_string_lossy());
+        assert_eq!(
+            info.copias[0].nombre,
+            p.file_name().unwrap().to_string_lossy()
+        );
         assert!(!info.copias[0].cifrado);
         // Tras liberar, info() muestra ejecutando = false
         assert!(!info.ejecutando);
@@ -1246,7 +1302,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r, 42);
-        assert_eq!(intentos, 3, "debe reintentar 2 veces y acertar al 3er intento");
+        assert_eq!(
+            intentos, 3,
+            "debe reintentar 2 veces y acertar al 3er intento"
+        );
 
         // Errores persistentes agotan los intentos y devuelven el último error
         let err = reintentar_io(
@@ -1279,7 +1338,11 @@ mod tests {
         assert_eq!(fs::read(&staging).unwrap(), contenido);
         assert_eq!(fs::read(&origen).unwrap(), contenido);
         assert_ne!(staging, origen);
-        assert!(staging.file_name().unwrap().to_string_lossy().starts_with(PREFIJO_STAGING));
+        assert!(staging
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(PREFIJO_STAGING));
         fs::remove_dir_all(&tmp).unwrap();
     }
 
@@ -1342,7 +1405,10 @@ mod tests {
         let err = restaurar_fdb_desde_fbk(&cfg, &staging, &cfg.db_path).unwrap_err();
         assert!(err.to_string().contains("gbak"), "{err}");
         assert_eq!(fs::read(&cfg.db_path).unwrap(), b"bd-actual-intacta");
-        assert!(!cfg.db_path.with_extension("fdb.restore.tmp").exists(), "sin temporales");
+        assert!(
+            !cfg.db_path.with_extension("fdb.restore.tmp").exists(),
+            "sin temporales"
+        );
         // restaurar_en_arranque además limpia el staging (éxito o fallo)
         let err2 = restaurar_en_arranque(&cfg, &staging).unwrap_err();
         assert!(err2.to_string().contains("gbak"));
@@ -1374,6 +1440,10 @@ mod tests {
             info.ultima_restauracion.as_deref(),
             Some("Backup_Dinamo_20260817_120000.fbk")
         );
-        assert!(info.ultima_restauracion_error.as_deref().unwrap().contains("gbak falló"));
+        assert!(info
+            .ultima_restauracion_error
+            .as_deref()
+            .unwrap()
+            .contains("gbak falló"));
     }
 }

@@ -19,7 +19,11 @@ function evento(overrides: Partial<AuditoriaEvento> = {}): AuditoriaEvento {
 	};
 }
 
-function resultado(eventos: AuditoriaEvento[], total = eventos.length, pagina = 1): AuditoriaResultado {
+function resultado(
+	eventos: AuditoriaEvento[],
+	total = eventos.length,
+	pagina = 1
+): AuditoriaResultado {
 	return { eventos, total, pagina, porPagina: 50 };
 }
 
@@ -157,9 +161,7 @@ describe('página de Auditoría', () => {
 
 			render(AuditoriaPage);
 
-			await waitFor(() =>
-				expect(goto).toHaveBeenCalledWith('/dashboard', { replaceState: true })
-			);
+			await waitFor(() => expect(goto).toHaveBeenCalledWith('/dashboard', { replaceState: true }));
 			// El no-admin no debe disparar NINGUNA llamada a la API
 			expect(listar).not.toHaveBeenCalled();
 		});
@@ -170,9 +172,7 @@ describe('página de Auditoría', () => {
 
 			render(AuditoriaPage);
 
-			await waitFor(() =>
-				expect(goto).toHaveBeenCalledWith('/dashboard', { replaceState: true })
-			);
+			await waitFor(() => expect(goto).toHaveBeenCalledWith('/dashboard', { replaceState: true }));
 		});
 
 		it('redirige a /login sin sesión (guard de sesión antes que el de rol)', async () => {

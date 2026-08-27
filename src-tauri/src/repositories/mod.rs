@@ -9,6 +9,6 @@ pub mod extension;
 pub mod gasto;
 pub mod informe;
 pub mod mantenimiento;
-pub mod reserva;
 pub mod renta;
+pub mod reserva;
 pub mod usuario;

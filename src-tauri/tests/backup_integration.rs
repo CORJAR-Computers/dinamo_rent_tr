@@ -144,7 +144,11 @@ fn tablas_de_usuario(db_path: &Path, cfg: &Arc<AppConfig>) -> i64 {
 fn restauracion_con_gbak_real_roundtrip_del_fdb() {
     let (cfg, _tmp, _guard) = config_con_backup_en_temp();
     let fbk = crear_backup(&cfg).unwrap();
-    assert!(fbk.exists(), "backup creado para restaurar: {}", fbk.display());
+    assert!(
+        fbk.exists(),
+        "backup creado para restaurar: {}",
+        fbk.display()
+    );
 
     restaurar_fdb_desde_fbk(&cfg, &fbk, &cfg.db_path).unwrap();
 
@@ -168,7 +172,11 @@ fn restauracion_de_backup_cifrado_con_gbak_real() {
     cfg.backup_encryption_password = "clave-integracion".into();
     let fbk_cifrado = crear_backup(cfg).unwrap();
     let enc = std::fs::read(&fbk_cifrado).unwrap();
-    assert!(enc.starts_with(b"DRENC-01"), "backup cifrado: {}", fbk_cifrado.display());
+    assert!(
+        enc.starts_with(b"DRENC-01"),
+        "backup cifrado: {}",
+        fbk_cifrado.display()
+    );
 
     // Staging descifrado (flujo del comando backup_restaurar)
     let staging = preparar_staging(cfg, &fbk_cifrado, Some("clave-integracion")).unwrap();
@@ -180,6 +188,9 @@ fn restauracion_de_backup_cifrado_con_gbak_real() {
     let _ = std::fs::remove_file(&staging);
 
     let tablas = tablas_de_usuario(&cfg.db_path, &Arc::new(cfg.clone()));
-    assert!(tablas > 0, "BD restaurada desde backup cifrado: {tablas} tablas");
+    assert!(
+        tablas > 0,
+        "BD restaurada desde backup cifrado: {tablas} tablas"
+    );
     assert!(tmp.join("Backups").exists());
 }

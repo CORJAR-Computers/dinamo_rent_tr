@@ -100,9 +100,9 @@ impl AppError {
             | AppError::Sanitization(d)
             | AppError::Crypto(d)
             | AppError::Generic(d) => Some(d.clone()),
-            AppError::AccountLocked { remaining_seconds } => {
-                Some(format!("Cuenta bloqueada. Restan {remaining_seconds} segundos."))
-            }
+            AppError::AccountLocked { remaining_seconds } => Some(format!(
+                "Cuenta bloqueada. Restan {remaining_seconds} segundos."
+            )),
             _ => None,
         }
     }

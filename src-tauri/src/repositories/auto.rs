@@ -176,8 +176,12 @@ pub struct AutoRepository;
 impl AutoRepository {
     /// Lista todos los vehículos (por marca, placa)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Auto>, AppError> {
-        let rows: Vec<AutoRow> =
-            conn.query(&format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL ORDER BY marca, placa"), ())?;
+        let rows: Vec<AutoRow> = conn.query(
+            &format!(
+                "SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL ORDER BY marca, placa"
+            ),
+            (),
+        )?;
         Ok(rows.into_iter().map(from_row).collect())
     }
 
@@ -196,7 +200,10 @@ impl AutoRepository {
     }
 
     /// Filtra por estado (Todos / Disponible / Rentado / ...)
-    pub fn obtener_por_estado(conn: &mut PooledConnection, estado: &str) -> Result<Vec<Auto>, AppError> {
+    pub fn obtener_por_estado(
+        conn: &mut PooledConnection,
+        estado: &str,
+    ) -> Result<Vec<Auto>, AppError> {
         let rows: Vec<AutoRow> = conn.query(
             &format!("SELECT {SELECT_COLS} FROM autos WHERE deleted_at IS NULL AND estado = ? ORDER BY marca, placa"),
             (estado.to_string(),),
@@ -269,7 +276,11 @@ impl AutoRepository {
     }
 
     /// Actualiza un vehículo por placa
-    pub fn actualizar(conn: &mut PooledConnection, placa: &str, d: &AutoDatos) -> Result<(), AppError> {
+    pub fn actualizar(
+        conn: &mut PooledConnection,
+        placa: &str,
+        d: &AutoDatos,
+    ) -> Result<(), AppError> {
         conn.execute(
             "UPDATE autos SET \
                 marca = ?, modelo = ?, version = ?, color = ?, tipo = ?, cilindraje = ?, \
@@ -352,7 +363,8 @@ impl AutoRepository {
 
     /// Total de vehículos
     pub fn contar(conn: &mut PooledConnection) -> Result<i64, AppError> {
-        let count: Option<(i64,)> = conn.query_first("SELECT COUNT(*) FROM autos WHERE deleted_at IS NULL", ())?;
+        let count: Option<(i64,)> =
+            conn.query_first("SELECT COUNT(*) FROM autos WHERE deleted_at IS NULL", ())?;
         Ok(count.map(|(c,)| c).unwrap_or(0))
     }
 
@@ -365,5 +377,3 @@ impl AutoRepository {
         Ok(rows)
     }
 }
-
-

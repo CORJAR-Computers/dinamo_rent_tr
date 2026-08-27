@@ -50,16 +50,15 @@ pub fn leer_errores_frontend(
     read_last_lines(&err_path, lineas.unwrap_or(200))
 }
 
-
 /// Escapa caracteres de control en strings provenientes del frontend
 /// para prevenir log injection (falsificación de entradas mediante \n, \r, etc.).
 /// Ver mejora #3 del roadmap de Dinamo Rent ERP.
 fn sanitize_log(s: &str) -> String {
     s.replace('\r', "\\r")
-     .replace('\n', "\\n")
-     .replace('\t', "\\t")
-     .replace('\x00', "\\x00")
-     .replace('\x1b', "\\x1b")
+        .replace('\n', "\\n")
+        .replace('\t', "\\t")
+        .replace('\x00', "\\x00")
+        .replace('\x1b', "\\x1b")
 }
 
 /// Sanitiza un Option<&str> (devuelve "-" si es None, sanitizado si tiene valor).
@@ -104,7 +103,11 @@ pub fn registrar_error_frontend(
         .create(true)
         .append(true)
         .open(&err_path)
-        .map_err(|e| cmd(AppError::Generic(format!("No se pudo abrir frontend_errors.log: {e}"))))?;
+        .map_err(|e| {
+            cmd(AppError::Generic(format!(
+                "No se pudo abrir frontend_errors.log: {e}"
+            )))
+        })?;
 
     file.write_all(entry.as_bytes())
         .map_err(|e| cmd(AppError::Generic(format!("No se pudo escribir: {e}"))))?;
@@ -114,10 +117,7 @@ pub fn registrar_error_frontend(
 
 /// Exporta todos los logs como un solo archivo de texto.
 #[tauri::command]
-pub fn exportar_logs(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Cmd<String> {
+pub fn exportar_logs(state: State<'_, AppState>, session_id: String) -> Cmd<String> {
     require_usuario_admin(&state, &session_id)?;
 
     let log_dir = state.config.data_dir.join("logs");
@@ -185,14 +185,8 @@ pub fn exportar_logs(
     output.push_str("═══════════════════════════════════════════\n");
     output.push_str(&format!("OS: {}\n", std::env::consts::OS));
     output.push_str(&format!("Arch: {}\n", std::env::consts::ARCH));
-    output.push_str(&format!(
-        "Data dir: {}\n",
-        state.config.data_dir.display()
-    ));
-    output.push_str(&format!(
-        "DB path: {}\n",
-        state.config.db_path.display()
-    ));
+    output.push_str(&format!("Data dir: {}\n", state.config.data_dir.display()));
+    output.push_str(&format!("DB path: {}\n", state.config.db_path.display()));
 
     if log_dir.exists() {
         output.push_str("\nArchivos de log:\n");
@@ -223,10 +217,7 @@ pub fn exportar_logs(
 
 /// Trunca los archivos de log.
 #[tauri::command]
-pub fn limpiar_logs(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Cmd<u32> {
+pub fn limpiar_logs(state: State<'_, AppState>, session_id: String) -> Cmd<u32> {
     require_usuario_admin(&state, &session_id)?;
 
     let log_dir = state.config.data_dir.join("logs");
@@ -234,16 +225,20 @@ pub fn limpiar_logs(
 
     if log_dir.exists() {
         let entries: Vec<_> = fs::read_dir(&log_dir)
-            .map_err(|e| cmd(AppError::Generic(format!("No se pudo leer directorio: {e}"))))?
+            .map_err(|e| {
+                cmd(AppError::Generic(format!(
+                    "No se pudo leer directorio: {e}"
+                )))
+            })?
             .flatten()
             .collect();
 
         for entry in entries {
             let path = entry.path();
-            if path.extension().map(|e| e == "log").unwrap_or(false) {
-                if fs::File::create(&path).is_ok() {
-                    eliminados += 1;
-                }
+            if path.extension().map(|e| e == "log").unwrap_or(false)
+                && fs::File::create(&path).is_ok()
+            {
+                eliminados += 1;
             }
         }
     }
@@ -260,8 +255,12 @@ fn read_last_lines(path: &PathBuf, n: usize) -> Cmd<String> {
         return Ok(String::from("(no hay logs disponibles)"));
     }
 
-    let file = fs::File::open(path)
-        .map_err(|e| cmd(AppError::Generic(format!("No se pudo abrir {}: {e}", path.display()))))?;
+    let file = fs::File::open(path).map_err(|e| {
+        cmd(AppError::Generic(format!(
+            "No se pudo abrir {}: {e}",
+            path.display()
+        )))
+    })?;
 
     let reader = BufReader::new(file);
     let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
