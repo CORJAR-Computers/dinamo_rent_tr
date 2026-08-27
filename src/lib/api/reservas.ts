@@ -19,6 +19,7 @@ export interface Reserva {
 	horasExtras: number;
 	valorDia: string;
 	valorHoraAdic: string;
+	costoLavado: string;
 	abono: string;
 	total: string;
 	observaciones: string | null;
@@ -44,6 +45,7 @@ export interface ReservaDatos {
 	horasExtras: number;
 	valorDia: string;
 	valorHoraAdic: string;
+	costoLavado: string;
 	abono: string;
 	total: string;
 	observaciones?: string;

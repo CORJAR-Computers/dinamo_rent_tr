@@ -180,7 +180,7 @@ fn normalizar(d: &mut ReservaDatos) {
         .map(|s| mayusculas(s))
         .filter(|s| !s.is_empty());
     // Montos: vacío → "0.00" (evita SQLCODE -303 al enlazar '' a DECIMAL)
-    for m in [&mut d.valor_dia, &mut d.valor_hora_adic, &mut d.abono] {
+    for m in [&mut d.valor_dia, &mut d.valor_hora_adic, &mut d.costo_lavado, &mut d.abono] {
         *m = m.trim().replace(',', ".");
         if m.is_empty() {
             *m = "0.00".into();
@@ -211,7 +211,10 @@ fn calcular_total(d: &mut ReservaDatos) {
     let vha = Decimal::from_str(&d.valor_hora_adic)
         .unwrap_or(Decimal::ZERO)
         .max(Decimal::ZERO);
-    let total = vdia * Decimal::from(dias) + vha * Decimal::from(horas);
+    let cl = Decimal::from_str(&d.costo_lavado)
+        .unwrap_or(Decimal::ZERO)
+        .max(Decimal::ZERO);
+    let total = vdia * Decimal::from(dias) + vha * Decimal::from(horas) + cl;
     d.total = total.round_dp(2).to_string();
 }
 

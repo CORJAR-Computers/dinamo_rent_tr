@@ -38,6 +38,7 @@ pub struct Reserva {
     /// Monto como string (decimal exacto)
     pub valor_dia: String,
     pub valor_hora_adic: String,
+    pub costo_lavado: String,
     pub abono: String,
     pub total: String,
     pub observaciones: Option<String>,
@@ -65,6 +66,7 @@ pub struct ReservaDatos {
     pub horas_extras: i64,
     pub valor_dia: String,
     pub valor_hora_adic: String,
+    pub costo_lavado: String,
     pub abono: String,
     pub total: String,
     pub observaciones: Option<String>,
@@ -78,6 +80,7 @@ pub const SELECT_COLS: &str = "\
     CAST(fecha_retorno AS VARCHAR(10)), CAST(hora_retorno AS VARCHAR(13)), ubicacion_retorno, \
     dias_calculados, horas_extras, \
     CAST(valor_dia AS VARCHAR(12)), CAST(valor_hora_adic AS VARCHAR(12)), \
+    CAST(costo_lavado AS VARCHAR(12)), \
     CAST(abono AS VARCHAR(12)), CAST(total AS VARCHAR(12)), \
     CAST(observaciones AS VARCHAR(2000)), estado, \
     CAST(created_at AS VARCHAR(30)), CAST(updated_at AS VARCHAR(30))";
@@ -99,6 +102,7 @@ pub type ReservaRow = (
     Option<String>,
     i64,
     i64,
+    String,
     String,
     String,
     String,
@@ -127,12 +131,13 @@ fn from_row(r: ReservaRow) -> Reserva {
         horas_extras: r.13,
         valor_dia: r.14,
         valor_hora_adic: r.15,
-        abono: r.16,
-        total: r.17,
-        observaciones: r.18,
-        estado: r.19,
-        created_at: r.20,
-        updated_at: r.21,
+        costo_lavado: r.16,
+        abono: r.17,
+        total: r.18,
+        observaciones: r.19,
+        estado: r.20,
+        created_at: r.21,
+        updated_at: r.22,
     }
 }
 
@@ -273,11 +278,11 @@ impl ReservaRepository {
                     id_cliente, nombre_cliente, nacionalidad, categoria_vehiculo, placa_asignada, \
                     fecha_recogida, hora_recogida, ubicacion_recogida, fecha_retorno, hora_retorno, \
                     ubicacion_retorno, dias_calculados, horas_extras, valor_dia, valor_hora_adic, \
-                    abono, total, observaciones, estado \
+                    costo_lavado, abono, total, observaciones, estado \
                  ) VALUES (\
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
                     ?, ?, ?, CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), \
-                    CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), ?, ? \
+                    CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), CAST(? AS DECIMAL(12,2)), ?, ? \
                  ) RETURNING id",
                 params![
                     d.id_cliente,
@@ -295,6 +300,7 @@ impl ReservaRepository {
                     d.horas_extras,
                     d.valor_dia.to_string(),
                     d.valor_hora_adic.to_string(),
+                    d.costo_lavado.to_string(),
                     d.abono.to_string(),
                     d.total.to_string(),
                     opt_str(&d.observaciones),
@@ -318,6 +324,7 @@ impl ReservaRepository {
                 ubicacion_recogida = ?, fecha_retorno = ?, hora_retorno = ?, \
                 ubicacion_retorno = ?, dias_calculados = ?, horas_extras = ?, \
                 valor_dia = CAST(? AS DECIMAL(12,2)), valor_hora_adic = CAST(? AS DECIMAL(12,2)), \
+                costo_lavado = CAST(? AS DECIMAL(12,2)), \
                 abono = CAST(? AS DECIMAL(12,2)), total = CAST(? AS DECIMAL(12,2)), \
                 observaciones = ?, estado = ?, updated_at = CURRENT_TIMESTAMP \
              WHERE id = ?",
@@ -337,6 +344,7 @@ impl ReservaRepository {
                 d.horas_extras,
                 d.valor_dia.to_string(),
                 d.valor_hora_adic.to_string(),
+                d.costo_lavado.to_string(),
                 d.abono.to_string(),
                 d.total.to_string(),
                 opt_str(&d.observaciones),

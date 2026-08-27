@@ -191,6 +191,10 @@ pub const MIGRACIONES_EMBEDIDAS: &[(&str, &str)] = &[
         "0027_soft_delete_entities.sql",
         include_str!("../../migrations/0027_soft_delete_entities.sql"),
     ),
+    (
+        "0028_reserva_costo_lavado.sql",
+        include_str!("../../migrations/0028_reserva_costo_lavado.sql"),
+    ),
 ];
 
 /// Aplica las migraciones pendientes. `migrations_dir` = src-tauri/migrations

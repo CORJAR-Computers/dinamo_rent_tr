@@ -91,6 +91,7 @@
 			horasExtras: 0,
 			valorDia: '',
 			valorHoraAdic: '',
+			costoLavado: '',
 			abono: '',
 			total: '',
 			observaciones: '',
@@ -101,7 +102,8 @@
 	// ── Calculadora en vivo ──
 	const totalCalc = $derived(
 		(parseFloat(form.valorDia) || 0) * form.diasCalculados +
-			(parseFloat(form.valorHoraAdic) || 0) * form.horasExtras
+			(parseFloat(form.valorHoraAdic) || 0) * form.horasExtras +
+			(parseFloat(form.costoLavado) || 0)
 	);
 	const saldoCalc = $derived(Math.max(0, totalCalc - (parseFloat(form.abono) || 0)));
 
@@ -252,6 +254,7 @@
 			horasExtras: r.horasExtras,
 			valorDia: r.valorDia,
 			valorHoraAdic: r.valorHoraAdic,
+			costoLavado: r.costoLavado,
 			abono: r.abono,
 			total: r.total,
 			observaciones: r.observaciones ?? '',
@@ -858,6 +861,14 @@
 							inputmode="decimal"
 							placeholder="10000"
 							bind:value={form.valorHoraAdic}
+						/>
+					</FormField>
+					<FormField label="Costo lavado" hint="COP" dense>
+						<input
+							class="input"
+							inputmode="decimal"
+							placeholder="0"
+							bind:value={form.costoLavado}
 						/>
 					</FormField>
 					<FormField label="Días calculados" hint="Auto desde fechas" dense>

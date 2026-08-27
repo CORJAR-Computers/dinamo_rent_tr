@@ -96,6 +96,7 @@ function reserva(overrides: Partial<Reserva> = {}): Reserva {
 		horasExtras: 0,
 		valorDia: '200000.00',
 		valorHoraAdic: '0.00',
+		costoLavado: '0',
 		abono: '100000.00',
 		total: '800000.00',
 		observaciones: null,

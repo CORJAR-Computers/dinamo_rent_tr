@@ -488,6 +488,7 @@
 			horasExtras: r.horasExtras,
 			valorDia: r.valorDia,
 			valorHoraExtra: r.valorHoraAdic,
+			costoLavado: r.costoLavado,
 			abono: r.abono,
 			observaciones: r.observaciones ?? '',
 			kmSalida: auto ? String(auto.kilometraje ?? '') : '',

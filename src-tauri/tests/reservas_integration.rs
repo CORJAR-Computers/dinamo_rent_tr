@@ -70,6 +70,7 @@ fn datos_reserva(nombre: &str, dias: i64) -> ReservaDatos {
         horas_extras: 2,
         valor_dia: "150000".into(),
         valor_hora_adic: "20000".into(),
+        costo_lavado: "0".into(),
         abono: "100000".into(),
         total: "0".into(),
         observaciones: Some("Reserva de prueba".into()),
