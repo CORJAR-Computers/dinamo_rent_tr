@@ -28,13 +28,22 @@ pub async fn listar_rentas(
     busqueda: Option<String>,
     estado: Option<String>,
     placa: Option<String>,
+    fecha_desde: Option<String>,
+    fecha_hasta: Option<String>,
 ) -> Cmd<Vec<Renta>> {
     require_session(&state, &session_id)?;
     let pool = state.pool.clone();
     tauri::async_runtime::spawn_blocking(
         move || -> Result<Vec<Renta>, AppError> {
             let mut c = pool.get().map_err(AppError::from)?;
-            RentaService::listar(&mut c, busqueda.as_deref(), estado.as_deref(), placa.as_deref())
+            RentaService::listar(
+                &mut c,
+                busqueda.as_deref(),
+                estado.as_deref(),
+                placa.as_deref(),
+                fecha_desde.as_deref(),
+                fecha_hasta.as_deref(),
+            )
         },
     )
     .await
@@ -42,19 +51,18 @@ pub async fn listar_rentas(
     .map_err(|e| e.to_payload())
 }
 
-/// Obtiene una renta por id (con pagos e inspecciones).
-///
-/// TODO TAREA 3.4 (Bloque 3 — Performance): envolver en
-/// `tauri::async_runtime::spawn_blocking` cuando se reactive el runtime async
-/// de Tauri para todos los comandos de renta. `obtener` hace 3-4 queries
-/// secuenciales (renta + pagos + inspecciones + extensiones) y conviene no
-/// bloquear el event loop. El patrón es el mismo que `listar_rentas` (clonar
-/// `state.pool`, mover al closure, devolver `Result<Renta, AppError>`).
+/// Obtiene una renta por id (con pagos e inspecciones; ejecutado asíncronamente en spawn_blocking).
 #[tauri::command]
-pub fn obtener_renta(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<Renta> {
+pub async fn obtener_renta(state: State<'_, AppState>, session_id: String, id: i64) -> Cmd<Renta> {
     require_session(&state, &session_id)?;
-    let mut c = conn(&state)?;
-    RentaService::obtener(&mut c, id).map_err(|e| e.to_payload())
+    let pool = state.pool.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<Renta, AppError> {
+        let mut c = pool.get().map_err(AppError::from)?;
+        RentaService::obtener(&mut c, id)
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("La tarea obtener_renta falló: {e}")).to_payload())?
+    .map_err(|e| e.to_payload())
 }
 
 /// Crea una renta
@@ -95,23 +103,25 @@ pub fn cambiar_auto_renta(
     RentaService::cambiar_auto(&mut c, id, &placa, &sesion.username).map_err(|e| e.to_payload())
 }
 
-/// Cierra una renta con la devolución real y recalcula los totales.
-///
-/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
-/// `tauri::async_runtime::spawn_blocking`. `cerrar` recalcula totales
-/// (días/horas + IVA + comisión + neto), registra devolución, inspección de
-/// entrada y actualiza el kilometraje del auto en una transacción multi-tabla
-/// — es de los comandos más pesados del módulo.
+/// Cierra una renta con la devolución real y recalcula los totales (ejecutado asíncronamente en spawn_blocking).
 #[tauri::command]
-pub fn cerrar_renta(
+pub async fn cerrar_renta(
     state: State<'_, AppState>,
     session_id: String,
     id: i64,
     datos: RentaCierreDatos,
 ) -> Cmd<Renta> {
     let sesion = require_session(&state, &session_id)?;
-    let mut c = conn(&state)?;
-    RentaService::cerrar(&mut c, &state.config, id, &sesion.username, datos).map_err(|e| e.to_payload())
+    let pool = state.pool.clone();
+    let config = state.config.clone();
+    let username = sesion.username;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Renta, AppError> {
+        let mut c = pool.get().map_err(AppError::from)?;
+        RentaService::cerrar(&mut c, &config, id, &username, datos)
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("La tarea cerrar_renta falló: {e}")).to_payload())?
+    .map_err(|e| e.to_payload())
 }
 
 /// Cancela una renta activa
@@ -153,26 +163,25 @@ pub fn listar_extensiones(
         .map_err(|e| e.to_payload())
 }
 
-/// Edita campos financieros de una renta cerrada (solo Administrador)
-/// Corrige errores de digitación que afectan los totales (valor_dia, valor_hora_extra,
-/// dias_calculados, horas_extras, descuento). Los campos de identificación y abono
-/// NO son editables. Recalcula subtotal/impuestos/total/saldo_pendiente/valor_neto.
-///
-/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
-/// `tauri::async_runtime::spawn_blocking`. `editar_cerrada` recalcula totales
-/// en una transacción y puede afectar al informe mensual si la renta cierra el
-/// período — conviene no retener el hilo del runtime.
+/// Edita campos financieros de una renta cerrada (solo Administrador; ejecutado asíncronamente en spawn_blocking).
 #[tauri::command]
-pub fn editar_renta_cerrada(
+pub async fn editar_renta_cerrada(
     state: State<'_, AppState>,
     session_id: String,
     id: i64,
     datos: RentaCierreEditDatos,
 ) -> Cmd<Renta> {
     let sesion = require_eliminacion(&state, &session_id)?;
-    let mut c = conn(&state)?;
-    RentaService::editar_cerrada(&mut c, &state.config, id, &sesion.username, datos)
-        .map_err(|e| e.to_payload())
+    let pool = state.pool.clone();
+    let config = state.config.clone();
+    let username = sesion.username;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Renta, AppError> {
+        let mut c = pool.get().map_err(AppError::from)?;
+        RentaService::editar_cerrada(&mut c, &config, id, &username, datos)
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("La tarea editar_renta_cerrada falló: {e}")).to_payload())?
+    .map_err(|e| e.to_payload())
 }
 
 /// Elimina una renta (pagos e inspecciones en cascada)

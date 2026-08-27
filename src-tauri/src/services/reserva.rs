@@ -32,20 +32,15 @@ pub struct ReservaCancelada {
 pub struct ReservaService;
 
 impl ReservaService {
-    /// Lista reservas con filtros opcionales (búsqueda libre o por estado)
+    /// Lista reservas con filtros opcionales (búsqueda libre, estado o rango de fechas)
     pub fn listar(
         conn: &mut PooledConnection,
         busqueda: Option<&str>,
         estado: Option<&str>,
+        fecha_desde: Option<&str>,
+        fecha_hasta: Option<&str>,
     ) -> Result<Vec<Reserva>, AppError> {
-        let term = busqueda.unwrap_or("").trim();
-        if !term.is_empty() {
-            ReservaRepository::buscar(conn, term)
-        } else if let Some(estado) = estado.filter(|e| !e.trim().is_empty() && e.trim() != "Todos") {
-            ReservaRepository::obtener_por_estado(conn, estado.trim())
-        } else {
-            ReservaRepository::obtener_todos(conn)
-        }
+        ReservaRepository::listar_con_filtros(conn, busqueda, estado, fecha_desde, fecha_hasta)
     }
 
     /// Próximas reservas (recogida hoy o en el futuro, no canceladas)

@@ -56,17 +56,16 @@
 		new Set(solapamientos.flatMap((s) => [s.a, s.b]))
 	);
 
-	// Rango visible actual (mes ± 6 meses). Se usa para recortar en cliente
-	// las rentas/reservas demasiado antiguas o futuras, ya que la API todavía
-	// no soporta filtro por fecha.
-	// TODO: añadir parámetros `fecha_inicio`/`fecha_fin` al comando `listar_rentas`
-	// y `listar_reservas` en Rust (src-tauri/src/commands/renta.rs y reserva.rs)
-	// y propagarlos en `rentaApi.listar` / `reservaApi.listar` de src/lib/api.ts
-	// para filtrar en backend y no cargar TODAS las rentas históricas en cada
-	// navegación de mes.
+	// Rango visible actual (mes ± 6 meses). Se usa para acotar la consulta en backend
 	function limiteInferiorIso(): string {
 		const base = mesActual;
 		const d = new Date(base.getFullYear(), base.getMonth() - 6, 1);
+		return d.toISOString().slice(0, 10);
+	}
+
+	function limiteSuperiorIso(): string {
+		const base = mesActual;
+		const d = new Date(base.getFullYear(), base.getMonth() + 7, 0);
 		return d.toISOString().slice(0, 10);
 	}
 
@@ -74,16 +73,14 @@
 		if (!guardSesion()) return;
 		loading = true;
 		try {
-			// TODO: pasar `fecha_inicio`/`fecha_fin` del mes visible cuando el
-			// backend los soporte. Por ahora la API carga todo y recortamos en
-			// cliente al rango visible (mes actual ± 6 meses) para acotar memoria.
 			const limiteInf = limiteInferiorIso();
+			const limiteSup = limiteSuperiorIso();
 			const [r, rs] = await Promise.all([
-				rentaApi.listar(sid()),
-				reservaApi.listar(sid())
+				rentaApi.listar(sid(), undefined, undefined, undefined, limiteInf, limiteSup),
+				reservaApi.listar(sid(), undefined, undefined, limiteInf, limiteSup)
 			]);
-			rentas = r.filter((x) => x.fechaRetorno >= limiteInf);
-			reservas = rs.filter((x) => x.fechaRetorno >= limiteInf);
+			rentas = r;
+			reservas = rs;
 		} catch {
 			toast.error('No se pudieron cargar los datos del calendario.');
 		} finally {

@@ -9,10 +9,10 @@
 //! > `crate::core::repository`. Migración pendiente — ver
 //! > `src/core/repository.rs` para el módulo centralizado.
 
-use chrono::NaiveDate;
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
 use crate::core::error::AppError;
+use crate::core::repository::{map_fb_error_fk, opt_str, parse_fecha, params};
 use crate::core::PooledConnection;
 
 use serde::Serialize;
@@ -44,15 +44,6 @@ pub struct GastoDatos {
     pub descripcion: String,
     pub monto: String,
     pub comprobante: Option<String>,
-}
-
-/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
-/// limitadas a 15 elementos en rsfbclient). Usa `IntoParam` para que las fechas
-/// viajen como TIMESTAMP (el driver no serializa String a DATE).
-macro_rules! params {
-    ($($e:expr),+ $(,)?) => {
-        ParamsType::Positional(vec![$($e.into_param()),+])
-    };
 }
 
 /// Orden de columnas del SELECT de gastos (debe coincidir con `GastoRow`)
@@ -93,18 +84,10 @@ fn from_row(r: GastoRow) -> Gasto {
 
 /// Mapea errores de Firebird a AppError (FK de placa)
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("foreign key")
-        || lower.contains("not a valid reference")
-        || lower.contains("referential")
-    {
-        AppError::Business(
-            "La placa seleccionada no existe. Verifica que el vehículo esté registrado.".into(),
-        )
-    } else {
-        AppError::Database(msg)
-    }
+    map_fb_error_fk(
+        e,
+        "El vehículo seleccionado no existe (o está referenciado por otros registros).",
+    )
 }
 
 pub struct GastoRepository;
@@ -302,14 +285,4 @@ impl GastoRepository {
         )?;
         Ok(rows)
     }
-}
-
-fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-}
-
-/// Parsea fecha 'AAAA-MM-DD' a NaiveDate (el servicio ya la validó)
-fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
-    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
-        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
 }

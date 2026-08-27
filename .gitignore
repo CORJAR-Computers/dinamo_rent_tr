@@ -69,6 +69,7 @@ scripts/.tmp-*
 
 # Artefactos de análisis del portal SIMIT (capturas y bundles minificados descargados
 # durante la ingeniería inversa; conservar en disco, fuera de git)
+tools/simit-analysis/
 /app.min.js
 /capture_simit.js
 /core.min.js
@@ -85,3 +86,4 @@ vite.config.ts.timestamp-*
 
 # Carpeta de entregables (patches/zips de revisión) — no debe commitearse
 dinamo-rent-mejoras/
+dinamo-mejoras/

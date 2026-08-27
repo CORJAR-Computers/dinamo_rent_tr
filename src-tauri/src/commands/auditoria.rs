@@ -2,7 +2,7 @@
 //!
 //! Acceso restringido a roles de administración de usuarios (roles_con_usuarios).
 
-use crate::core::error::ErrorPayload;
+use crate::core::error::{AppError, ErrorPayload};
 use crate::repositories::auditoria::AuditoriaFiltros;
 use crate::services::auditoria::{AuditoriaResultado, AuditoriaService};
 use crate::services::AppState;
@@ -12,16 +12,10 @@ use super::{conn, require_usuario_admin};
 
 type Cmd<T> = Result<T, ErrorPayload>;
 
-/// Lista eventos de auditoría con filtros opcionales y paginación (solo admin).
-///
-/// TODO Tarea 3.4 (Bloque 3 — Performance): envolver en
-/// `tauri::async_runtime::spawn_blocking`. `listar_auditoria` hace 2 queries
-/// (COUNT + SELECT paginado) con LIKE sobre `mensaje` que puede escanear toda
-/// la tabla `auditoria` si crece mucho — conviene no retener el event loop
-/// mientras Firebird resuelve el WHERE.
+/// Lista eventos de auditoría con filtros opcionales y paginación (solo admin; ejecutado asíncronamente en spawn_blocking).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn listar_auditoria(
+pub async fn listar_auditoria(
     state: State<'_, AppState>,
     session_id: String,
     usuario: Option<String>,
@@ -33,7 +27,7 @@ pub fn listar_auditoria(
     por_pagina: Option<i64>,
 ) -> Cmd<AuditoriaResultado> {
     require_usuario_admin(&state, &session_id)?;
-    let mut c = conn(&state)?;
+    let pool = state.pool.clone();
     let filtros = AuditoriaFiltros {
         usuario,
         accion,
@@ -41,7 +35,13 @@ pub fn listar_auditoria(
         fecha_hasta,
         busqueda,
     };
-    AuditoriaService::listar(&mut c, filtros, pagina, por_pagina).map_err(|e| e.to_payload())
+    tauri::async_runtime::spawn_blocking(move || -> Result<AuditoriaResultado, AppError> {
+        let mut c = pool.get().map_err(AppError::from)?;
+        AuditoriaService::listar(&mut c, filtros, pagina, por_pagina)
+    })
+    .await
+    .map_err(|e| AppError::Generic(format!("La tarea listar_auditoria falló: {e}")).to_payload())?
+    .map_err(|e| e.to_payload())
 }
 
 /// Acciones distintas disponibles para el filtro (solo admin)

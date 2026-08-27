@@ -476,6 +476,57 @@ impl RentaRepository {
             .collect())
     }
 
+    /// Lista rentas aplicando filtros combinables (búsqueda, estado, placa, rango de fechas)
+    pub fn listar_con_filtros(
+        conn: &mut PooledConnection,
+        busqueda: Option<&str>,
+        estado: Option<&str>,
+        placa: Option<&str>,
+        fecha_desde: Option<&str>,
+        fecha_hasta: Option<&str>,
+    ) -> Result<Vec<Renta>, AppError> {
+        let mut where_clauses = Vec::new();
+        let mut params = Vec::new();
+
+        if let Some(term) = busqueda.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            let like = format!("%{term}%");
+            where_clauses.push(
+                "(UPPER(r.nombre_cliente) LIKE UPPER(?) OR UPPER(COALESCE(r.placa, '')) LIKE UPPER(?) OR UPPER(r.estado) LIKE UPPER(?))".to_string()
+            );
+            params.push(like.clone().into_param());
+            params.push(like.clone().into_param());
+            params.push(like.into_param());
+        }
+
+        if let Some(est) = estado.map(|s| s.trim()).filter(|s| !s.is_empty() && *s != "Todos") {
+            where_clauses.push("r.estado = ?".to_string());
+            params.push(est.to_string().into_param());
+        }
+
+        if let Some(plac) = placa.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            where_clauses.push("r.placa = ?".to_string());
+            params.push(plac.to_string().into_param());
+        }
+
+        if let Some(desde) = fecha_desde.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            where_clauses.push("r.fecha_retorno >= ?".to_string());
+            params.push(desde.to_string().into_param());
+        }
+
+        if let Some(hasta) = fecha_hasta.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            where_clauses.push("r.fecha_recogida <= ?".to_string());
+            params.push(hasta.to_string().into_param());
+        }
+
+        let where_sql = if where_clauses.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", where_clauses.join(" AND "))
+        };
+
+        Self::consultar(conn, &where_sql, &ParamsType::Positional(params))
+    }
+
     /// Lista todas las rentas
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Renta>, AppError> {
         let empty = ParamsType::Positional(vec![]);

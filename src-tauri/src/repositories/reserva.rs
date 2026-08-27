@@ -9,10 +9,10 @@
 //! > `crate::core::repository`. Migración pendiente — ver
 //! > `src/core/repository.rs` para el módulo centralizado.
 
-use chrono::{NaiveDate, NaiveTime};
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
 use crate::core::error::AppError;
+use crate::core::repository::{map_fb_error_fk, opt_str, parse_fecha, parse_hora_opt, params};
 use crate::core::PooledConnection;
 
 use serde::Serialize;
@@ -69,15 +69,6 @@ pub struct ReservaDatos {
     pub total: String,
     pub observaciones: Option<String>,
     pub estado: String,
-}
-
-/// Construye parámetros posicionales de cualquier longitud (tuplas `IntoParams`
-/// limitadas a 15 elementos en rsfbclient). Usa `IntoParam` para que las fechas
-/// y horas viajen como TIMESTAMP (el driver no serializa String a TIME).
-macro_rules! params {
-    ($($e:expr),+ $(,)?) => {
-        ParamsType::Positional(vec![$($e.into_param()),+])
-    };
 }
 
 /// Orden de columnas del SELECT de reservas (debe coincidir con `ReservaRow`)
@@ -147,24 +138,60 @@ fn from_row(r: ReservaRow) -> Reserva {
 
 /// Mapea errores de Firebird a AppError (FKs de cliente/auto)
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("foreign key")
-        || lower.contains("not a valid reference")
-        || lower.contains("referential")
-    {
-        AppError::Business(
-            "El cliente o el vehículo seleccionado no existe (o está referenciado por otros registros)."
-                .into(),
-        )
-    } else {
-        AppError::Database(msg)
-    }
+    map_fb_error_fk(
+        e,
+        "El cliente o el vehículo seleccionado no existe (o está referenciado por otros registros).",
+    )
 }
 
 pub struct ReservaRepository;
 
 impl ReservaRepository {
+    /// Lista reservas aplicando filtros combinables (búsqueda, estado, rango de fechas)
+    pub fn listar_con_filtros(
+        conn: &mut PooledConnection,
+        busqueda: Option<&str>,
+        estado: Option<&str>,
+        fecha_desde: Option<&str>,
+        fecha_hasta: Option<&str>,
+    ) -> Result<Vec<Reserva>, AppError> {
+        let mut where_clauses = vec!["deleted_at IS NULL".to_string()];
+        let mut params = Vec::new();
+
+        if let Some(term) = busqueda.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            let like = format!("%{term}%");
+            where_clauses.push(
+                "(UPPER(nombre_cliente) LIKE UPPER(?) OR UPPER(placa_asignada) LIKE UPPER(?) OR UPPER(nacionalidad) LIKE UPPER(?))".to_string()
+            );
+            params.push(like.clone().into_param());
+            params.push(like.clone().into_param());
+            params.push(like.into_param());
+        }
+
+        if let Some(est) = estado.map(|s| s.trim()).filter(|s| !s.is_empty() && *s != "Todos") {
+            where_clauses.push("estado = ?".to_string());
+            params.push(est.to_string().into_param());
+        }
+
+        if let Some(desde) = fecha_desde.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            where_clauses.push("fecha_retorno >= ?".to_string());
+            params.push(desde.to_string().into_param());
+        }
+
+        if let Some(hasta) = fecha_hasta.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            where_clauses.push("fecha_recogida <= ?".to_string());
+            params.push(hasta.to_string().into_param());
+        }
+
+        let sql = format!(
+            "SELECT {SELECT_COLS} FROM reservas WHERE {} ORDER BY fecha_recogida DESC, id DESC",
+            where_clauses.join(" AND ")
+        );
+
+        let rows: Vec<ReservaRow> = conn.query(&sql, ParamsType::Positional(params))?;
+        Ok(rows.into_iter().map(from_row).collect())
+    }
+
     /// Lista todas las reservas (más recientes primero)
     pub fn obtener_todos(conn: &mut PooledConnection) -> Result<Vec<Reserva>, AppError> {
         let rows: Vec<ReservaRow> = conn.query(
@@ -247,10 +274,10 @@ impl ReservaRepository {
                     opt_str(&d.categoria_vehiculo),
                     opt_str(&d.placa_asignada),
                     parse_fecha(&d.fecha_recogida)?,
-                    parse_hora(&d.hora_recogida)?,
+                    parse_hora_opt(&d.hora_recogida)?,
                     opt_str(&d.ubicacion_recogida),
                     parse_fecha(&d.fecha_retorno)?,
-                    parse_hora(&d.hora_retorno)?,
+                    parse_hora_opt(&d.hora_retorno)?,
                     opt_str(&d.ubicacion_retorno),
                     d.dias_calculados,
                     d.horas_extras,
@@ -285,10 +312,10 @@ impl ReservaRepository {
                 opt_str(&d.categoria_vehiculo),
                 opt_str(&d.placa_asignada),
                 parse_fecha(&d.fecha_recogida)?,
-                parse_hora(&d.hora_recogida)?,
+                parse_hora_opt(&d.hora_recogida)?,
                 opt_str(&d.ubicacion_recogida),
                 parse_fecha(&d.fecha_retorno)?,
-                parse_hora(&d.hora_retorno)?,
+                parse_hora_opt(&d.hora_retorno)?,
                 opt_str(&d.ubicacion_retorno),
                 d.dias_calculados,
                 d.horas_extras,
@@ -342,30 +369,7 @@ impl ReservaRepository {
     }
 }
 
-fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-}
-
-/// Parsea fecha 'AAAA-MM-DD' a NaiveDate (el servicio ya la validó)
-fn parse_fecha(v: &str) -> Result<NaiveDate, AppError> {
-    NaiveDate::parse_from_str(v.trim(), "%Y-%m-%d")
-        .map_err(|_| AppError::Validation("Fecha inválida (formato AAAA-MM-DD).".into()))
-}
-
 /// Recorta 'HH:MM:SS.0000' (Firebird) a 'HH:MM' para la UI
 fn hora_corta(h: &str) -> String {
     h.split(':').take(2).collect::<Vec<_>>().join(":")
-}
-
-/// Parsea hora 'HH:MM[:SS]' a NaiveTime (el servicio ya la validó)
-fn parse_hora(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
-    match opt_str(v) {
-        None => Ok(None),
-        Some(h) => {
-            let h = if h.len() == 5 { format!("{h}:00") } else { h };
-            NaiveTime::parse_from_str(&h, "%H:%M:%S")
-                .map(Some)
-                .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
-        }
-    }
 }

@@ -42,25 +42,16 @@ pub struct RentaCancelada {
 pub struct RentaService;
 
 impl RentaService {
-    /// Lista rentas con filtros opcionales (búsqueda libre, estado o placa)
+    /// Lista rentas con filtros opcionales (búsqueda libre, estado, placa o rango de fechas)
     pub fn listar(
         conn: &mut PooledConnection,
         busqueda: Option<&str>,
         estado: Option<&str>,
         placa: Option<&str>,
+        fecha_desde: Option<&str>,
+        fecha_hasta: Option<&str>,
     ) -> Result<Vec<Renta>, AppError> {
-        let term = busqueda.unwrap_or("").trim();
-        let est = estado.unwrap_or("").trim();
-        let plac = placa.unwrap_or("").trim();
-        if !term.is_empty() {
-            RentaRepository::buscar(conn, term)
-        } else if !est.is_empty() && est != "Todos" {
-            RentaRepository::obtener_por_estado(conn, est)
-        } else if !plac.is_empty() {
-            RentaRepository::obtener_por_placa(conn, plac)
-        } else {
-            RentaRepository::obtener_todos(conn)
-        }
+        RentaRepository::listar_con_filtros(conn, busqueda, estado, placa, fecha_desde, fecha_hasta)
     }
 
     /// Obtiene una renta por id (con pagos e inspecciones)

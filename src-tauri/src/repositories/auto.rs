@@ -13,6 +13,7 @@
 use rsfbclient::{Execute, ParamsType, Queryable};
 
 use crate::core::error::AppError;
+use crate::core::repository::{map_fb_error_dup, map_fb_error_fk, opt_str};
 use crate::core::PooledConnection;
 
 use serde::Serialize;
@@ -165,15 +166,9 @@ fn from_row(r: AutoRow) -> Auto {
     }
 }
 
-/// Mapea errores de Firebird a AppError (duplicados, FKs)
+/// Mapea errores de Firebird a AppError (duplicados de placa)
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("duplicate") || lower.contains("unique") {
-        AppError::Duplicate("Ya existe un vehículo con esa placa.".into())
-    } else {
-        AppError::Database(msg)
-    }
+    map_fb_error_dup(e, "Ya existe un vehículo con esa placa.")
 }
 
 pub struct AutoRepository;
@@ -319,23 +314,14 @@ impl AutoRepository {
     /// Soft-delete de un vehículo (FKs: mantenimiento/comparendos CASCADE, gastos/reservas SET NULL,
     /// rentas SIN cascada → bloquea si hay rentas asociadas)
     pub fn eliminar(conn: &mut PooledConnection, placa: &str) -> Result<(), AppError> {
-        match conn.execute("UPDATE autos SET deleted_at = CURRENT_TIMESTAMP WHERE placa = ?", (placa.trim().to_string(),)) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let lower = e.to_string().to_lowercase();
-                if lower.contains("foreign key")
-                    || lower.contains("still referenced")
-                    || lower.contains("not a valid reference")
-                {
-                    Err(AppError::Business(
-                        "El vehículo tiene registros asociados (rentas, mantenimiento, comparendos) y no puede eliminarse."
-                            .into(),
-                    ))
-                } else {
-                    Err(AppError::Database(e.to_string()))
-                }
-            }
-        }
+        conn.execute("UPDATE autos SET deleted_at = CURRENT_TIMESTAMP WHERE placa = ?", (placa.trim().to_string(),))
+            .map_err(|e| {
+                map_fb_error_fk(
+                    e,
+                    "El vehículo tiene registros asociados (rentas, mantenimiento, comparendos) y no puede eliminarse.",
+                )
+            })?;
+        Ok(())
     }
 
     /// Actualiza el km del próximo cambio de aceite (lo dispara el servicio de
@@ -378,10 +364,6 @@ impl AutoRepository {
         )?;
         Ok(rows)
     }
-}
-
-fn opt_str(v: &Option<String>) -> Option<String> {
-    v.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
 

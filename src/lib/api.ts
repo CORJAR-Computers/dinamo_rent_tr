@@ -583,11 +583,13 @@ export const auditoriaApi = {
 };
 
 export const reservaApi = {
-	listar: (sessionId: string, busqueda?: string, estado?: string) =>
+	listar: (sessionId: string, busqueda?: string, estado?: string, fechaDesde?: string, fechaHasta?: string) =>
 		invokeCmd<Reserva[]>('listar_reservas', {
 			sessionId,
 			busqueda: busqueda || null,
-			estado: estado || null
+			estado: estado || null,
+			fechaDesde: fechaDesde || null,
+			fechaHasta: fechaHasta || null
 		}),
 	proximas: (sessionId: string, limit?: number) =>
 		invokeCmd<Reserva[]>('proximas_reservas', { sessionId, limit: limit ?? null }),
@@ -821,12 +823,21 @@ export interface RentaCancelada {
 }
 
 export const rentaApi = {
-	listar: (sessionId: string, busqueda?: string, estado?: string, placa?: string) =>
+	listar: (
+		sessionId: string,
+		busqueda?: string,
+		estado?: string,
+		placa?: string,
+		fechaDesde?: string,
+		fechaHasta?: string
+	) =>
 		invokeCmd<Renta[]>('listar_rentas', {
 			sessionId,
 			busqueda: busqueda || null,
 			estado: estado || null,
-			placa: placa || null
+			placa: placa || null,
+			fechaDesde: fechaDesde || null,
+			fechaHasta: fechaHasta || null
 		}),
 	obtener: (sessionId: string, id: number) => invokeCmd<Renta>('obtener_renta', { sessionId, id }),
 	crear: (sessionId: string, datos: RentaDatos) =>

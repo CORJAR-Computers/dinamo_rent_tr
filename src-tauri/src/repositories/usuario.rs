@@ -10,6 +10,7 @@
 use rsfbclient::{Execute, Queryable};
 
 use crate::core::error::AppError;
+use crate::core::repository::map_fb_error_dup;
 use crate::core::PooledConnection;
 
 use serde::Serialize;
@@ -393,11 +394,5 @@ impl UsuarioRepository {
 
 /// Mapea errores de Firebird a AppError (unicidad de username)
 fn map_fb_error(e: rsfbclient::FbError) -> AppError {
-    let msg = e.to_string();
-    let lower = msg.to_lowercase();
-    if lower.contains("duplicate") || lower.contains("unique") {
-        AppError::Duplicate("Ya existe un usuario con ese nombre de usuario.".into())
-    } else {
-        AppError::Database(msg)
-    }
+    map_fb_error_dup(e, "Ya existe un usuario con ese nombre de usuario.")
 }

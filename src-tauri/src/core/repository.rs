@@ -16,17 +16,11 @@
 //! exporta para que los repositorios los importen vía
 //! `use crate::core::repository::{map_fb_error, opt_str, parse_fecha_opt, parse_hora_opt, params};`.
 //!
-//! ## Migración parcial (Bloque 4 / TAREA 4.2)
+//! ## Migración completada (Bloque 4 / TAREA 4.2)
 //!
-//! Para no romper la API existente ni tocar los 10 repositorios de golpe,
-//! la migración es **incremental**:
-//!   - **Migrados a `core::repository`** (3): `renta.rs`, `cliente.rs`,
-//!     `mantenimiento.rs`. Estos tres concentran ~60% del tráfico de queries
-//!     (rentas + clientes + mantenimiento) y son los que más se beneficiaron
-//!     del DRY.
-//!   - **Pendientes** (7): `auto.rs`, `reserva.rs`, `gasto.rs`,
-//!     `comparendo.rs`, `usuario.rs`, `empresa.rs`, `auditoria.rs`. Mantienen
-//!     sus helpers locales con la nota `// TODO: migrar a core::repository`.
+//! Los 10 repositorios (`renta.rs`, `cliente.rs`, `mantenimiento.rs`, `auto.rs`,
+//! `reserva.rs`, `gasto.rs`, `comparendo.rs`, `usuario.rs`, `empresa.rs`, `auditoria.rs`)
+//! utilizan los helpers centralizados de este módulo eliminando duplicación de código.
 //!
 //! ## `map_fb_error` y los mensajes por entidad
 //!
@@ -117,6 +111,16 @@ pub fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError
     }
 }
 
+/// Parsea `&str` (formato HH:MM o HH:MM:SS) a `NaiveTime`.
+///
+/// Si la hora viene sin segundos (`HH:MM`, 5 chars) se le añade `:00` antes de parsear.
+pub fn parse_hora(v: &str) -> Result<NaiveTime, AppError> {
+    let h = v.trim();
+    let h = if h.len() == 5 { format!("{h}:00") } else { h.to_string() };
+    NaiveTime::parse_from_str(&h, "%H:%M:%S")
+        .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
+}
+
 /// Parsea `Option<String>` -> `Option<NaiveTime>` (formato HH:MM o HH:MM:SS).
 ///
 /// Equivalente a los `fn parse_hora` que estaban duplicados en `renta.rs`,
@@ -125,12 +129,7 @@ pub fn parse_fecha_opt(v: &Option<String>) -> Result<Option<NaiveDate>, AppError
 pub fn parse_hora_opt(v: &Option<String>) -> Result<Option<NaiveTime>, AppError> {
     match opt_str(v) {
         None => Ok(None),
-        Some(h) => {
-            let h = if h.len() == 5 { format!("{h}:00") } else { h };
-            NaiveTime::parse_from_str(&h, "%H:%M:%S")
-                .map(Some)
-                .map_err(|_| AppError::Validation("Hora inválida (formato HH:MM).".into()))
-        }
+        Some(h) => parse_hora(&h).map(Some),
     }
 }
 
