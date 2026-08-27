@@ -17,13 +17,13 @@ jobs:
       # Historial completo (fetch-depth: 0): el changelog necesita los commits
       # y tags anteriores para calcular el rango entre releases.
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # jsdom 30 requiere Node >= 22.4; usamos Node 24 (LTS activo).
       - name: Setup Node 24
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
 
