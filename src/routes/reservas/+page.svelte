@@ -497,7 +497,7 @@
 				{#if col.key === 'id'}
 					<span class="font-bold text-primary tabular-nums">#{String(r.id).padStart(4, '0')}</span>
 				{:else if col.key === 'cliente'}
-					<div class="max-w-[200px]">
+					<div class="max-w-50">
 						<p class="font-semibold text-text-primary truncate">{r.nombreCliente}</p>
 						{#if r.nacionalidad}
 							<p class="text-xs text-text-secondary truncate">{r.nacionalidad}</p>
@@ -515,7 +515,7 @@
 							<span class="text-text-secondary">{fmtHora(r.horaRecogida)}</span>
 						</p>
 						{#if r.ubicacionRecogida}
-							<p class="text-xs text-text-secondary truncate max-w-[160px]">
+							<p class="text-xs text-text-secondary truncate max-w-40">
 								{r.ubicacionRecogida}
 							</p>
 						{/if}
@@ -903,7 +903,7 @@
 					</div>
 					<!-- Total destacado -->
 					<div
-						class="rounded-lg bg-gradient-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2"
+						class="rounded-lg bg-linear-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2"
 					>
 						<p class="text-[10px] uppercase tracking-wide opacity-80 font-semibold">
 							Total estimado
@@ -953,7 +953,7 @@
 						Observaciones
 					</span>
 					<textarea
-						class="input flex-1 min-h-[60px] resize-none text-xs"
+						class="input flex-1 min-h-15 resize-none text-xs"
 						placeholder="Aparecen en la orden imprimible…"
 						bind:value={form.observaciones}
 						maxlength="2000"

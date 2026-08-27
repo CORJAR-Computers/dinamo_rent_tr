@@ -938,7 +938,7 @@
 						<p class="text-[10px] text-text-secondary tabular-nums">Id {r.id}</p>
 					</div>
 				{:else if col.key === 'cliente'}
-					<div class="max-w-[200px]">
+					<div class="max-w-50">
 						<p class="font-semibold text-text-primary truncate">{r.nombreCliente}</p>
 						{#if r.nacionalidad}
 							<p class="text-xs text-text-secondary truncate">{r.nacionalidad}</p>
@@ -946,7 +946,7 @@
 					</div>
 				{:else if col.key === 'vehiculo'}
 					<div>
-						<p class="text-text-primary truncate max-w-[160px]">{r.vehiculo || '—'}</p>
+						<p class="text-text-primary truncate max-w-40">{r.vehiculo || '—'}</p>
 						<p class="text-xs text-text-secondary font-mono">{r.placa || 'Sin placa'}</p>
 					</div>
 				{:else if col.key === 'itinerario'}
@@ -1542,7 +1542,7 @@
 					<span class="text-xs text-text-secondary">(se resta del total → valor neto)</span>
 				</label>
 				{#if form.tieneComision}
-					<div class="mt-2 max-w-[240px]">
+					<div class="mt-2 max-w-60">
 						<FormField label="Valor comisión" hint="COP" dense>
 							<input
 								class="input"
@@ -1579,7 +1579,7 @@
 					</div>
 					<!-- Total destacado -->
 					<div
-						class="rounded-lg bg-gradient-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2"
+						class="rounded-lg bg-linear-to-br from-primary to-primary-hover px-3 py-2.5 text-white mb-2"
 					>
 						<p class="text-[10px] uppercase tracking-wide opacity-80 font-semibold">
 							Total estimado
@@ -1658,7 +1658,7 @@
 						Observaciones
 					</span>
 					<textarea
-						class="input flex-1 min-h-[60px] resize-none text-xs"
+						class="input flex-1 min-h-15 resize-none text-xs"
 						placeholder="Aparecen en el documento imprimible…"
 						bind:value={form.observaciones}
 						maxlength="2000"

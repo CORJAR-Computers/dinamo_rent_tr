@@ -658,7 +658,7 @@
 			</FormField>
 			<FormField label="Observaciones" hint="Máx. 2000 caracteres.">
 				<textarea
-					class="input min-h-[80px] resize-y"
+					class="input min-h-20 resize-y"
 					bind:value={form.observaciones}
 					maxlength="2000"
 				></textarea>

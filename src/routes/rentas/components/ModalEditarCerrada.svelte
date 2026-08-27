@@ -74,7 +74,7 @@
 			<div class="col-span-full">
 				<FormField label="Motivo de la corrección" required hint="Obligatorio para auditoría">
 					<textarea
-						class="input min-h-[60px] resize-y"
+						class="input min-h-15 resize-y"
 						placeholder="Describe el error de digitación que se corrige..."
 						bind:value={editCerrada.observaciones}
 						maxlength="500"

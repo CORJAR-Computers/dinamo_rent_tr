@@ -127,7 +127,7 @@
 			</div>
 			<FormField label="Daños de carrocería">
 				<textarea
-					class="input min-h-[60px] resize-y"
+					class="input min-h-15 resize-y"
 					placeholder="Describir golpes, rayones..."
 					bind:value={inspeccion.danosCarroceria}
 					maxlength="2000"
@@ -135,7 +135,7 @@
 			</FormField>
 			<FormField label="Observaciones">
 				<textarea
-					class="input min-h-[60px] resize-y"
+					class="input min-h-15 resize-y"
 					bind:value={inspeccion.observaciones}
 					maxlength="2000"
 				></textarea>

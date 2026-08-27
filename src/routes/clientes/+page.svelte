@@ -229,7 +229,7 @@
 			</span>
 			{#if tieneRol(['Administrador'])}
 				<button
-					class="btn-outline !px-2.5 !py-1 text-[11px] shrink-0"
+					class="btn-outline px-2.5! py-1! text-[11px] shrink-0"
 					onclick={() => (piiDialogOpen = true)}
 				>
 					<span class="inline-flex items-center gap-1.5"
@@ -275,7 +275,7 @@
 						<p class="text-[11px] text-text-secondary">{c.tipoDoc || ''}</p>
 					</div>
 				{:else if col.key === 'nombre'}
-					<div class="max-w-[220px]">
+					<div class="max-w-55">
 						<p class="font-semibold text-text-primary truncate">{c.nombreCompleto}</p>
 						{#if c.nacionalidad}
 							<p class="text-xs text-text-secondary truncate">{c.nacionalidad}</p>
@@ -285,7 +285,7 @@
 					<div>
 						<p class="text-text-primary tabular-nums">{c.celular || '—'}</p>
 						{#if c.email}
-							<p class="text-xs text-text-secondary truncate max-w-[180px]">{c.email}</p>
+							<p class="text-xs text-text-secondary truncate max-w-45">{c.email}</p>
 						{/if}
 					</div>
 				{:else if col.key === 'licencia'}

@@ -125,7 +125,7 @@
 			</FormField>
 			<FormField label="Observaciones de la devolución">
 				<textarea
-					class="input min-h-[70px] resize-y"
+					class="input min-h-17.5 resize-y"
 					bind:value={cierre.observaciones}
 					maxlength="2000"
 				></textarea>

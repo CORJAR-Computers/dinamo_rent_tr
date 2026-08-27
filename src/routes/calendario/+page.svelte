@@ -223,7 +223,7 @@
 					/></svg
 				>
 			</button>
-			<span class="text-lg font-black text-text-primary capitalize min-w-[160px] text-center"
+			<span class="text-lg font-black text-text-primary capitalize min-w-40 text-center"
 				>{tituloMes}</span
 			>
 		</div>
@@ -281,7 +281,7 @@
 						{@const nDia = totalDia(celda.dia)}
 						{@const esDiaActual = celda.dia === diaSeleccionado}
 						<button
-							class="min-h-[96px] p-1.5 border-b border-r border-border/60 text-left align-top transition-colors
+							class="min-h-24 p-1.5 border-b border-r border-border/60 text-left align-top transition-colors
 								{celda.enMes ? 'bg-surface' : 'bg-alt-row/30'}
 								hover:bg-primary/5
 								{esDiaActual ? 'ring-2 ring-primary ring-inset' : ''}"

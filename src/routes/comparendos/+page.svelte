@@ -944,7 +944,7 @@
 					<span class="font-bold text-primary tabular-nums">#{String(c.id).padStart(4, '0')}</span>
 				{:else if col.key === 'vehiculo'}
 					<div>
-						<p class="text-text-primary truncate max-w-[160px]">{c.vehiculo || '—'}</p>
+						<p class="text-text-primary truncate max-w-40">{c.vehiculo || '—'}</p>
 						<p class="text-xs text-text-secondary font-mono">{c.placa}</p>
 					</div>
 				{:else if col.key === 'fecha'}
@@ -954,7 +954,7 @@
 					</div>
 				{:else if col.key === 'responsable'}
 					{#if c.responsable}
-						<div class="max-w-[200px]">
+						<div class="max-w-50">
 							<p class="text-text-primary truncate">{c.responsable.nombreCliente || '—'}</p>
 							<p class="text-xs text-text-secondary truncate" title={c.responsable.estadoRenta}>
 								{formatContrato(c.responsable.anioContrato, c.responsable.noContrato)} ·
@@ -1002,7 +1002,7 @@
 						{c.estado}
 					</span>
 				{:else if col.key === 'observaciones'}
-					<p class="text-sm text-text-secondary truncate max-w-[220px]">{c.observaciones || '—'}</p>
+					<p class="text-sm text-text-secondary truncate max-w-55">{c.observaciones || '—'}</p>
 				{:else if col.key === 'acciones'}
 					<div class="flex items-center justify-end gap-1">
 						<button

@@ -435,7 +435,7 @@
 				{#if col.key === 'fecha'}
 					<span class="whitespace-nowrap text-text-secondary text-xs">{formatDate(m.fecha)}</span>
 				{:else if col.key === 'placa'}
-					<div class="max-w-[200px]">
+					<div class="max-w-50">
 						<p class="font-mono text-xs font-semibold text-primary">{m.placa}</p>
 						{#if m.vehiculo}
 							<p class="text-[11px] text-text-secondary/70 truncate">{m.vehiculo}</p>
@@ -448,7 +448,7 @@
 						{m.tipo}
 					</span>
 				{:else if col.key === 'descripcion'}
-					<div class="max-w-[240px]">
+					<div class="max-w-60">
 						<p class="text-text-primary truncate">{m.descripcion || '—'}</p>
 						{#if m.observaciones}
 							<p class="text-[11px] text-text-secondary/70 truncate">{m.observaciones}</p>
@@ -576,7 +576,7 @@
 			<div class="col-span-full">
 				<FormField label="Observaciones">
 					<textarea
-						class="input min-h-[80px] resize-y"
+						class="input min-h-20 resize-y"
 						placeholder="Detalles adicionales (opcional)"
 						bind:value={form.observaciones}
 						maxlength="2000"
