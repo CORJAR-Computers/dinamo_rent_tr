@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Modal from '$lib/components/Modal.svelte';
 	import FormField from '$lib/components/FormField.svelte';
-	import type { InspeccionDatos, Renta } from '$lib/api';
+	import type { InspeccionDatos } from '$lib/api';
 
 	interface Props {
 		open: boolean;
@@ -11,7 +11,6 @@
 		inspeccionError: string;
 		guardandoInspeccion: boolean;
 		nivelTanqueList: string[];
-		rentas: Renta[];
 		onTipoChange: (tipo: 'Salida' | 'Entrada') => void;
 		onConfirmar: () => void;
 		onClose: () => void;
@@ -25,7 +24,6 @@
 		inspeccionError,
 		guardandoInspeccion,
 		nivelTanqueList,
-		rentas,
 		onTipoChange,
 		onConfirmar,
 		onClose

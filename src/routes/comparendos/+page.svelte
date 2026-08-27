@@ -16,6 +16,7 @@
 		type EventoProgresoSimit,
 		type EventoLogSimit
 	} from '$lib/api';
+	import type ExcelJS from 'exceljs';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
@@ -175,7 +176,7 @@
 				'Nuevo'
 			];
 			const headerRow = ws.addRow(header);
-			headerRow.eachCell((cell: any) => {
+			headerRow.eachCell((cell: ExcelJS.Cell) => {
 				cell.font = { bold: true };
 				cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
 			});

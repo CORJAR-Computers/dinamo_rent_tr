@@ -1762,7 +1762,6 @@
 	{inspeccionError}
 	{guardandoInspeccion}
 	nivelTanqueList={lists?.nivelTanque ?? ['Lleno', '3/4', '1/2', '1/4', 'Vacío']}
-	{rentas}
 	onTipoChange={(t) => {
 		inspeccionTipo = t;
 		inspeccion = defaultInspeccion(inspeccionTipo);

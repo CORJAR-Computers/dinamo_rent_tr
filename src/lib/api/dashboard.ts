@@ -1,6 +1,6 @@
 // dashboard.ts — Datos del Dashboard
 import { invokeCmd } from './base';
-import type { Auto, AlertaVencimiento } from './autos';
+import type { AlertaVencimiento } from './autos';
 import type { Cliente } from './clientes';
 
 /** Datos del Dashboard (services/dashboard.rs) */
