@@ -13,7 +13,7 @@ body:
     attributes:
       label: Versión de Dinamo Rent
       description: Se ve en el menú Ayuda → Acerca de, o en el login
-      placeholder: "1.0.25"
+      placeholder: "1.0.26"
     validations:
       required: true
   - type: dropdown
@@ -58,7 +58,7 @@ body:
     id: logs
     attributes:
       label: Logs relevantes
-      description: "Pega aquí cualquier log de %APPDATA%\com.corjar.dinamorent\logs\app.log (sin datos sensibles)"
+      description: "Pega aquí cualquier log de %APPDATA%\\com.corjar.dinamorent\\logs\\app.log (sin datos sensibles)"
       render: shell
   - type: textarea
     id: screenshot

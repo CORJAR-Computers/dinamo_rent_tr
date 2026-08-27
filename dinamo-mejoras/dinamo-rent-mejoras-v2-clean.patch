@@ -1,0 +1,351 @@
+diff --git a/.github/CODEOWNERS b/.github/CODEOWNERS
+new file mode 100644
+index 0000000..1d1eb99
+--- /dev/null
++++ b/.github/CODEOWNERS
+@@ -0,0 +1,19 @@
++# CODEOWNERS de Dinamo Rent ERP
++# Cada línea define quién es responsable de revisar cambios en esa ruta.
++
++# Backend Rust (Tauri commands, services, repositories, core)
++/src-tauri/src/           @CORJAR-Computers/backend
++
++# Frontend Svelte (routes, components, lib)
++/src/                     @CORJAR-Computers/frontend
++
++# Scripts de operación y CI
++/scripts/                 @CORJAR-Computers/devops
++/.github/workflows/       @CORJAR-Computers/devops
++
++# Migraciones de BD
++/src-tauri/migrations/    @CORJAR-Computers/backend
++
++# Documentación crítica
++/SECURITY.md              @CORJAR-Computers/security
++/RELEASE_CHECKLIST.md     @CORJAR-Computers/devops
+diff --git a/.github/ISSUE_TEMPLATE/bug_report.yml b/.github/ISSUE_TEMPLATE/bug_report.yml
+new file mode 100644
+index 0000000..e5b06f5
+--- /dev/null
++++ b/.github/ISSUE_TEMPLATE/bug_report.yml
+@@ -0,0 +1,67 @@
++---
++name: Reporte de bug
++about: Reporta un bug en Dinamo Rent ERP
++title: "[BUG] "
++labels: ["bug", "triage"]
++body:
++  - type: markdown
++    attributes:
++      value: |
++        Gracias por reportar un bug. Por favor completa la siguiente información.
++  - type: input
++    id: version
++    attributes:
++      label: Versión de Dinamo Rent
++      description: Se ve en el menú Ayuda → Acerca de, o en el login
++      placeholder: "1.0.26"
++    validations:
++      required: true
++  - type: dropdown
++    id: module
++    attributes:
++      label: Módulo afectado
++      options:
++        - Rentas
++        - Clientes
++        - Flota / Autos
++        - Reservas
++        - Calendario
++        - Comparendos / SIMIT
++        - Mantenimiento
++        - Gastos
++        - Informes
++        - Finanzas / Pagos
++        - Auditoría
++        - Login / Usuarios
++        - Backup / Restauración
++        - Otro
++    validations:
++      required: true
++  - type: textarea
++    id: description
++    attributes:
++      label: Descripción del bug
++      description: Qué ocurrió, qué esperabas que ocurriera
++    validations:
++      required: true
++  - type: textarea
++    id: steps
++    attributes:
++      label: Pasos para reproducir
++      placeholder: |
++        1. Ir a '...'
++        2. Hacer clic en '...'
++        3. Ver error
++    validations:
++      required: true
++  - type: textarea
++    id: logs
++    attributes:
++      label: Logs relevantes
++      description: "Pega aquí cualquier log de %APPDATA%\\com.corjar.dinamorent\\logs\\app.log (sin datos sensibles)"
++      render: shell
++  - type: textarea
++    id: screenshot
++    attributes:
++      label: Capturas de pantalla
++      description: Si aplica, añade capturas
+diff --git a/.github/ISSUE_TEMPLATE/feature_request.yml b/.github/ISSUE_TEMPLATE/feature_request.yml
+new file mode 100644
+index 0000000..4b340ff
+--- /dev/null
++++ b/.github/ISSUE_TEMPLATE/feature_request.yml
+@@ -0,0 +1,40 @@
++---
++name: Solicitud de funcionalidad
++about: Sugiere una nueva funcionalidad para Dinamo Rent ERP
++title: "[FEAT] "
++labels: ["enhancement", "triage"]
++body:
++  - type: textarea
++    id: problem
++    attributes:
++      label: Problema o necesidad
++      description: Qué problema resuelve esta funcionalidad
++    validations:
++      required: true
++  - type: textarea
++    id: solution
++    attributes:
++      label: Solución propuesta
++      description: Descripción de la funcionalidad que te gustaría ver
++    validations:
++      required: true
++  - type: textarea
++    id: alternatives
++    attributes:
++      label: Alternativas consideradas
++  - type: dropdown
++    id: module
++    attributes:
++      label: Módulo
++      options:
++        - Rentas
++        - Clientes
++        - Flota / Autos
++        - Reservas
++        - Calendario
++        - Comparendos / SIMIT
++        - Mantenimiento
++        - Gastos
++        - Informes
++        - Finanzas / Pagos
++        - Otro
+diff --git a/.github/PULL_REQUEST_TEMPLATE.md b/.github/PULL_REQUEST_TEMPLATE.md
+new file mode 100644
+index 0000000..90d0145
+--- /dev/null
++++ b/.github/PULL_REQUEST_TEMPLATE.md
+@@ -0,0 +1,36 @@
++## 📋 Descripción
++
++<!-- Breve descripción de qué hace este PR y por qué -->
++
++## 🔗 Issue relacionado
++
++<!-- Fixes #123, closes #456, o "N/A" -->
++
++## 🧪 Tipo de cambio
++
++- [ ] Bug fix (cambio que no rompe nada)
++- [ ] Nueva funcionalidad
++- [ ] Breaking change (cambio que requiere migración)
++- [ ] Refactor
++- [ ] Documentación
++- [ ] CI/CD
++
++## ✅ Checklist
++
++- [ ] `bun run lint` pasa sin errores
++- [ ] `bun run check` pasa sin errores (svelte-check 0/0)
++- [ ] `bun run test` pasa (vitest)
++- [ ] `cargo test` pasa (incl. integración con BD sembrada)
++- [ ] `cargo clippy -- -D warnings` sin warnings
++- [ ] `cargo fmt --check` pasa
++- [ ] Si hay migraciones: son idempotentes y tienen `EXECUTE BLOCK` con guards
++- [ ] Si hay cambios de UI: responsive y accessible (aria-label, focus-visible)
++- [ ] Si hay cambios de seguridad: revisado por SECURITY.md
++
++## 📸 Capturas / evidencia
++
++<!-- Si hay cambios de UI, añade capturas antes/después -->
++
++## 📝 Notas para el reviewer
++
++<!-- Cualquier contexto adicional, decisiones de diseño, o áreas de riesgo -->
+diff --git a/.gitignore b/.gitignore
+index d766fa7..de41204 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -82,3 +82,6 @@ scripts/.tmp-*
+ # Vite timestamps
+ vite.config.js.timestamp-*
+ vite.config.ts.timestamp-*
++
++# Carpeta de entregables (patches/zips de revisión) — no debe commitearse
++dinamo-rent-mejoras/
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+new file mode 100644
+index 0000000..695dce1
+--- /dev/null
++++ b/CONTRIBUTING.md
+@@ -0,0 +1,94 @@
++# Guía de Contribución — Dinamo Rent ERP
++
++¡Gracias por tu interés en contribuir a Dinamo Rent ERP! Este documento describe
++el flujo de trabajo y las convenciones del proyecto.
++
++## 🚀 Flujo de desarrollo
++
++1. **Clona el repositorio**
++   ```bash
++   git clone https://github.com/CORJAR-Computers/dinamo_rent_tr.git
++   cd dinamo_rent_tr
++   bun install
++   ```
++
++2. **Crea una rama** desde `main`:
++   ```bash
++   git checkout -b fix/descripcion-corta
++   ```
++
++3. **Desarrolla y prueba**:
++   ```bash
++   bun run dev          # frontend (Vite)
++   bun run tauri dev    # app completa (Tauri + Rust)
++   ```
++
++4. **Verifica antes de commitear** (el hook de husky ejecuta `bun run lint`):
++   ```bash
++   bun run lint         # ESLint (frontend)
++   bun run check        # svelte-check (tipos)
++   bun run test         # vitest (tests frontend)
++   cd src-tauri && cargo test  # tests Rust + integración
++   cd .. && cargo fmt --check  # formato Rust
++   cargo clippy -- -D warnings # lints Rust
++   ```
++
++5. **Commitea** usando [conventional commits](https://www.conventionalcommits.org/):
++   ```
++   fix(core): corrige precedencia de operadores en cliente.buscar()
++   feat(ui): añade componente Spinner unificado
++   refactor(ui): extrae Icon.svelte con 10 iconos nuevos
++   docs: sincroniza RELEASE_CHECKLIST a v1.0.26
++   ```
++
++6. **Push y PR**:
++   ```bash
++   git push -u origin fix/descripcion-corta
++   gh pr create --title "fix(core): ..." --body "..."
++   ```
++
++## 📋 Convenciones
++
++### Commits (conventional commits)
++- `fix(scope):` corrección de bugs
++- `feat(scope):` nueva funcionalidad
++- `refactor(scope):` refactor sin cambio de comportamiento
++- `perf(scope):` mejora de rendimiento
++- `docs:` cambios en documentación
++- `chore:` tareas de mantenimiento
++- `test:` additions/modifications de tests
++
++**Scopes comunes:** `core`, `ui`, `security`, `docs`, `ci`, `perf`
++
++### Estilo de código
++- **Frontend**: Svelte 5 (runes), TypeScript estricto, Tailwind CSS v4
++- **Backend**: Rust, consultas explícitas con `rsfbclient`, `params![]` para SQL parametrizado
++- **SQL**: siempre parametrizado (`?`), nunca `format!` con valores de usuario
++- **Logs**: usar `tracing`/`log` (no `println!`), sin datos PII
++
++### Testing
++- Todo nuevo comando de Tauri debe tener tests de integración
++- Todo nuevo componente Svelte debe tener tests con `@testing-library/svelte`
++- Los tests de Rust corren contra una BD Firebird Embedded sembrada por `seed_ci`
++
++## 🔒 Seguridad
++- **Nunca** commitear `data/config.ini` (está en `.gitignore`)
++- **Nunca** commitear claves, tokens o credenciales
++- Reportar vulnerabilidades a `seguridad@dinamorent.com` (ver `SECURITY.md`)
++- La clave `db_encryption_key` debe rotarse al menos una vez al año
++
++## 🌿 Ramas
++- `main` — estable, siempre deployable
++- `fix/*` — correcciones de bugs
++- `feat/*` — nuevas funcionalidades
++
++## ✅ Checklist del PR
++- [ ] `bun run lint` pasa sin errores
++- [ ] `bun run check` pasa sin errores
++- [ ] `bun run test` pasa
++- [ ] `cargo test` pasa (incl. integración con BD sembrada)
++- [ ] `cargo clippy` sin warnings
++- [ ] `cargo fmt --check` pasa
++- [ ] Si hay migraciones: son idempotentes (EXECUTE BLOCK con guards)
++- [ ] Si hay cambios de UI: responsive y accessible (aria-label, focus-visible)
++- [ ] El PR describe el qué, por qué y cómo verificar
+diff --git a/LICENSE b/LICENSE
+new file mode 100644
+index 0000000..a87b3d1
+--- /dev/null
++++ b/LICENSE
+@@ -0,0 +1,19 @@
++Copyright (c) 2024-2026 CORJAR Computers
++
++Todos los derechos reservados.
++
++Este software y su código fuente asociado (en adelante, "el Software") son
++propiedad de CORJAR Computers. Queda prohibida la reproducción, distribución,
++modificación o uso del Software, total o parcial, sin autorización expresa y
++por escrito de CORJAR Computers.
++
++Para solicitar una licencia o autorización de uso, contacte a:
++  seguridad@dinamorent.com
++
++El Software se proporciona "tal cual", sin garantía de ningún tipo, expresa o
++implícita, incluyendo pero no limitándose a garantías de comerciabilidad,
++idoneidad para un propósito particular y no infracción. En ningún caso los
++autores o titulares de los derechos de autor serán responsables de cualquier
++reclamación, daño u otra responsabilidad, ya sea en una acción de contrato,
++agravio o de otro tipo, que surja de o en conexión con el Software o el uso
++u otros tratos en el Software.
+diff --git a/src/lib/components/Placeholder.svelte b/src/lib/components/Placeholder.svelte
+deleted file mode 100644
+index 92e1ec8..0000000
+--- a/src/lib/components/Placeholder.svelte
++++ /dev/null
+@@ -1,23 +0,0 @@
+-<script lang="ts">
+-	import Icon from './Icon.svelte';
+-
+-	interface Props {
+-		title: string;
+-		description: string;
+-		icon?: string;
+-		badge?: string;
+-	}
+-
+-	let { title, description, icon = 'car', badge = 'Fase 6' }: Props = $props();
+-</script>
+-
+-<div class="card p-10 flex flex-col items-center justify-center text-center min-h-[60vh]">
+-	<div class="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-6 text-primary">
+-		<Icon name={icon} class="w-10 h-10" />
+-	</div>
+-	<h2 class="text-2xl font-bold text-text-primary mb-2">{title}</h2>
+-	<p class="text-text-secondary max-w-md mb-6">{description}</p>
+-	<span class="text-xs font-semibold px-3 py-1.5 rounded-full bg-primary/10 text-primary uppercase tracking-wide">
+-		{badge}
+-	</span>
+-</div>
