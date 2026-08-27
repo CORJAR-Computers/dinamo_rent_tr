@@ -187,20 +187,22 @@ fn informe_comisiones_y_balance_neto() {
 
     // Renta de hoy con comisión de 120.000: total 178.500 (1 día × 150.000
     // + 19% IVA) → valor neto 58.500
-    let mut datos = RentaDatos::default();
-    datos.placa = Some(placa.clone());
-    datos.nombre_cliente = "CLIENTE INFORME COMISION".into();
-    datos.fecha_recogida = dia.clone();
-    datos.hora_recogida = Some("09:00".into());
-    datos.fecha_retorno = (hoy + Duration::days(1)).format("%Y-%m-%d").to_string();
-    datos.hora_retorno = Some("18:00".into());
-    datos.dias_calculados = 1;
-    datos.horas_extras = 0;
-    datos.valor_dia = "150000".into();
-    datos.valor_hora_extra = "10000".into();
-    datos.cobra_iva = true;
-    datos.tiene_comision = true;
-    datos.comision = "120000".into();
+    let datos = RentaDatos {
+        placa: Some(placa.clone()),
+        nombre_cliente: "CLIENTE INFORME COMISION".into(),
+        fecha_recogida: dia.clone(),
+        hora_recogida: Some("09:00".into()),
+        fecha_retorno: (hoy + Duration::days(1)).format("%Y-%m-%d").to_string(),
+        hora_retorno: Some("18:00".into()),
+        dias_calculados: 1,
+        horas_extras: 0,
+        valor_dia: "150000".into(),
+        valor_hora_extra: "10000".into(),
+        cobra_iva: true,
+        tiene_comision: true,
+        comision: "120000".into(),
+        ..RentaDatos::default()
+    };
     let creada = RentaService::crear(&mut conn, cfg, datos).expect("crear renta con comisión");
     assert_eq!(creada.valor_neto, "58500.00", "neto = 178.500 − 120.000");
 

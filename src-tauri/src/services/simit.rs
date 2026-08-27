@@ -1974,6 +1974,7 @@ mod tests {
     /// escritura es best-effort — si el cliente aborta la conexión (EPIPE) o
     /// no llega, el hilo falla con un panic descriptivo en vez de colgar al
     /// test o paniquear con un mensaje engañoso.
+    #[allow(clippy::type_complexity)]
     fn servidor_http(
         respuestas: Vec<(u16, Vec<(&'static str, &'static str)>, String)>,
     ) -> (String, std::thread::JoinHandle<Vec<Option<String>>>) {

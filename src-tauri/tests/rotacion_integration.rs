@@ -52,12 +52,12 @@ fn copia_bd_dev() -> (PathBuf, LimpiarTemporal) {
 }
 
 /// Config de dev apuntando a la copia temporal.
-fn config_con_db(path: &PathBuf) -> Arc<AppConfig> {
+fn config_con_db(path: &std::path::Path) -> Arc<AppConfig> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let data_dir = manifest.join("../data");
     let resource_dir = manifest.join("resources");
     let mut cfg = AppConfig::load(&data_dir, &resource_dir, &manifest);
-    cfg.db_path = path.clone();
+    cfg.db_path = path.to_path_buf();
     Arc::new(cfg)
 }
 
