@@ -319,6 +319,7 @@ impl RentaService {
         let fecha_dev = parse_fecha_opt(&datos.fecha_devolucion_real)?;
         let hora_dev = parse_hora(&datos.hora_devolucion_real)?;
         let km_final = opt_str(&datos.km_final);
+        let km_final_f64 = km_final.as_ref().and_then(|s| s.parse::<f64>().ok());
         let tanque_final = opt_str(&datos.tanque_final);
         let valor_dia = datos
             .valor_dia
@@ -382,13 +383,22 @@ impl RentaService {
                     id,
                 ],
             )?;
-            // Liberar el vehículo (sólo si la renta tenía placa asignada)
+            // Liberar el vehículo y actualizar kilometraje (sólo si la renta tenía placa asignada)
             if let Some(placa) = placa_auto.as_ref() {
-                tx.execute(
-                    "UPDATE autos SET estado = 'Disponible', updated_at = CURRENT_TIMESTAMP \
-                     WHERE placa = ?",
-                    (placa.clone(),),
-                )?;
+                // Si se proporcionó km final, actualizar también el kilometraje del auto
+                if let Some(km) = km_final_f64 {
+                    tx.execute(
+                        "UPDATE autos SET estado = 'Disponible', kilometraje = ?, \
+                         updated_at = CURRENT_TIMESTAMP WHERE placa = ?",
+                        (km, placa.clone()),
+                    )?;
+                } else {
+                    tx.execute(
+                        "UPDATE autos SET estado = 'Disponible', updated_at = CURRENT_TIMESTAMP \
+                         WHERE placa = ?",
+                        (placa.clone(),),
+                    )?;
+                }
             }
             // Auditoría del cierre
             tx.execute(
