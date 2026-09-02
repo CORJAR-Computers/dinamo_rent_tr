@@ -114,6 +114,7 @@ fn cierre_renta_actualiza_kilometraje_auto() {
         valor_hora_extra: Some("10000".into()),
         descuento: Some("0".into()),
         observaciones: Some("Cierre con actualización de km".into()),
+        ..Default::default()
     };
     let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.estado, "Cerrada");
@@ -211,6 +212,7 @@ fn cierre_renta_sin_km_no_modifica_auto() {
         valor_hora_extra: Some("10000".into()),
         descuento: Some("0".into()),
         observaciones: None,
+        ..Default::default()
     };
     RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
 

@@ -68,9 +68,30 @@
 			<FormField label="Horas extras">
 				<input class="input" type="number" min="0" bind:value={editCerrada.horasExtras} />
 			</FormField>
+			<FormField label="Valor día extra">
+				<input
+					class="input"
+					type="number"
+					step="0.01"
+					min="0"
+					bind:value={editCerrada.valorDiaExtra}
+				/>
+			</FormField>
 			<FormField label="Descuento">
 				<input class="input" type="number" step="0.01" min="0" bind:value={editCerrada.descuento} />
 			</FormField>
+			<div class="col-span-full mb-2">
+				<label
+					class="flex items-center gap-2 text-sm text-text-primary cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-alt-row/60 transition-colors w-fit"
+				>
+					<input
+						type="checkbox"
+						class="accent-primary"
+						bind:checked={editCerrada.cobrarHorasExtra}
+					/>
+					Cobrar horas extras
+				</label>
+			</div>
 			<div class="col-span-full">
 				<FormField label="Motivo de la corrección" required hint="Obligatorio para auditoría">
 					<textarea

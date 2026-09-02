@@ -172,6 +172,8 @@ export interface RentaCierreDatos {
 	horasExtras?: number | null;
 	valorDia?: string;
 	valorHoraExtra?: string;
+	valorDiaExtra?: string;
+	cobrarHorasExtra?: boolean;
 	descuento?: string;
 	observaciones?: string;
 }
@@ -180,6 +182,8 @@ export interface RentaCierreDatos {
 export interface RentaCierreEditDatos {
 	valorDia?: string;
 	valorHoraExtra?: string;
+	valorDiaExtra?: string;
+	cobrarHorasExtra?: boolean;
 	diasCalculados?: number | null;
 	horasExtras?: number | null;
 	descuento?: string;

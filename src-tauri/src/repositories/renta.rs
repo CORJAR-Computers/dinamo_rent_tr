@@ -207,6 +207,8 @@ pub struct RentaCierreDatos {
     pub horas_extras: Option<i64>,
     pub valor_dia: Option<String>,
     pub valor_hora_extra: Option<String>,
+    pub valor_dia_extra: Option<String>,
+    pub cobrar_horas_extra: Option<bool>,
     pub descuento: Option<String>,
     pub observaciones: Option<String>,
 }
@@ -221,6 +223,10 @@ pub struct RentaCierreEditDatos {
     pub valor_dia: Option<String>,
     /// Valor hora extra (corrección de digitación)
     pub valor_hora_extra: Option<String>,
+    /// Valor días extra (corrección de digitación)
+    pub valor_dia_extra: Option<String>,
+    /// Bandera de cobrar horas extras
+    pub cobrar_horas_extra: Option<bool>,
     /// Días calculados (corrección de digitación)
     pub dias_calculados: Option<i64>,
     /// Horas extras (corrección de digitación)

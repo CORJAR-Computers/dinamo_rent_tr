@@ -621,6 +621,81 @@ describe('página de Rentas', () => {
 		expect(screen.getByText(/CONTRATO Nº: 2026-042/)).toBeInTheDocument();
 	});
 
+	it('muestra desglose de horas extras y tarifas en orden de renta y contrato', async () => {
+		const rentaConHE = renta({
+			id: 2,
+			horasExtras: 2,
+			valorHoraExtra: '15000.00',
+			diasCalculados: 2,
+			valorDia: '100000.00',
+			subtotal: '230000.00',
+			total: '230000.00',
+			cobrarHorasExtra: true
+		});
+		tauri.register('listar_rentas', () => [rentaConHE]);
+		tauri.register('obtener_renta', () => ({ ...rentaConHE, pagos: [], inspecciones: [] }));
+
+		render(RentasPage);
+		await screen.findByText('Cliente de Prueba');
+
+		// 1) Abrir orden de renta
+		await fireEvent.click(screen.getByTitle('Imprimir orden de renta'));
+		expect(await screen.findByRole('dialog')).toHaveTextContent('Orden de renta #0002');
+		expect(screen.getByText(/Horas extras \(2 × \$ 15\.000\)/)).toBeInTheDocument();
+		expect(screen.getByText(/Valor del día × 2 días/)).toBeInTheDocument();
+
+		// 2) Pasar al contrato
+		await fireEvent.click(screen.getByRole('button', { name: /Ver contrato/ }));
+		expect(await screen.findByRole('dialog')).toHaveTextContent('Contrato de renta #0002');
+		// Cláusula Tercera tiene el desglose de horas extras
+		expect(screen.getByText(/Horas extras:/)).toBeInTheDocument();
+		expect(screen.getByText(/2 horas × \$ 15\.000 = \$ 30\.000/)).toBeInTheDocument();
+		// Cláusula Cuarta muestra la tarifa por hora configurada
+		expect(screen.getAllByText(/\$ 15\.000 POR HORA/).length).toBeGreaterThanOrEqual(1);
+	});
+
+	it('cierra una renta enviando valorHoraExtra, horasExtras, valorDiaExtra y cobrarHorasExtra', async () => {
+		const rentaActiva = renta({
+			id: 5,
+			valorDia: '100000.00',
+			valorHoraExtra: '15000.00',
+			valorDiaExtra: '0.00',
+			diasCalculados: 2,
+			horasExtras: 0,
+			kmSalida: '50000'
+		});
+		tauri.register('listar_rentas', () => [rentaActiva]);
+		const cerrarMock = vi.fn(
+			(_args: { sessionId: string; id: number; datos: RentaCierreDatos }) =>
+				renta({ id: 5, estado: 'Cerrada' })
+		);
+		tauri.register('cerrar_renta', cerrarMock);
+
+		render(RentasPage);
+		await screen.findByText('Cliente de Prueba');
+
+		// Abrir modal de cierre
+		await fireEvent.click(screen.getByTitle('Cerrar renta (devolución)'));
+		const modal = await screen.findByRole('dialog');
+		expect(modal).toHaveTextContent('Cerrar renta #5');
+
+		// Ingresar campos de cierre
+		const kmInput = screen.getByPlaceholderText('Km al devolver');
+		await fireEvent.input(kmInput, { target: { value: '50500' } });
+
+		const diasExtraInput = screen.getByLabelText(/Valor días extra final/i);
+		await fireEvent.input(diasExtraInput, { target: { value: '80000' } });
+
+		// Confirmar cierre
+		await fireEvent.click(within(modal).getByRole('button', { name: 'Cerrar renta' }));
+
+		await waitFor(() => expect(cerrarMock).toHaveBeenCalledTimes(1));
+		const args = cerrarMock.mock.calls[0][0];
+		expect(args.id).toBe(5);
+		expect(args.datos.valorDiaExtra).toBe('80000');
+		expect(args.datos.cobrarHorasExtra).toBe(true);
+	});
+
 	it('filtra por estado con el selector', async () => {
 		const listar = vi.fn(
 			(_args: { sessionId: string; estado: string | null; placa: string | null }) => [renta()]

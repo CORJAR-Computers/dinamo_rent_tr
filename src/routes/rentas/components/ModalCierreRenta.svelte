@@ -115,6 +115,14 @@
 					bind:value={cierre.valorHoraExtra}
 				/>
 			</FormField>
+			<FormField label="Valor días extra final (COP)" hint="Días adicionales no contemplados en el plazo">
+				<input
+					class="input"
+					inputmode="decimal"
+					placeholder="Mantener"
+					bind:value={cierre.valorDiaExtra}
+				/>
+			</FormField>
 			<FormField label="Descuento final (COP)">
 				<input
 					class="input"
@@ -123,13 +131,29 @@
 					bind:value={cierre.descuento}
 				/>
 			</FormField>
-			<FormField label="Observaciones de la devolución">
-				<textarea
-					class="input min-h-17.5 resize-y"
-					bind:value={cierre.observaciones}
-					maxlength="2000"
-				></textarea>
-			</FormField>
+			<div class="col-span-full mb-1">
+				<label
+					class="flex items-center gap-2 text-sm text-text-primary cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-alt-row/60 transition-colors w-fit"
+				>
+					<input
+						type="checkbox"
+						class="accent-primary"
+						bind:checked={cierre.cobrarHorasExtra}
+						onchange={onCalcular}
+					/>
+					Cobrar horas extras
+					<span class="text-xs text-text-secondary">(desmarcar si aplica hora de gracia o cortesía)</span>
+				</label>
+			</div>
+			<div class="col-span-full">
+				<FormField label="Observaciones de la devolución">
+					<textarea
+						class="input min-h-17.5 resize-y"
+						bind:value={cierre.observaciones}
+						maxlength="2000"
+					></textarea>
+				</FormField>
+			</div>
 		</div>
 	{/snippet}
 

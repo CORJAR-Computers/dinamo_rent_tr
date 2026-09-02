@@ -71,6 +71,33 @@
 		const hora12 = ((Number(hh) + 11) % 12) + 1;
 		return `${hora12}:${mm} ${Number(hh) >= 12 ? 'PM' : 'AM'}`;
 	}
+
+	const baseMonto = $derived((parseFloat(renta.valorDia) || 0) * renta.diasCalculados);
+	const horasExtrasMonto = $derived(
+		(parseFloat(renta.valorHoraExtra) || 0) * (renta.horasExtras || 0)
+	);
+	const valorDiaExtraMonto = $derived(parseFloat(renta.valorDiaExtra) || 0);
+
+	const tieneHorasExtras = $derived(renta.horasExtras > 0 && horasExtrasMonto > 0);
+	const tieneDiasExtras = $derived(valorDiaExtraMonto > 0);
+
+	const otrosCostosMonto = $derived(
+		[
+			renta.costoLavado,
+			renta.costoSilla,
+			renta.costoRetorno,
+			renta.costoDomicilio,
+			renta.costoCables,
+			renta.costoInversor,
+			renta.valorGasolina
+		].reduce((acc, c) => acc + (parseFloat(c || '0') || 0), 0)
+	);
+
+	const valorHoraExtraTexto = $derived(
+		(parseFloat(renta.valorHoraExtra) || 0) > 0
+			? `${formatCOP(renta.valorHoraExtra)} POR HORA`
+			: '______________________ POR HORA'
+	);
 </script>
 
 <div class="print-area contrato-carta bg-white text-black contrato-body px-6 py-6">
@@ -187,7 +214,8 @@
 		bases y tarifas que considere la empresa por el término pactado. El método de pago del presente
 		contrato de arrendamiento se establece de la siguiente forma en
 		<span class="campo-resaltado">{formatCOP(renta.total)}</span>
-		pesos y de manera anticipada, y se establece como costo de Arrendamiento los siguientes valores.
+		pesos y de manera anticipada, y se establece como costo de Arrendamiento los siguientes valores:
+		<span class="campo-resaltado">Días base:</span> {renta.diasCalculados} día{renta.diasCalculados === 1 ? '' : 's'} × {formatCOP(renta.valorDia)} = {formatCOP(baseMonto)}{#if tieneHorasExtras}, <span class="campo-resaltado">Horas extras:</span> {renta.horasExtras} hora{renta.horasExtras === 1 ? '' : 's'} × {formatCOP(renta.valorHoraExtra)} = {formatCOP(horasExtrasMonto)}{/if}{#if tieneDiasExtras}, <span class="campo-resaltado">Día(s) extra:</span> {formatCOP(renta.valorDiaExtra)}{/if}{#if otrosCostosMonto > 0}, <span class="campo-resaltado">Otros cargos:</span> {formatCOP(otrosCostosMonto)}{/if}{#if (parseFloat(renta.descuento) || 0) > 0}, <span class="campo-resaltado">Descuento:</span> -{formatCOP(renta.descuento)}{/if}. <span class="campo-resaltado">TOTAL: {formatCOP(renta.total)}</span>.
 	</div>
 
 	<!-- CLÁUSULA CUARTA (PÁGINA 1) -->
@@ -214,8 +242,7 @@
 		la finalización del contrato, de conformidad con las tarifas plenas en vigencia para alquiler de
 		vehículo tomado en renta. El atraso en la devolución del vehículo hará incurrir al arrendatario
 		en una multa de
-		<span class="campo-resaltado">______________________ POR HORA</span> de retardo. Sin perjuicio de
-		las demás acciones civiles o penales que se pudieren intentar en su contra.
+		<span class="campo-resaltado">{valorHoraExtraTexto}</span> de retardo. Sin perjuicio de las demás acciones civiles o penales que se pudieren intentar en su contra.
 	</div>
 
 	<div class="clausula-contenido">
@@ -228,13 +255,16 @@
 		presentarse cualquier plazo de exceso trascurrido hasta el momento de la devolución al
 		ARRENDADOR del vehículo y su recepción a entera satisfacción, deberá pagar el ARRENDATARIO el
 		valor de
-		<span class="campo-resaltado">______________________ POR HORA</span>. Lo anterior será pagado
+		<span class="campo-resaltado">{valorHoraExtraTexto}</span>. Lo anterior será pagado
 		por el ARRENDATARIO cuando se presenten retardos hasta por tres horas pues en adelante deberá
 		cancelar la tarifa plena del vehículo rentado, estos valores serán descontados de los depósitos
 		anticipados efectuados a favor de la ARRENDADORA; y si el monto resultante de la liquidación
 		practicada en este instrumento no alcanzare a ser cubierto en su totalidad el depósito, el
 		restante adecuado por EL ARRENDATARIO deberá ser pagado íntegramente en el momento de la
 		devolución del vehículo arrendado.
+		{#if renta.estado === 'Cerrada' && renta.fechaDevolucionReal}
+			<span class="campo-resaltado">(Devolución real registrada: {formatDate(renta.fechaDevolucionReal)}{renta.horaDevolucionReal ? ` a las ${hora(renta.horaDevolucionReal)}` : ''})</span>.
+		{/if}
 	</div>
 
 	<!-- CLÁUSULA QUINTA -->

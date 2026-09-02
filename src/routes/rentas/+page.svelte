@@ -201,6 +201,8 @@
 			horasExtras: null,
 			valorDia: '',
 			valorHoraExtra: '',
+			valorDiaExtra: '',
+			cobrarHorasExtra: true,
 			descuento: '',
 			observaciones: ''
 		};
@@ -311,8 +313,8 @@
 			cierre.horaDevolucionReal ?? ''
 		);
 		cierre.diasCalculados = dias;
-		// Solo cobrar horas extras si la renta tiene cobrarHorasExtra activado
-		cierre.horasExtras = r.cobrarHorasExtra ? horas : 0;
+		// Respetar decisión del operador o el flag de la renta
+		cierre.horasExtras = (cierre.cobrarHorasExtra ?? r.cobrarHorasExtra) ? horas : 0;
 	}
 
 	function onClienteChange(v: string) {
@@ -454,6 +456,7 @@
 			descuento: r.descuento,
 			cobraIva: r.cobraIva,
 			tieneComision: r.tieneComision,
+			cobrarHorasExtra: r.cobrarHorasExtra ?? true,
 			comision: r.comision,
 			abono: r.abono,
 			observaciones: r.observaciones ?? '',
@@ -515,6 +518,10 @@
 			formError = 'La fecha de retorno no puede ser anterior a la recogida.';
 			return;
 		}
+		// Si se agregaron horas extras y valor por hora extra, asegurar cobrarHorasExtra = true
+		if (Number(form.horasExtras) > 0 && (parseFloat(form.valorHoraExtra) || 0) > 0) {
+			form.cobrarHorasExtra = true;
+		}
 		guardando = true;
 		try {
 			if (editando && editandoId !== null) {
@@ -539,6 +546,10 @@
 		cerrarRenta = r;
 		cierre = defaultCierre();
 		cierre.kmFinal = r.kmSalida;
+		cierre.valorDia = r.valorDia;
+		cierre.valorHoraExtra = r.valorHoraExtra;
+		cierre.valorDiaExtra = r.valorDiaExtra;
+		cierre.cobrarHorasExtra = r.cobrarHorasExtra ?? true;
 		cierreError = '';
 		calcularCierre();
 	}
@@ -679,6 +690,8 @@
 		editCerrada = {
 			valorDia: r.valorDia,
 			valorHoraExtra: r.valorHoraExtra,
+			valorDiaExtra: r.valorDiaExtra,
+			cobrarHorasExtra: r.cobrarHorasExtra ?? true,
 			diasCalculados: r.diasCalculados,
 			horasExtras: r.horasExtras,
 			descuento: r.descuento,
@@ -704,6 +717,11 @@
 					editCerrada.valorHoraExtra !== '' && editCerrada.valorHoraExtra != null
 						? String(editCerrada.valorHoraExtra)
 						: undefined,
+				valorDiaExtra:
+					editCerrada.valorDiaExtra !== '' && editCerrada.valorDiaExtra != null
+						? String(editCerrada.valorDiaExtra)
+						: undefined,
+				cobrarHorasExtra: editCerrada.cobrarHorasExtra,
 				diasCalculados: editCerrada.diasCalculados,
 				horasExtras: editCerrada.horasExtras,
 				descuento:

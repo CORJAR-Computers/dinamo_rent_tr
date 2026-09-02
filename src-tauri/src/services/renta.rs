@@ -272,8 +272,9 @@ impl RentaService {
         )
         .unwrap_or((actual.dias_calculados, actual.horas_extras));
         let dias = datos.dias_calculados.unwrap_or(dias_auto).max(0);
-        // Si cobrar_horas_extra está desactivado en la renta, las horas extras no se cobran
-        let horas = if actual.cobrar_horas_extra {
+        // Si cobrar_horas_extra está desactivado, las horas extras no se cobran (cortesía / hora de gracia)
+        let cobrar_he = datos.cobrar_horas_extra.unwrap_or(actual.cobrar_horas_extra);
+        let horas = if cobrar_he {
             datos.horas_extras.unwrap_or(horas_auto).max(0)
         } else {
             0
@@ -283,17 +284,22 @@ impl RentaService {
             datos.valor_hora_extra.as_deref().unwrap_or(""),
             &actual.valor_hora_extra,
         );
+        let vde = dec(
+            datos.valor_dia_extra.as_deref().unwrap_or(""),
+            &actual.valor_dia_extra,
+        );
         let desc = dec(datos.descuento.as_deref().unwrap_or(""), &actual.descuento);
 
         let bruto = vdia * Decimal::from(dias) + vhe * Decimal::from(horas);
         let extras = sum_dec(&[
-            &actual.valor_dia_extra,
+            &vde.to_string(),
             &actual.costo_lavado,
             &actual.costo_silla,
             &actual.costo_retorno,
             &actual.costo_domicilio,
             &actual.costo_cables,
             &actual.costo_inversor,
+            &actual.valor_gasolina,
         ]);
         let subtotal = (bruto + extras - desc).max(Decimal::ZERO);
         // IVA según el flag guardado en la renta (checkbox del formulario)
@@ -329,6 +335,10 @@ impl RentaService {
             .valor_hora_extra
             .as_deref()
             .map(|s| s.trim().replace(',', "."));
+        let valor_dia_extra = datos
+            .valor_dia_extra
+            .as_deref()
+            .map(|s| s.trim().replace(',', "."));
         let descuento = datos
             .descuento
             .as_deref()
@@ -356,8 +366,10 @@ impl RentaService {
                     fecha_devolucion_real = ?, hora_devolucion_real = ?, km_final = ?, tanque_final = ?, \
                     dias_calculados = COALESCE(?, dias_calculados), \
                     horas_extras = COALESCE(?, horas_extras), \
+                    cobrar_horas_extra = ?, \
                     valor_dia = CAST(COALESCE(?, valor_dia) AS DECIMAL(12,2)), \
                     valor_hora_extra = CAST(COALESCE(?, valor_hora_extra) AS DECIMAL(12,2)), \
+                    valor_dia_extra = CAST(COALESCE(?, valor_dia_extra) AS DECIMAL(12,2)), \
                     descuento = CAST(COALESCE(?, descuento) AS DECIMAL(12,2)), \
                     subtotal = CAST(? AS DECIMAL(12,2)), impuestos = CAST(? AS DECIMAL(12,2)), \
                     total = CAST(? AS DECIMAL(12,2)), saldo_pendiente = CAST(? AS DECIMAL(12,2)), \
@@ -371,8 +383,10 @@ impl RentaService {
                     tanque_final,
                     dias,
                     horas,
+                    if cobrar_he { 1i16 } else { 0i16 },
                     valor_dia,
                     valor_hora_extra,
+                    valor_dia_extra,
                     descuento,
                     subtotal_s,
                     impuestos_s,
@@ -684,7 +698,10 @@ impl RentaService {
                 .valor_hora_extra
                 .clone()
                 .unwrap_or_else(|| actual.valor_hora_extra.clone()),
-            valor_dia_extra: actual.valor_dia_extra.clone(),
+            valor_dia_extra: datos
+                .valor_dia_extra
+                .clone()
+                .unwrap_or_else(|| actual.valor_dia_extra.clone()),
             costo_lavado: actual.costo_lavado.clone(),
             costo_silla: actual.costo_silla.clone(),
             costo_retorno: actual.costo_retorno.clone(),
@@ -701,7 +718,7 @@ impl RentaService {
             impuestos: actual.impuestos.clone(),
             cobra_iva: actual.cobra_iva,
             tiene_comision: actual.tiene_comision,
-            cobrar_horas_extra: actual.cobrar_horas_extra,
+            cobrar_horas_extra: datos.cobrar_horas_extra.unwrap_or(actual.cobrar_horas_extra),
             comision: actual.comision.clone(),
             valor_neto: actual.valor_neto.clone(),
             total: actual.total.clone(),
@@ -725,6 +742,8 @@ impl RentaService {
         let edit = RentaCierreEditDatos {
             valor_dia: Some(d.valor_dia.clone()),
             valor_hora_extra: Some(d.valor_hora_extra.clone()),
+            valor_dia_extra: Some(d.valor_dia_extra.clone()),
+            cobrar_horas_extra: Some(d.cobrar_horas_extra),
             dias_calculados: Some(d.dias_calculados),
             horas_extras: Some(d.horas_extras),
             descuento: Some(d.descuento.clone()),
@@ -732,11 +751,11 @@ impl RentaService {
         };
         // Registrar valores anteriores para auditoría
         let audit_msg = format!(
-            "renta={id}, placa={}, ANTES: vdia={}, vhe={}, dias={}, hext={}, desc={}, total={} | DESPUES: vdia={}, vhe={}, dias={}, hext={}, desc={}, total={}, motivo={}",
+            "renta={id}, placa={}, ANTES: vdia={}, vhe={}, vde={}, dias={}, hext={}, desc={}, total={} | DESPUES: vdia={}, vhe={}, vde={}, dias={}, hext={}, desc={}, total={}, motivo={}",
             actual.placa.as_deref().unwrap_or("-"),
-            actual.valor_dia, actual.valor_hora_extra, actual.dias_calculados, actual.horas_extras,
+            actual.valor_dia, actual.valor_hora_extra, actual.valor_dia_extra, actual.dias_calculados, actual.horas_extras,
             actual.descuento, actual.total,
-            d.valor_dia, d.valor_hora_extra, d.dias_calculados, d.horas_extras,
+            d.valor_dia, d.valor_hora_extra, d.valor_dia_extra, d.dias_calculados, d.horas_extras,
             d.descuento, d.total,
             datos.observaciones.as_deref().unwrap_or("(sin motivo)")
         );
@@ -746,8 +765,10 @@ impl RentaService {
                 "UPDATE rentas SET \
                     valor_dia = CAST(COALESCE(?, valor_dia) AS DECIMAL(12,2)), \
                     valor_hora_extra = CAST(COALESCE(?, valor_hora_extra) AS DECIMAL(12,2)), \
+                    valor_dia_extra = CAST(COALESCE(?, valor_dia_extra) AS DECIMAL(12,2)), \
                     dias_calculados = COALESCE(?, dias_calculados), \
                     horas_extras = COALESCE(?, horas_extras), \
+                    cobrar_horas_extra = ?, \
                     descuento = CAST(COALESCE(?, descuento) AS DECIMAL(12,2)), \
                     subtotal = CAST(? AS DECIMAL(12,2)), \
                     impuestos = CAST(? AS DECIMAL(12,2)), \
@@ -763,8 +784,12 @@ impl RentaService {
                     edit.valor_hora_extra
                         .as_deref()
                         .map(|s| s.trim().replace(',', ".")),
+                    edit.valor_dia_extra
+                        .as_deref()
+                        .map(|s| s.trim().replace(',', ".")),
                     edit.dias_calculados,
                     edit.horas_extras,
+                    if d.cobrar_horas_extra { 1i16 } else { 0i16 },
                     edit.descuento
                         .as_deref()
                         .map(|s| s.trim().replace(',', ".")),
@@ -1087,7 +1112,12 @@ fn normalizar_cierre(d: &mut RentaCierreDatos) {
         .as_ref()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    for m in [&mut d.valor_dia, &mut d.valor_hora_extra, &mut d.descuento] {
+    for m in [
+        &mut d.valor_dia,
+        &mut d.valor_hora_extra,
+        &mut d.valor_dia_extra,
+        &mut d.descuento,
+    ] {
         if let Some(v) = m {
             *v = v.trim().replace(',', ".");
             if v.is_empty() {

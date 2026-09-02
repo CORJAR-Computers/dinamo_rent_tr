@@ -225,6 +225,7 @@ fn renta_crud_cierre_pagos_inspecciones() {
         valor_hora_extra: Some("10000".into()),
         descuento: Some("10000".into()),
         observaciones: Some("Devolución en buen estado".into()),
+        ..Default::default()
     };
     let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.estado, "Cerrada");
@@ -303,6 +304,7 @@ fn renta_montos_en_blanco_ok() {
         valor_hora_extra: Some(String::new()),
         descuento: Some(String::new()),
         observaciones: None,
+        ..Default::default()
     };
     let cerrada = RentaService::cerrar(&mut conn, cfg, creada.id, "test", cierre)
         .expect("cerrar con ajustes en blanco");
@@ -924,6 +926,7 @@ fn renta_editar_cerrada_recálculo_totales() {
         valor_hora_extra: Some("10000".into()),
         descuento: Some("0".into()),
         observaciones: Some("Cierre normal".into()),
+        ..Default::default()
     };
     let cerrada = RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
     assert_eq!(cerrada.estado, "Cerrada");
@@ -939,6 +942,7 @@ fn renta_editar_cerrada_recálculo_totales() {
         horas_extras: None,
         descuento: None,
         observaciones: Some("Corrección: digitó 150k en vez de 180k".into()),
+        ..Default::default()
     };
     let editada =
         RentaService::editar_cerrada(&mut conn, cfg, id, "admin", edicion).expect("editar cerrada");
@@ -965,6 +969,7 @@ fn renta_editar_cerrada_recálculo_totales() {
         horas_extras: None,
         descuento: None,
         observaciones: None, // sin motivo
+        ..Default::default()
     };
     // El servicio permite observaciones None (el validador del backend/command lo rechaza)
     // pero el servicio en sí no valida esto — lo hace el comando Tauri.
