@@ -1,12 +1,14 @@
-# Instalación de Dinamo Rent ERP — v1.0.26 (estable)
+# Instalación de Dinamo Rent ERP — v1.2.0 (estable)
 
-> Guía para el equipo de operaciones. **Última versión estable: v1.0.26** — con el
+> Guía para el equipo de operaciones. **Última versión estable: v1.2.0** — con el
 > **auto-update** activo desde la v1.0.14 (la app detecta y ofrece instalar las versiones
-> nuevas al arrancar, ver sección 6) y, sobre las features previas (IVA por renta,
-> auto-cálculo de días/horas, cambio de vehículo, combos con búsqueda, errores de BD
-> visibles, fix -303), el **documento**: contrato en 2 hojas, `+57` en los celulares del
-> encabezado, multa de la cláusula 4 en blanco, póliza de lucro cesante 40/50/70 mil y
-> el campo **Gasolina** en el formulario de renta. Construida y validada por CI.
+> nuevas al arrancar, ver sección 6) y, sobre las features previas (cierre de renta
+> completo: valor día extra y cobro de horas extras editables, gasolina en el recálculo,
+> contrato con desglose de costos, costo de lavado en reservas, atomicidad en
+> mantenimiento, auditoría completa), el **documento**: contrato en 2 hojas, `+57` en
+> los celulares del encabezado, multa de la cláusula 4 con tarifa por hora, póliza de
+> lucro cesante 40/50/70 mil y el campo **Gasolina** en el formulario de renta.
+> Construida y validada por CI.
 >
 > Las instalaciones **v1.0.2 (sin updater)** se actualizan una vez a mano instalando esta
 > versión encima; desde la v1.0.14 las siguientes llegan solas.
@@ -15,15 +17,15 @@
 
 ## 1. Descarga de los instaladores
 
-Página de la release: <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.0.26>
+Página de la release: <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.0>
 
 | Instalador | Enlace directo | Tamaño | Uso |
 |---|---|---|---|
-| **NSIS** (`DinamoRent_1.0.26_x64-setup.exe`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.26/DinamoRent_1.0.26_x64-setup.exe> | ~21 MB | **Recomendado** — instalación asistida con atajo de escritorio |
-| **MSI** (`DinamoRent_1.0.26_x64_en-US.msi`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.0.26/DinamoRent_1.0.26_x64_en-US.msi> | ~33 MB | Despliegue empresarial / GPO |
+| **NSIS** (`DinamoRent_1.2.0_x64-setup.exe`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.0/DinamoRent_1.2.0_x64-setup.exe> | ~21 MB | **Recomendado** — instalación asistida con atajo de escritorio |
+| **MSI** (`DinamoRent_1.2.0_x64_en-US.msi`) | <https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.0/DinamoRent_1.2.0_x64_en-US.msi> | ~33 MB | Despliegue empresarial / GPO |
 
 > ⚠️ **No usar la v1.0.0** (descontinuada): falla en equipos sin BD previa. Si un equipo
-> ya la tiene instalada **con datos**, no hay que desinstalar — la v1.0.26 abre la BD
+> ya la tiene instalada **con datos**, no hay que desinstalar — la v1.2.0 abre la BD
 > existente tal cual (arranque idempotente, solo aplica migraciones pendientes).
 
 ---
@@ -43,18 +45,18 @@ Página de la release: <https://github.com/CORJAR-Computers/dinamo_rent_tr/relea
 ## 3. Instalación
 
 ### Opción A — Asistida (NSIS, recomendada)
-1. Ejecutar `DinamoRent_1.0.26_x64-setup.exe` como usuario normal.
+1. Ejecutar `DinamoRent_1.2.0_x64-setup.exe` como usuario normal.
 2. Seguir el asistente (siguiente → instalar → finalizar).
 
 ### Opción B — Silenciosa (NSIS)
 ```powershell
 # Instala sin interacción, sin atajo ni ejecución al final
-DinamoRent_1.0.26_x64-setup.exe /S
+DinamoRent_1.2.0_x64-setup.exe /S
 ```
 
 ### Opción C — Silenciosa (MSI, para GPO/Intune)
 ```powershell
-msiexec /i DinamoRent_1.0.26_x64_en-US.msi /qn /norestart
+msiexec /i DinamoRent_1.2.0_x64_en-US.msi /qn /norestart
 ```
 
 ---
@@ -115,8 +117,8 @@ embebida y reinicia la app al terminar).
   la clave privada de firma vive solo en el secret `TAURI_SIGNING_PRIVATE_KEY` del repo
   (nunca en el instalador). Publicación: ver `RELEASE_CHECKLIST.md`.
 
-- **Actualizar desde v1.0.0**: instalar la v1.0.26 encima. Idempotente, sin pérdida de datos.
-- **Actualizar desde v1.0.2**: instalar la v1.0.26 encima (transición al auto-update).
+- **Actualizar desde v1.0.0**: instalar la v1.2.0 encima. Idempotente, sin pérdida de datos.
+- **Actualizar desde v1.0.2**: instalar la v1.2.0 encima (transición al auto-update).
 - **Actualizar desde v1.0.14+**: desde el diálogo de la app, o a mano instalando la release
   nueva encima (idempotente).
 - **Actualizar desde v1.0.3–v1.0.13**: a mano, instalando la release nueva encima (el diálogo
