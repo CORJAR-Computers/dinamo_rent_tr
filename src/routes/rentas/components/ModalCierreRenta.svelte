@@ -115,7 +115,10 @@
 					bind:value={cierre.valorHoraExtra}
 				/>
 			</FormField>
-			<FormField label="Valor días extra final (COP)" hint="Días adicionales no contemplados en el plazo">
+			<FormField
+				label="Valor días extra final (COP)"
+				hint="Días adicionales no contemplados en el plazo"
+			>
 				<input
 					class="input"
 					inputmode="decimal"
@@ -142,7 +145,9 @@
 						onchange={onCalcular}
 					/>
 					Cobrar horas extras
-					<span class="text-xs text-text-secondary">(desmarcar si aplica hora de gracia o cortesía)</span>
+					<span class="text-xs text-text-secondary"
+						>(desmarcar si aplica hora de gracia o cortesía)</span
+					>
 				</label>
 			</div>
 			<div class="col-span-full">

@@ -665,9 +665,8 @@ describe('página de Rentas', () => {
 			kmSalida: '50000'
 		});
 		tauri.register('listar_rentas', () => [rentaActiva]);
-		const cerrarMock = vi.fn(
-			(_args: { sessionId: string; id: number; datos: RentaCierreDatos }) =>
-				renta({ id: 5, estado: 'Cerrada' })
+		const cerrarMock = vi.fn((_args: { sessionId: string; id: number; datos: RentaCierreDatos }) =>
+			renta({ id: 5, estado: 'Cerrada' })
 		);
 		tauri.register('cerrar_renta', cerrarMock);
 
