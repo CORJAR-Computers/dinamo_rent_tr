@@ -61,7 +61,7 @@ la lee automáticamente desde `config.ini` (sección `[security]`) en cada arran
 en memoria (`AppState.pii_key`). Ubicaciones actuales de la clave:
 
 | Entorno | Archivo | Estado |
-|---|---|---|
+| --- | --- | --- |
 | Desarrollo | `<repo>/data/config.ini` → `[security] db_encryption_key` | Configurada (10-08-2026) |
 | Producción | `%APPDATA%\com.corjar.dinamorent\config.ini` → `[security] db_encryption_key` | Configurada (10-08-2026) |
 
@@ -235,7 +235,7 @@ rm -f /tmp/new_key.txt /tmp/replacements.txt
 
 ### 3.1 Canal de reporte
 
-- **Email**: <seguridad@dinamorent.com> (placeholder — actualizar con correo real de operaciones antes de producción).
+- **Email**: <corjarcomputers@gmail.com>
 - **PGP**: el equipo de seguridad puede proporcionar una clave pública para cifrado del reporte bajo petición.
 - **Respuesta**: confirmación de recepción en **≤ 48h hábiles**. Evaluación inicial y plan de mitigación en **≤ 5 días hábiles**.
 
@@ -295,8 +295,8 @@ Esto constituye un incidente **Critical** (CVSS ~9.1) bajo RGPD/Ley 1581 de Colo
 
 ### 4.4 Mitigación aplicada posteriormente (2026-08-10)
 
-6. ✅ **Historial Git purgado** (2026-08-10) con `git filter-repo` (invert-paths + replace-text) y force-push.
-7. ✅ **Clave PII rotada** (2026-08-10): nueva clave generada con `openssl rand -base64 32`, los 42 clientes re-cifrados (Fernet → AES-GCM v1:) en las BDs de dev y producción con `rotate_pii_key`, y `db_encryption_key` actualizada en ambos `config.ini` (dev y `%APPDATA%`). Verificación OK: la app lista los clientes sin PII oculto y sin errores.
+1. ✅ **Historial Git purgado** (2026-08-10) con `git filter-repo` (invert-paths + replace-text) y force-push.
+2. ✅ **Clave PII rotada** (2026-08-10): nueva clave generada con `openssl rand -base64 32`, los 42 clientes re-cifrados (Fernet → AES-GCM v1:) en las BDs de dev y producción con `rotate_pii_key`, y `db_encryption_key` actualizada en ambos `config.ini` (dev y `%APPDATA%`). Verificación OK: la app lista los clientes sin PII oculto y sin errores.
 
 > ⚠️ **Esta verificación resultó insuficiente** (ver §5): el binario usado re-cifraba de nuevo los
 > tokens `v1:` ya cifrados (doble capa con la misma clave). El defecto se detectó el 2026-08-11
@@ -315,7 +315,7 @@ ambas BD (usuario `sistema`, ip `local`, fecha 2026-08-10 09:00, mensaje con con
 clave**):
 
 | BD | `PII_KEY_ROTATED` (10-08) | `PII_NORMALIZADA` (11-08) |
-|---|---|---|
+| --- | --- | --- |
 | Desarrollo (`data/`) | #2085 | #2042 |
 | Producción (`%APPDATA%`) | #681 | — (no aplica) |
 
@@ -361,7 +361,7 @@ calidad del binario (no pérdida de clave ni compromiso): los datos **no se perd
 ### 5.2 Cómo detectarlo
 
 | Señal | Dónde | Qué indica |
-|---|---|---|
+| --- | --- | --- |
 | Campos PII con texto `v1:...` en la UI | Modal Editar cliente / tabla Clientes | La app descifró 1 capa y mostró la capa interna (token anidado) |
 | Descifrado que devuelve otro token `v1:` o `gAAAA` | Diagnóstico SQL / script | El valor almacenado tiene más de una capa de cifrado |
 | Dry-run del script de normalización > 0 | `scripts/normalizar_doble_cifrado.py` | Existen campos con cifrado anidado que necesitan normalización |
