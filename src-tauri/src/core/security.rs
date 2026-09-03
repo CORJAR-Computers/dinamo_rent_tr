@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::{phc::PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::{Algorithm, Argon2, Params, Version};
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
@@ -30,13 +30,13 @@ const ARGON2_PREFIX: &str = "$argon2id$";
 
 /// Genera un hash Argon2id (PHC string)
 pub fn hash_password(password: &str) -> Result<String, AppError> {
-    let salt = SaltString::generate(&mut rand::rngs::OsRng);
     // Params recomendados por OWASP para Argon2id (m=19MiB, t=2, p=1)
     let params = Params::new(19_456, 2, 1, Some(32))
         .map_err(|e| AppError::Crypto(format!("Params Argon2 inválidos: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    // hash_password genera un salt aleatorio de 16 bytes internamente
     let hash = argon2
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map_err(|e| AppError::Crypto(format!("Error hasheando contraseña: {e}")))?
         .to_string();
     Ok(hash)
@@ -99,9 +99,9 @@ pub fn verify_password(stored: &str, provided: &str) -> VerifyResult {
 pub fn generate_secure_token(bytes: usize) -> String {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
-    use rand::RngCore;
+    use rand::TryRng;
     let mut buf = vec![0u8; bytes];
-    rand::rngs::OsRng.fill_bytes(&mut buf);
+    rand::rngs::SysRng.try_fill_bytes(&mut buf).unwrap();
     URL_SAFE_NO_PAD.encode(buf)
 }
 

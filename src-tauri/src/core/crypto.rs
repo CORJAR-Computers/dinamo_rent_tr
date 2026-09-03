@@ -10,7 +10,7 @@
 //!   - cualquier otro             → se devuelve tal cual (datos en claro)
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
+    aead::{consts::U12, Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::engine::general_purpose::STANDARD as B64;
@@ -18,7 +18,8 @@ use base64::engine::general_purpose::URL_SAFE as B64_URL;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL_NOPAD;
 use base64::Engine;
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
@@ -53,11 +54,10 @@ pub fn encrypt(key: &[u8; 32], plaintext: &str) -> Result<String, AppError> {
     let cipher = Aes256Gcm::new_from_slice(key)
         .map_err(|e| AppError::Crypto(format!("Error creando cifrador AES: {e}")))?;
     let mut nonce_bytes = [0u8; 12];
-    use rand::RngCore;
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    rand::rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::<U12>::from(nonce_bytes);
     let ct = cipher
-        .encrypt(nonce, plaintext.as_bytes())
+        .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|e| AppError::Crypto(format!("Error cifrando: {e}")))?;
     Ok(format!(
         "{V1_PREFIX}{}:{}",
@@ -88,8 +88,12 @@ pub fn decrypt(key: &[u8; 32], stored: &str) -> Result<String, AppError> {
         .map_err(|e| AppError::Crypto(format!("Ciphertext inválido: {e}")))?;
     let cipher = Aes256Gcm::new_from_slice(key)
         .map_err(|e| AppError::Crypto(format!("Error creando descifrador AES: {e}")))?;
+    let nonce: [u8; 12] = nonce_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| AppError::Crypto("Nonce inválido (debe ser de 12 bytes)".into()))?;
     let pt = cipher
-        .decrypt(Nonce::from_slice(&nonce_bytes), ct.as_ref())
+        .decrypt(&Nonce::<U12>::from(nonce), ct.as_ref())
         .map_err(|_| AppError::Crypto("No se pudo desencriptar (¿clave incorrecta?)".into()))?;
     String::from_utf8(pt).map_err(|e| AppError::Crypto(format!("Dato desencriptado no UTF-8: {e}")))
 }
@@ -128,7 +132,7 @@ pub fn fernet_decrypt(fernet_key_b64: &str, token: &str) -> Option<String> {
     let (header_ct, signature) = token_bytes.split_at(token_bytes.len() - 32);
 
     // 1) Verificar HMAC-SHA256 (clave de firma = primeros 16 bytes)
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(&raw_key[..16]).ok()?;
+    let mut mac = <HmacSha256 as HmacKeyInit>::new_from_slice(&raw_key[..16]).ok()?;
     mac.update(header_ct);
     let computed = mac.finalize().into_bytes();
     if !bool::from(computed.as_slice().ct_eq(signature)) {

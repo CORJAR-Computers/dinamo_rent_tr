@@ -49,12 +49,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
+    aead::{consts::U12, Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Timelike};
 use pbkdf2::pbkdf2_hmac;
-use rand::RngCore;
+use rand::Rng;
 use serde::Serialize;
 use sha2::Sha256;
 
@@ -245,7 +245,7 @@ pub fn cifrar_archivo(origen: &Path, destino: &Path, password: &str) -> Result<(
     let mut salida = File::create(destino)?;
     salida.write_all(MAGIC_CIFRADO)?;
     let mut salt = [0u8; PBKDF2_SALT_LEN];
-    rand::thread_rng().fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut salt);
     salida.write_all(&salt)?;
     let clave = derivar_clave_cifrado(password.as_bytes(), &salt);
     let cipher = Aes256Gcm::new_from_slice(&clave)
@@ -271,8 +271,9 @@ pub fn cifrar_archivo(origen: &Path, destino: &Path, password: &str) -> Result<(
         }
         let mut nonce_bytes = [0u8; GCM_NONCE_LEN];
         nonce_bytes[..8].copy_from_slice(&idx.to_be_bytes());
+        let nonce = Nonce::<U12>::from(nonce_bytes);
         let ct = cipher
-            .encrypt(Nonce::from_slice(&nonce_bytes), &buf[..n])
+            .encrypt(&nonce, &buf[..n])
             .map_err(|e| AppError::Crypto(format!("Error cifrando chunk: {e}")))?;
         salida.write_all(&nonce_bytes)?;
         salida.write_all(&ct)?;
@@ -350,14 +351,13 @@ pub fn descifrar_archivo(origen: &Path, destino: &Path, password: &str) -> Resul
                 ));
             }
             ct.truncate(n);
-            let pt = cipher
-                .decrypt(Nonce::from_slice(&nonce_bytes), ct.as_slice())
-                .map_err(|_| {
-                    AppError::Crypto(
-                        "No se pudo descifrar el backup (contraseña incorrecta o archivo dañado)"
-                            .into(),
-                    )
-                })?;
+            let nonce = Nonce::<U12>::from(nonce_bytes);
+            let pt = cipher.decrypt(&nonce, ct.as_slice()).map_err(|_| {
+                AppError::Crypto(
+                    "No se pudo descifrar el backup (contraseña incorrecta o archivo dañado)"
+                        .into(),
+                )
+            })?;
             salida.write_all(&pt)?;
         }
         salida.flush()?;
@@ -1084,7 +1084,7 @@ mod tests {
     fn archivo_prueba(dir: &Path, nombre: &str, bytes: usize) -> PathBuf {
         let ruta = dir.join(nombre);
         let mut datos = vec![0u8; bytes];
-        rand::thread_rng().fill_bytes(&mut datos);
+        rand::rng().fill_bytes(&mut datos);
         fs::write(&ruta, &datos).unwrap();
         ruta
     }
