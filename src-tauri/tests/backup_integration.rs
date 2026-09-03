@@ -10,7 +10,7 @@
 //!   - aplica la rotación a `max_copies` (las excedentes se eliminan).
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use dinamo_rent_lib::core::config::AppConfig;
 use dinamo_rent_lib::core::db::create_pool;
@@ -34,6 +34,17 @@ fn uniq() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| format!("{}_{}", d.as_secs(), d.subsec_nanos()))
         .unwrap_or_else(|_| "x".into())
+}
+
+/// Serializa los 4 tests de backup: cada uno copia la BD dev (~decenas de MB)
+/// a su propio temporal y ejecuta gbak sobre la copia. En paralelo, el runner
+/// recién sembrado + Defender hacían fallar de forma intermitente la copia y
+/// la lectura de archivos recién escritos (os error 3/32) — la misma carrera
+/// que ya motivó `reintentar_io` en el servicio. En serie son deterministas.
+static SERIAL_BACKUP: Mutex<()> = Mutex::new(());
+
+fn lock_serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL_BACKUP.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Copia la BD de desarrollo a un directorio temporal; devuelve la config con
@@ -63,6 +74,7 @@ fn config_con_backup_en_temp() -> (Arc<AppConfig>, PathBuf, LimpiarTemporal) {
 /// genera un `.fbk` válido y la rotación conserva `max_copies`.
 #[test]
 fn backups_automaticos_crean_fbk_y_rotan() {
+    let _serial = lock_serial();
     let (cfg, tmp, _guard) = config_con_backup_en_temp();
     let db_size = std::fs::metadata(&cfg.db_path).unwrap().len();
 
@@ -97,6 +109,7 @@ fn backups_automaticos_crean_fbk_y_rotan() {
 /// cubierta por el test de arriba y la fidelidad del cifrado por los unitarios.
 #[test]
 fn backups_cifrados_roundtrip_del_fdb() {
+    let _serial = lock_serial();
     let (mut cfg, tmp, _guard) = config_con_backup_en_temp();
     let cfg = Arc::make_mut(&mut cfg);
     cfg.backup_encryption_enabled = true;
@@ -105,7 +118,7 @@ fn backups_cifrados_roundtrip_del_fdb() {
     cfg.resource_dir = tmp.join("sin-firebird");
 
     let p = crear_backup(cfg).unwrap();
-    let enc = std::fs::read(&p).unwrap();
+    let enc = reintentar_io(|| std::fs::read(&p), 8, 250).unwrap();
     assert!(
         enc.starts_with(b"DRENC-01"),
         "el backup debe estar cifrado: {}",
@@ -142,6 +155,7 @@ fn tablas_de_usuario(db_path: &Path, cfg: &Arc<AppConfig>) -> i64 {
 /// Firebird legible con las mismas tablas de usuario.
 #[test]
 fn restauracion_con_gbak_real_roundtrip_del_fdb() {
+    let _serial = lock_serial();
     let (cfg, _tmp, _guard) = config_con_backup_en_temp();
     let fbk = crear_backup(&cfg).unwrap();
     assert!(
@@ -166,6 +180,7 @@ fn restauracion_con_gbak_real_roundtrip_del_fdb() {
 /// el `.fdb`. Cubre el flujo completo «descifrar si está cifrado» del panel.
 #[test]
 fn restauracion_de_backup_cifrado_con_gbak_real() {
+    let _serial = lock_serial();
     let (mut cfg, tmp, _guard) = config_con_backup_en_temp();
     let cfg = Arc::make_mut(&mut cfg);
     cfg.backup_encryption_enabled = true;
