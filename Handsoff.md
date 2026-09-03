@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-08-23** · Estado: **todos los módulos operativos, validación verde · release v1.0.26 publicada · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-09-02** · Estado: **todos los módulos operativos, validación verde · release v1.2.0 publicada · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -603,13 +603,18 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
       automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
 
+### v1.2.0 — Renta management y reportes (02-09)
+
+- [x] **Cierre de renta completo**: `valor_dia_extra` y `cobrar_horas_extra` editables al cerrar (y al editar una renta cerrada); la gasolina entra en el cálculo de extras y el contrato muestra el desglose completo (días base × tarifa, horas, días extra, otros cargos, descuento, total) — con tests unitarios y de integración.
+- [x] **Reportes del contrato pulidos**: tarifa por hora impresa en la cláusula de penalidad y fecha/hora reales de entrega al cerrar (con tests).
+- [x] **Migración de dependencias criptográficas** (rand 0.10, argon2 0.6, password-hash 0.6, hmac 0.13, aes-gcm 0.11): mismo formato de salida — el cifrado PII, los hash de contraseñas y los backups cifrados existentes se siguen leyendo sin cambios (suite completa en verde).
+
 ### v1.0.26 — Hardening de seguridad y fixes SQL
 
 - [x] **Atomicidad en mantenimiento**: `crear()` y `actualizar()` envueltos en `conn.with_transaction()` para que INSERT de mantenimiento + sync de `autos.proximo_aceite` sean atómicos. `MantenimientoRepository` ahora acepta `C: Execute` genérico.
 - [x] **Sesiones periódicas**: hilo de fondo que purga sesiones expiradas cada 5 minutos (`session_cleanup.rs`). `AppState.sessions` es `Arc<Mutex<SessionStore>>`.
 - [x] **Auditoría completa**: `log_audit` en creación/edición de clientes, vehículos y reservas (6 acciones nuevas).
-- [x] **Log injection prevention**: `sanitize_log()` escapa `
-`, ``, `	`, ` `, `` en `frontend_errors.log`. Carácter chino `位置` → `línea`.
+- [x] **Log injection prevention**: `sanitize_log()` escapa `\n`, `\r`, `\t`, `\u0000`, `\u001b` en `frontend_errors.log`. Carácter chino `位置` → `línea`.
 - [x] **Unwrap seguros**: 6 Mutex `.unwrap()` en `simit.rs` → `.unwrap_or_else(|e| e.into_inner())`.
 - [x] **SQL precedence fixes**: paréntesis en `buscar()` de cliente, auto y reserva; `deleted_at IS NULL` duplicados eliminados en auto, reserva, usuario.
 - [x] **StatusBadge capitalize**: primera letra capitalizada correctamente.
