@@ -19,8 +19,8 @@ por CI (auto-update activo desde la v1.0.14).
 
 📦 Descarga: release v1.2.1 → https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.1/DinamoRent_1.2.1_x64-setup.exe
 (~22 MB, NSIS) o el .msi (~34 MB): https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.1/DinamoRent_1.2.1_x64_en-US.msi
-sha256 NSIS: <tras publicar>
-sha256 MSI:  <tras publicar>
+sha256 NSIS: 6f086a6cb23e82343ae32305a789c903e9d0191e356a57addfbed0bbefef0039
+sha256 MSI:  6f00145efc5791d0de7dbff61eab6315c7ee2053821295dff816e1238dec5b85
 Credenciales iniciales: admin / admin123 (cambio forzado al primer ingreso).
 ⚠️ No instalar versiones anteriores descontinuadas.
 
@@ -58,7 +58,7 @@ Descarga: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.1
 
 - **Producto:** Dinamo Rent ERP
 - **Repo:** https://github.com/CORJAR-Computers/dinamo_rent_tr
-- **Assets de la v1.2.1:** `DinamoRent_1.2.1_x64-setup.exe` (NSIS, ~22 MB, sha256 `<tras publicar>`) y `DinamoRent_1.2.1_x64_en-US.msi` (~34 MB, sha256 `<tras publicar>`)
+- **Assets de la v1.2.1:** `DinamoRent_1.2.1_x64-setup.exe` (NSIS, ~22 MB, sha256 `6f086a6cb23e82343ae32305a789c903e9d0191e356a57addfbed0bbefef0039`) y `DinamoRent_1.2.1_x64_en-US.msi` (~34 MB, sha256 `6f00145efc5791d0de7dbff61eab6315c7ee2053821295dff816e1238dec5b85`)
 - **Credenciales iniciales:** `admin` / `admin123` (cambio forzado)
 - **URLs directas de assets v1.2.1:**
   - NSIS: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.1/DinamoRent_1.2.1_x64-setup.exe
@@ -70,4 +70,4 @@ Descarga: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.1
 - **Pasos al publicar:** crear tag `vX.Y.Z` → `release.yml` (CI) construye y publica → calcular sha256 de los instaladores y completar aquí → pegar el anuncio.
 - **Changelog automático:** `release.yml` genera el body de la release con los commits entre el tag anterior y el nuevo.
 - **Auto-actualización (v1.0.14+):** la app chequea GitHub Releases al arrancar (`latest.json`), verifica firma minisign. Las instalaciones **≤v1.0.13 se actualizan UNA vez a mano**.
-- **Assets de la v1.2.1 (publicada):** los 2 instaladores, sus firmas del updater y `latest.json`. sha256 NSIS `<tras publicar>`, MSI `<tras publicar>` (03-09-2026).
+- **Assets de la v1.2.1 (publicada):** los 2 instaladores, sus firmas del updater y `latest.json`. sha256 NSIS `6f086a6cb23e82343ae32305a789c903e9d0191e356a57addfbed0bbefef0039`, MSI `6f00145efc5791d0de7dbff61eab6315c7ee2053821295dff816e1238dec5b85` (03-09-2026).

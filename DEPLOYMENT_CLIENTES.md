@@ -190,8 +190,8 @@ Copy-Item "$env:APPDATA\com.corjar.dinamorent\dinamo_rent_v3.fdb" "D:\backups\di
 ```
 [ ] Backup de la BD creado (si el equipo tiene datos)
 [ ] Instalador v1.2.1 descargado y verificado:
-      sha256 NSIS: <completar tras publicar>
-      sha256 MSI:  <completar tras publicar>
+      sha256 NSIS: 6f086a6cb23e82343ae32305a789c903e9d0191e356a57addfbed0bbefef0039
+      sha256 MSI:  6f00145efc5791d0de7dbff61eab6315c7ee2053821295dff816e1238dec5b85
 [ ] Instalación silenciosa OK (código 0)
 [ ] scripts\verificar-despliegue.ps1 → VEREDICTO: OK (incluye comprobación 8: auto-update al día)
 [ ] Login con el usuario del cliente (no admin123 salvo primer ingreso)
