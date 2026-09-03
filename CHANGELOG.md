@@ -6,6 +6,23 @@ Las versiones se publican como [releases en GitHub](https://github.com/CORJAR-Co
 
 ---
 
+## [v1.2.1] — 2026-09-03
+
+### Corregido
+
+- **Migración de dependencias criptográficas** (rand 0.10, argon2 0.6, hmac 0.13 y
+  aes-gcm 0.11): el código crypto se migró a las APIs nuevas sin cambiar los formatos de
+  salida — el cifrado PII (AES-GCM), los hash de contraseñas (Argon2) y los backups
+  cifrados existentes se siguen leyendo sin cambios. La suite completa queda en verde
+  con las versiones nuevas.
+- **Tests de backups de integración deterministas**: los 4 tests de `backup_integration`
+  se serializan y reintentan la lectura de archivos recién escritos — en el runner del
+  CI, Defender hacía fallar de forma intermitente la copia/lectura de la BD sembrada
+  (os error 3/32) con la misma carrera que ya motivó `reintentar_io` en el servicio.
+- **log 0.4.34** (dependabot).
+
+---
+
 ## [v1.2.0] — 2026-09-02
 
 ### Añadido
@@ -409,6 +426,7 @@ Primera release estable. Migración completa de Python a Tauri V2 + Rust + Fireb
 
 ---
 
+[v1.2.1]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.1
 [v1.2.0]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.0
 [v1.1.1]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.1.1
 [v1.1.0]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.1.0
