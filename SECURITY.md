@@ -235,7 +235,7 @@ rm -f /tmp/new_key.txt /tmp/replacements.txt
 
 ### 3.1 Canal de reporte
 
-- **Email**: seguridad@dinamorent.com (placeholder — actualizar con correo real de operaciones antes de producción).
+- **Email**: <seguridad@dinamorent.com> (placeholder — actualizar con correo real de operaciones antes de producción).
 - **PGP**: el equipo de seguridad puede proporcionar una clave pública para cifrado del reporte bajo petición.
 - **Respuesta**: confirmación de recepción en **≤ 48h hábiles**. Evaluación inicial y plan de mitigación en **≤ 5 días hábiles**.
 
