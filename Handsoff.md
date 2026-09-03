@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-09-02** · Estado: **todos los módulos operativos, validación verde · release v1.2.0 publicada · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-09-03** · Estado: **todos los módulos operativos, validación verde · release v1.2.1 publicada · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) con formatos de salida intactos · tests de backups deterministas · log 0.4.34 · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -602,6 +602,13 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
       hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
       automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
+
+### v1.2.1 — Migración criptográfica y CI determinista (03-09)
+
+- [x] **Migración de dependencias criptográficas** (rand 0.10, argon2 0.6, password-hash 0.6, hmac 0.13, aes-gcm 0.11): se migró el código de `core::crypto`, `core::security` y `services::backup` a las APIs nuevas SIN cambiar los formatos — el cifrado PII (AES-256-GCM), los hash Argon2 y los backups cifrados (PBKDF2 + GCM) existentes se siguen leyendo (cubierto por tests de legacy/round-trip). Suite completa en verde (91 lib + integración, clippy `-D warnings`, fmt con el toolchain del CI).
+- [x] **Tests de backups deterministas**: `backup_integration` serializa sus 4 tests y reintenta la lectura de archivos recién escritos — elimina la carrera de Defender/os error 3/32 que hacía fallar de forma intermitente el CI en runners recién sembrados.
+- [x] **log 0.4.34** (dependabot #24).
+- [ ] **CI en rojo cerrados**: los 6 PRs de dependabot que fallaban (rsfbclient 0.28 con lockfile roto, svelte/testing/eslint/typescript con `lockfile frozen`) se cerraron; queda solo el green de `log` (mergeado).
 
 ### v1.2.0 — Renta management y reportes (02-09)
 
