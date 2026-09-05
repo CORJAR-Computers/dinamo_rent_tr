@@ -17,3 +17,4 @@ export * from './informes';
 export * from './empresa';
 export * from './usuarios';
 export * from './logs';
+export * from './syncWeb';

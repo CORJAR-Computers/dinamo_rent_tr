@@ -4,6 +4,7 @@
 		reservaApi,
 		clienteApi,
 		autoApi,
+		syncWebApi,
 		ApiError,
 		type Reserva,
 		type ReservaDatos,
@@ -70,6 +71,10 @@
 	let cancelando = $state(false);
 	let eliminarId = $state<number | null>(null);
 	let eliminando = $state(false);
+
+	// Sincronización con la plataforma Web (Neon PostgreSQL)
+	let sincronizandoWeb = $state(false);
+	let pendientesWebCount = $state(0);
 
 	function defaultForm(): ReservaDatos {
 		const hoy = new Date();
@@ -178,6 +183,41 @@
 			toast.error(e instanceof ApiError ? e.message : 'No se pudieron cargar las reservas.');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function verificarPendientesWeb() {
+		if (!haySesion()) return;
+		try {
+			const res = await syncWebApi.consultarPendientes();
+			if (res.ok) {
+				pendientesWebCount = res.count;
+			}
+		} catch {
+			pendientesWebCount = 0;
+		}
+	}
+
+	async function sincronizarConWeb() {
+		if (!haySesion()) return;
+		sincronizandoWeb = true;
+		try {
+			const res = await syncWebApi.sincronizarReservas(sid());
+			if (res.importadas > 0) {
+				toast.success(
+					`¡Sincronización exitosa! ${res.importadas} reserva(s) web importada(s) (${res.clientesReutilizados} clientes vinculados, ${res.clientesNuevos} nuevos).`
+				);
+			} else if (res.errores.length > 0) {
+				toast.error(`Hubo problemas al sincronizar: ${res.errores.join(', ')}`);
+			} else {
+				toast.info('No hay reservas web pendientes por importar.');
+			}
+			await Promise.all([cargar(), cargarProximas(),
+			verificarPendientesWeb()]);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Error al conectar con el servidor web.');
+		} finally {
+			sincronizandoWeb = false;
 		}
 	}
 
@@ -400,18 +440,63 @@
 				{reservas.length} reserva{reservas.length === 1 ? '' : 's'} · orden imprimible incluida
 			</p>
 		</div>
-		<button class="btn-primary" onclick={abrirNuevo}>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				class="w-4 h-4"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-				stroke-width="2"
-				><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg
+		<div class="flex items-center gap-2.5">
+			<button
+				class="relative inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary transition-all disabled:opacity-60 cursor-pointer"
+				onclick={sincronizarConWeb}
+				disabled={sincronizandoWeb}
+				title="Sincronizar reservas pagadas desde la página Web"
 			>
-			Nueva Reserva
-		</button>
+				{#if sincronizandoWeb}
+					<svg
+						class="animate-spin w-4 h-4 text-primary"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+					>
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+					</svg>
+					<span>Sincronizando...</span>
+				{:else}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="w-4 h-4"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+						/>
+					</svg>
+					<span>Sincronizar Web</span>
+					{#if pendientesWebCount > 0}
+						<span
+							class="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-black rounded-full bg-primary text-white animate-pulse"
+						>
+							{pendientesWebCount}
+						</span>
+					{/if}
+				{/if}
+			</button>
+
+			<button class="btn-primary" onclick={abrirNuevo}>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="w-4 h-4"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg
+				>
+				Nueva Reserva
+			</button>
+		</div>
 	</div>
 
 	<!-- Próximas reservas -->
@@ -498,7 +583,17 @@
 			{#snippet children(col, item)}
 				{@const r = item as unknown as Reserva}
 				{#if col.key === 'id'}
-					<span class="font-bold text-primary tabular-nums">#{String(r.id).padStart(4, '0')}</span>
+					<div class="flex items-center gap-1.5">
+						<span class="font-bold text-primary tabular-nums">#{String(r.id).padStart(4, '0')}</span>
+						{#if r.observaciones?.includes('[ORIGEN: WEB')}
+							<span
+								class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-600 border border-sky-500/30 whitespace-nowrap"
+								title="Reserva originada en la Web y pagada online"
+							>
+								🌐 WEB
+							</span>
+						{/if}
+					</div>
 				{:else if col.key === 'cliente'}
 					<div class="max-w-50">
 						<p class="font-semibold text-text-primary truncate">{r.nombreCliente}</p>
