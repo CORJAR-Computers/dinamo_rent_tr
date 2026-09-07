@@ -107,7 +107,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 ts-rs = { version = "10", features = ["chrono-impl", "no-serde-warnings"] }
 
 # Base de datos Firebird
-rsfbclient = { version = "0.27", default-features = false, features = ["dynamic_loading"] }
+rsfbclient = { version = "0.28", default-features = false, features = ["dynamic_loading"] }
 r2d2 = "0.8"
 r2d2_firebird = "0.27"
 # tokio = { version = "1", features = ["full"] }  # TODO G-C3: sin uso actual (grep `tokio::` no encuentra referencias en src/). Reactivar si se añaden transacciones async, timers con tokio::time o spawn de tareas en background. Tauri v2 ya expone su propio runtime async.
