@@ -11,9 +11,18 @@
 | **Aplicación** | Todos los módulos operativos (rentas, comparendos + agente SIMIT, alertas, calendario, informes, reservas, contratos) |
 | **Versión estable** | **v1.2.1** — la única release que se distribuye (con auto-update activo) |
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
-| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 250 tests frontend, cargo 69 lib + integración con BD sembrada (backups/restauración con gbak real), importador 16 casos) |
+| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 254 tests frontend, cargo 92 lib + integración con BD sembrada (backups/restauración con gbak real), clippy -D warnings, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
 | **Auto-actualización** | ✅ Activa desde la **v1.0.14** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.4–v1.0.15 publicadas y firmadas (la v1.2.1 sale firmada con el tag) |
+
+### Ronda de QA (16-09)
+
+Correcciones de calidad y fiabilidad operativa validadas localmente (vitest 254 · cargo test 174 (92 lib + 82 integración) · `cargo clippy --all-targets -- -D warnings` 0/0 · `cargo fmt` limpio):
+
+1. **Fechas locales en toda la app** — `formatLocalDateISO()` sustituye a `toISOString().slice(0,10)` en 8 pantallas (rentas, reservas, comparendos, autos, mantenimiento, gastos, logs, calendario e informes). En UTC-5, tras las 7 PM se proponía la fecha de mañana; la más crítica era la **fecha de devolución real** del cierre de rentas.
+2. **Extensiones de renta** — sin doble cobro (la extensión se valoriza solo en `valor_dia_extra` + historial `extensiones_renta`) y sin pánicos por cantidades extremas (`checked_add_signed` + tope de 5 años).
+3. **Restauración de BD más segura** — copia preventiva `pre_restore_<timestamp>.bak` antes del reemplazo y rechazo temprano de backups vacíos/truncados (< 1 KB) antes de invocar gbak.
+4. **Gate de calidad obligatorio** — `cargo clippy --all-targets -- -D warnings` añadido a `scripts/test-completo.sh` y al hook pre-commit (con `--all-targets`); documentación y plantilla de PR alineadas.
 
 ## 2. Releases en GitHub
 
@@ -82,7 +91,7 @@ embebida.
 
 ## 3. CI (GitHub Actions)
 
-- **`ci.yml`** (cada push/PR a main): eslint · svelte-check (0/0) · **vitest (250 tests)** · vite build · **cargo test --lib (91)** + integración con BD sembrada por `seed_ci` (incluye backups/restauración con gbak real) · cargo check (all-targets + bins de mantenimiento) · **test del importador Python (16 casos)**.
+- **`ci.yml`** (cada push/PR a main): eslint · svelte-check (0/0) · **vitest (254 tests)** · vite build · `cargo fmt --check` · **`cargo clippy --all-targets -- -D warnings`** · **cargo test --lib (92)** + integración con BD sembrada por `seed_ci` (incluye backups/restauración con gbak real) · cargo check (all-targets + bins de mantenimiento) · **test del importador Python (16 casos)**.
 - **`release.yml`** (por tag `v*`): construye y publica el instalador (NSIS + MSI) vía `tauri-action`, con **body de release generado automáticamente** (changelog con los commits entre el tag anterior y el nuevo). **Firma los bundles para el auto-update** (`.sig` + `latest.json`) con el secret `TAURI_SIGNING_PRIVATE_KEY` (configurado — la v1.0.3 salió firmada).
 - **Nota de operación:** el CI usa `cancel-in-progress` por rama — en pushes consecutivos solo el run del **tope** de main queda completo (los intermedios salen `cancelled`). Para verificar, mirar el run del HEAD.
 
