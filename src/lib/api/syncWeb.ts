@@ -59,7 +59,9 @@ export const syncWebApi = {
 	/**
 	 * Consulta cuántas reservas web están pendientes de importar en mostrador
 	 */
-	consultarPendientes: async (syncUrl = DEFAULT_WEB_SYNC_URL): Promise<{ ok: boolean; count: number; reservations: WebReservation[] }> => {
+	consultarPendientes: async (
+		syncUrl = DEFAULT_WEB_SYNC_URL
+	): Promise<{ ok: boolean; count: number; reservations: WebReservation[] }> => {
 		try {
 			const res = await fetch(`${syncUrl}?pending=true`);
 			const data = await res.json();
@@ -108,9 +110,7 @@ export const syncWebApi = {
 
 					// Buscar si ya existe en clientes por documento
 					const busqueda = await clienteApi.listar(sessionId, cleanDoc);
-					const clienteExistente = busqueda.find(
-						(c) => c.cliente.noDoc?.trim() === cleanDoc
-					);
+					const clienteExistente = busqueda.find((c) => c.cliente.noDoc?.trim() === cleanDoc);
 
 					if (clienteExistente) {
 						idCliente = clienteExistente.cliente.id;
