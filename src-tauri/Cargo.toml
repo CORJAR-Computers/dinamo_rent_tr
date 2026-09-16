@@ -133,7 +133,7 @@ pbkdf2 = { version = "0.13", features = ["sha2"] }
 sha2 = "0.11"
 hmac = "0.13"
 aes-gcm = "0.11"
-aes = "0.8"
+aes = "0.9"
 cbc = { version = "0.1", features = ["alloc"] }
 rand = "0.10"
 base64 = "0.22"
