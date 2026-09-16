@@ -14,7 +14,7 @@
 Esta migración reescribe la aplicación con:
 
 | Capa | Origen | Destino |
-|------|--------|---------|
+| --- | --- | --- |
 | Frontend (UI) | PySide6 (QWidgets + QSS) | SvelteKit 2 + Svelte 5 (runes) + Tailwind CSS v4 |
 | Backend (lógica de negocio) | Python `services/` (16 servicios) | Rust (módulos `services/`) |
 | Acceso a datos | SQLAlchemy + repositorios `repositories/` | `rsfbclient` (queries explícitas) + runner de migraciones `.sql` |
@@ -48,7 +48,7 @@ Esta migración reescribe la aplicación con:
 
 ### 2.2 Arquitectura por capas
 
-```
+```text
 main_qt.py                     → Punto de entrada (Splash, Login, MainWindow, menú lateral)
 ├── core/                      → Núcleo
 │   ├── app_config.py / config.py    → Config centralizada (config.ini, configparser)
@@ -70,7 +70,7 @@ main_qt.py                     → Punto de entrada (Splash, Login, MainWindow, 
 ### 2.3 Inventario de módulos (vistas ↔ servicios ↔ tablas)
 
 | # | Vista (PySide6) | Servicio | Tabla(s) principal(es) |
-|---|-----------------|----------|------------------------|
+| --- | --- | --- | --- |
 | 0 | Dashboard | `DashboardService` | KPIs agregados |
 | 1 | Calendario | `RentaService.obtener_para_calendario` | rentas |
 | 2 | Rentas | `RentaService`, `PagoService`, `InspeccionService` | rentas, pagos, inspecciones |
@@ -93,6 +93,7 @@ main_qt.py                     → Punto de entrada (Splash, Login, MainWindow, 
 `usuarios`, `autos`, `clientes`, `rentas`, `reservas`, `mantenimiento_vehiculos`, `configuracion`, `auditoria`, `inspecciones`, `comparendos`, `pagos`, `gastos` (+ `alembic_version`).
 
 Detalles críticos:
+
 - **Moneda:** `DECIMAL(12,2)` — en Rust debe usarse un tipo decimal exacto (ver §4.5).
 - **Columnas cifradas (Fernet):** `clientes.celular`, `clientes.celular2`, `clientes.email`, `clientes.dir_residencia`, `clientes.dir_temporal`, `clientes.no_licencia`.
 - **Índices compuestos** en rentas, clientes, gastos, comparendos, mantenimiento, pagos, auditoría (preservar en las migraciones).
@@ -126,7 +127,7 @@ Detalles críticos:
 
 ### 3.1 Diagrama de componentes
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │  Tauri V2 (ventana nativa, WebView2 en Windows)                  │
 │                                                                  │
@@ -156,7 +157,7 @@ Firebird Embedded corre **dentro del mismo proceso** (fbclient.dll se carga en m
 ### 3.2 Stack destino (versiones de referencia — ajustar a las vigentes)
 
 | Componente | Versión recomendada |
-|------------|---------------------|
+| --- | --- |
 | Rust | edition 2021, toolchain estable reciente |
 | Tauri | **2.x** (`tauri = "2"`, `tauri-build = "2"`, CLI `@tauri-apps/cli@2`) |
 | SvelteKit | **2.x** (`@sveltejs/kit`) + Svelte **5** |
@@ -174,7 +175,7 @@ Firebird Embedded corre **dentro del mismo proceso** (fbclient.dll se carga en m
 
 ### 3.3 Estructura de carpetas del nuevo repositorio
 
-```
+```text
 dinamo-rent-tauri/
 ├── package.json                  # Frontend (SvelteKit)
 ├── svelte.config.js              # adapter-static, ssr=false, prerender=true
@@ -242,9 +243,11 @@ dinamo-rent-tauri/
 ## 4. Decisiones técnicas clave (ADRs)
 
 ### 4.1 Base de datos: Firebird Embedded 5.0, ÚNICO motor (eliminar MySQL y SQLite)
+
 **Decisión:** El stack destino usa **solo Firebird Embedded 5.0**. Se eliminan MySQL y SQLite (como motor de producción y como motor de pruebas).
 
 Razones:
+
 1. **Continuidad:** la app actual ya corre sobre Firebird Embedded (default en `config.ini`); el `.fdb` de producción se reutiliza sin exportar/importar datos.
 2. **Compatibilidad:** Firebird 5.0 abre el `.fdb` creado por Firebird 4.0.7 (ODS 13.0) y lo actualiza a ODS 13.1 automáticamente en el primer arranque (respaldar con `gbak` antes).
 3. **Embedded = cero infraestructura:** fbclient.dll se carga en el proceso; no hay servicio, ni puertos, ni instalación en el equipo del cliente. Ideal para app de escritorio portable.
@@ -253,12 +256,17 @@ Razones:
 6. **Rust SÍ tiene driver:** el argumento original del plan anterior ("Rust no tiene driver maduro") es incorrecto — `rsfbclient` es maduro y soporta embedded nativo (ver §4.2).
 
 Consecuencias:
+
 - El `.fdb` se distribuye **fuera** del instalador (se crea/abre en la primera ejecución en la carpeta de datos del usuario); solo se empaquetan los binarios de Firebird Embedded.
 - La config `[database] engine` se fija en `firebird`; se conservan `path`, `user` y `password` (defaults `sysdba`/`masterkey`).
 - Las pruebas (CI y locales) usan un `.fdb` temporal creado por el propio motor embedded — paridad real con producción.
 
 ### 4.2 Acceso a datos: rsfbclient (driver nativo de Firebird, no ORM)
-**Decisión:** `rsfbclient` con queries explícitas. Razones:
+
+**Decisión:** `rsfbclient` con queries explícitas.
+
+Razones:
+
 1. Es el **driver Rust estándar de facto** para Firebird: wrapper del cliente nativo (`fbclient.dll`), ~58k descargas, mantenimiento activo (v0.27, 2026).
 2. **Modo embedded nativo**: `builder_native().with_dyn_load(path).with_embedded().db_name("...fdb").connect()` — carga fbclient.dll en el proceso, sin servidor.
 3. Pool de conexiones con **`r2d2` + `r2d2_firebird`** (multiplexa el driver síncrono sobre hilos).
@@ -266,6 +274,7 @@ Consecuencias:
 5. Migraciones: **runner propio** (tabla `schema_migrations` + archivos `.sql` en orden), porque SQLx migrate no soporta Firebird. Firebird soporta DDL transaccional.
 
 Alternativas evaluadas:
+
 - **SQLx**: no tiene soporte Firebird oficial (`sqlx-firebird` es beta sin mantenimiento). **Descartado.**
 - **`firebirust` / `firebird-wire`** (implementaciones Rust del wire protocol): los backends **pure-Rust** (`rsfbclient` con feature `pure_rust`, `firebird-wire`) no soportan modo embedded (requieren servidor TCP) o son muy recientes. **Descartados** para el modo embedded — por eso se usa el backend **nativo** de `rsfbclient` sobre `fbclient.dll`.
 - **SeaORM / Diesel** (`rsfbclient-diesel`): agregan curva de aprendizaje sin beneficio para queries ya escritas. **Descartados.**
@@ -274,28 +283,34 @@ Alternativas evaluadas:
 Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en compilación como SQLx; se compensa con tests de integración contra `.fdb` reales (§8) y revisión de queries en los PRs.
 
 ### 4.3 Hash de contraseñas: Argon2id con compatibilidad PBKDF2
+
 - **Nuevos hashes:** Argon2id (`argon2` crate, m=19456, t=2, p=1 — o valores recomendados por OWASP), formato `$argon2id$...` (PHC string).
 - **Hashes legados (PBKDF2 `hex:salt`):** se detectan por formato, se verifican con crate `pbkdf2` + `sha2` (100.000 iteraciones) y se **re-hashean a Argon2id en el primer login exitoso** (write-back).
 - **Migración de datos:** no es necesario re-hashear el `.fdb`; la compatibilidad en runtime es suficiente y más segura.
 
 ### 4.4 Sesiones y RBAC
+
 - **Sesiones:** `tauri::State<AppState>` con `Mutex<HashMap<String, SessionData>>`; token generado con `rand` (32 bytes base64url). Timeout 3600 s por inactividad (configurable). Al ser una app de escritorio de usuario único, el modelo en memoria es correcto (igual que Python).
 - **RBAC:** helpers en `core::rbac` que todo comando debe llamar: `require_role(state, token, &["Administrador", ...])?` y `require_active_session(state, token)?`. Mismas reglas que `core/rbac.py` (roles, `roles_con_informes`, `roles_con_usuarios`).
 - **Registro de comandos:** los `#[tauri::command]` de `commands/` son *thin wrappers* que (1) validan sesión/RBAC, (2) llaman al servicio, (3) mapean `AppError` → `Err(String)` serializable al frontend.
 
 ### 4.5 Decimales (moneda)
+
 **Decisión:** los montos Firebird `DECIMAL(12,2)` se convierten a **`rust_decimal`** (feature `serde`) — según el mapeo del driver (string o `f64`), usando `FromStr`/parseo exacto para evitar pérdida de precisión. Se serializa como string en el IPC JSON; el frontend formatea con `Intl.NumberFormat` (COP). Evitar `f64` para montos.
 
 ### 4.6 Cifrado de columnas PII: AES-256-GCM
+
 - Clave derivada de `config.ini [security] db_encryption_key` (se conserva el mismo campo; si es una clave Fernet base64 de 44 chars, se **deriva un nuevo key AES-256** de ella con SHA-256 — así no hay que regenerar credenciales).
 - Formato de valor cifrado: `v1:{nonce_base64}:{ciphertext_base64}`.
 - `scripts/exportar_datos.py` desencripta con Fernet (clave vieja) y re-encripta con el nuevo formato si se cambia la clave; si la clave se conserva, la derivación SHA-256 hace transparente la migración.
 
 ### 4.7 Reportes PDF y Excel
+
 - **PDF:** se renderizan las plantillas HTML existentes (portadas a SvelteKit o componentes imprimibles) y se usa la **impresión del WebView** (`window.print()` → "Guardar como PDF"). Es el mecanismo nativo de Tauri, sin dependencias pesadas. Alternativa futura: plugin `tauri-plugin-print` o crate `printpdf` en Rust.
 - **Excel:** `xlsx` (SheetJS) en el frontend para exportar los mismos informes.
 
 ### 4.8 Backups
+
 - **Firebird (primario):** invocar **`gbak`** vía `std::process::Command` (se empaqueta `gbak.exe` + `zlib1.dll` junto al binario; usa el mismo `fbclient.dll`). Comando: `gbak -b -user sysdba -password *** dinamo_rent_v3.fdb Backup_Dinamo_<ts>.fbk` (formato nativo, consistente). Ejecutar con la BD sin conexiones activas de escritura.
 - **Firebird (alternativa simple):** copia del archivo `.fdb` (`fs::copy`) con la app sin conexiones activas (mismo patrón de copia de archivo que usa la app actual para Firebird); suficiente para single-user embedded. En producción con la app corriendo el motor Embedded abre la BD en exclusiva por proceso, así que **el fallback de copia es el camino operativo** del scheduler.
 - **Cifrado:** AES-256-GCM con PBKDF2-SHA256 (salt 16 bytes prefijado) — compatible en concepto con el actual Fernet+PBKDF2.
@@ -303,10 +318,12 @@ Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en c
 - **Implementado (Fase 8, 18-08):** `services/backup.rs` — scheduler automático en `[backup] schedule_times` (4 horarios), `backup_ahora`/`backup_estado`, cifrado por chunks de 1 MiB (magic `DRENC-01` + salt PBKDF2 prefijado) y rotación a `max_copies`; panel `/backups` (solo admin) con crear manual, listado de copias, estado de la última corrida y **restauración** (descifrar si aplica + `gbak -r` con reinicio de la app). `database_config_dialog` y el setup wizard **pospuestos** (proyecto de uso interno de Dinamo: la instalación con defaults basta; se retoman solo si hay despliegues externos).
 
 ### 4.9 Configuración
+
 - Se **mantiene `config.ini`** (mismo formato y secciones) para no romper la migración de instalaciones existentes. Se implementa con crate `config` (o `ini` + serde) y los mismos defaults de `core/config.py` (engine fijo `firebird`, `path = dinamo_rent_v3.fdb`, user/password `sysdba`/`masterkey`).
 - Alternativa a considerar (Fase 9, opcional): migrar a `tauri-plugin-store` (JSON) manteniendo un importador desde `config.ini`.
 
 ### 4.10 Tareas pesadas y asincronía
+
 - Los comandos son `async fn` (Tauri). **`rsfbclient` es síncrono**: las operaciones de BD se ejecutan en `tokio::task::spawn_blocking` (con el pool `r2d2` como despachador) para no bloquear el runtime.
 - Backups y `gbak` también usan `spawn_blocking` para no congelar la UI.
 - El patrón `QRunnable`/`QTimer` de Python se reemplaza por promesas en el frontend (`invoke()` es async) + estados de carga.
@@ -316,7 +333,7 @@ Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en c
 ## 5. Mapeo módulo a módulo
 
 | Módulo Python | Equivalente Rust | Equivalente SvelteKit |
-|---------------|------------------|-----------------------|
+| --- | --- | --- |
 | `core/app_config.py` + `core/config.py` | `core/config.rs` | `src/lib/stores/config.svelte.ts` (solo lectura de UI) |
 | `core/database_sa.py` | `core/db.rs` (+ `core/migrations.rs`) | — |
 | `core/models.py` | `repositories/*.rs` + `migrations/*.sql` | tipos TS en `src/lib/api.ts` |
@@ -354,6 +371,7 @@ Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en c
 ## 6. Migración de datos
 
 ### 6.1 Estrategia general
+
 1. **El `.fdb` se reutiliza directamente**: Firebird 5.0 Embedded abre el archivo existente (creado con Firebird 4.0.7) y actualiza el formato interno (ODS 13.0 → 13.1) automáticamente. **No hay exportación/importación de datos entre motores.**
 2. **Esquema:** se portan `migrations/versions/*_initial_schema.py` y el esquema real del `.fdb` a migraciones `.sql` de Firebird (runner propio, §4.2). El esquema ya es 100% Firebird, así que el portado es directo.
 3. **PII (si cambia la clave):** `scripts/exportar_datos.py` desencripta las columnas Fernet (clave de `config.ini` origen) y re-encripta con AES-GCM (formato destino). Si la clave se conserva, la derivación SHA-256 (§4.6) hace la migración transparente.
@@ -361,9 +379,11 @@ Trade-off a mitigar: `rsfbclient` no tiene macros `query!` de verificación en c
 5. **Validación:** script de conteo por tabla y spot-checks de montos totales (origen vs destino) después del primer arranque con el motor nuevo.
 
 ### 6.2 Prerrequisito obligatorio
+
 Antes de abrir el `.fdb` por primera vez con Firebird 5.0: **backup con `gbak`** del archivo actual (copia de seguridad del ODS 13.0) y verificación de que restaura correctamente.
 
 ### 6.3 Verificación de paridad
+
 Script de auditoría que compara: recuento por tabla, suma de montos (`pagos.monto`, `rentas.total`, `gastos.monto`), y conteo de usuarios activos — tomando como referencia el `.fdb` original.
 
 ---
@@ -378,13 +398,17 @@ Script de auditoría que compara: recuento por tabla, suma de montos (`pagos.mon
 **Objetivo:** repo nuevo con frontend SvelteKit + Tauri V2 compilando end-to-end.
 
 Pasos:
+
 1. Crear app SvelteKit: `npm create svelte@latest dinamo-rent-tauri` (template minimal, TypeScript, opciones de lint/format activadas).
 2. Agregar `adapter-static`:
+
    ```bash
    npm i -D @sveltejs/adapter-static @tauri-apps/cli@^2
    npm i @tauri-apps/api@^2
    ```
+
 3. `svelte.config.js`:
+
    ```js
    import adapter from '@sveltejs/adapter-static';
    export default {
@@ -393,17 +417,24 @@ Pasos:
      },
    };
    ```
+
 4. `src/routes/+layout.ts`:
+
    ```ts
    export const ssr = false;
    export const prerender = true;
    ```
+
 5. Tailwind v4:
+
    ```bash
    npm i tailwindcss @tailwindcss/vite
    ```
+
    `vite.config.ts`: agregar `tailwindcss()` a plugins; `src/app.css`: `@import "tailwindcss";`
+
 6. Inicializar Tauri: `npx tauri init` (o crear `src-tauri/` a mano). Verificar `tauri.conf.json` (schema v2) con **recursos de Firebird Embedded**:
+
    ```json
    {
      "$schema": "https://schema.tauri.app/config/2",
@@ -428,6 +459,7 @@ Pasos:
      }
    }
    ```
+
 7. Descargar **Firebird 5.0 Embedded** (zip Windows x64 de firebirdsql.org) y copiar a `src-tauri/resources/firebird/`: `fbclient.dll`, `ib_util.dll`, `firebird.msg`, `firebird.conf` (opcional), carpetas `intl/` y `plugins/`, DLLs de ICU, y los runtimes MSVC si no vienen con el instalador.
 8. Verificar hello-world Tauri: `npm run tauri dev`.
 
@@ -438,6 +470,7 @@ Pasos:
 **Objetivo:** infraestructura de backend equivalente a `core/` (sin lógica de negocio aún).
 
 1. `Cargo.toml` — dependencias:
+
    ```toml
    [dependencies]
    tauri = { version = "2", features = [] }
@@ -460,8 +493,10 @@ Pasos:
    tracing-subscriber = "0.3"
    config = "0.14"
    ```
+
 2. `core/config.rs`: leer `config.ini` con crate `config` (o `ini`), replicar secciones: database (engine fijo `firebird`, path, user, password, pool_size), security, backup, logging, application, ui, business, email, whatsapp, reports. Exponer tipos `AppConfig` con getters tipados. Los defaults deben copiarse de `core/config.py::_DEFAULTS`.
 3. `core/db.rs`:
+
    ```rust
    pub async fn connect(cfg: &AppConfig) -> Result<r2d2::Pool<FirebirdConnectionManager>> {
        let fbclient_path = cfg.fbclient_path(); // resources/firebird/fbclient.dll
@@ -480,6 +515,7 @@ Pasos:
        Ok(pool)
    }
    ```
+
    - Registrar `AppState { db: Pool, sessions: Mutex<HashMap<String, SessionData>>, config: Arc<AppConfig> }` en `tauri::Builder::manage()`.
    - Replicar `check_connection()` (query `SELECT CURRENT_USER FROM RDB$DATABASE`) y el seed de `admin` (solo si la tabla está vacía; hash Argon2id, `debe_cambiar_password=1`).
    - Queries síncronas → envolver con `tauri::async_runtime::spawn_blocking` en los comandos.
@@ -506,10 +542,12 @@ Pasos:
    - `sync_tracker_from_db()` al iniciar app.
    - `logout(session_id)`.
 3. `core/rbac.rs`:
+
    ```rust
    pub fn require_role(state: &AppState, token: &str, roles: &[&str]) -> Result<SessionData, AppError>
    pub fn require_active_session(state: &AppState, token: &str) -> Result<SessionData, AppError>
    ```
+
    (expiración por inactividad 3600 s, `last_activity` refresh).
 4. `commands/auth.rs`: `login`, `logout`, `change_password`, `get_login_status`, `unlock_account`.
 5. Frontend: `src/routes/login/+page.svelte` (formulario, errores, bloqueo/espera), `src/lib/api.ts` con `invoke('login', ...)`, `src/lib/stores/session.svelte.ts` (persistencia del token en localStorage, guard en `+layout.svelte`: sin token → redirect a `/login`).
@@ -533,6 +571,7 @@ Pasos:
 **Objetivo:** 16 servicios en Rust con la misma lógica, validaciones y RBAC.
 
 Orden recomendado (por dependencia):
+
 1. `financial.rs` (cálculos de totales: `calcular_total_renta`, `calcular_total_cierre`, `roi_flota`) — probarlo de forma aislada con tablas de casos.
 2. `renta.rs` (crear, cerrar, extender, cambiar vehículo, obtener, activas, documento, calendario) — el más complejo; portar con cuidado los cálculos de días/horas extras/descuentos.
 3. `pago.rs`, `inspeccion.rs`, `reserva.rs`.
@@ -562,6 +601,7 @@ Regla por comando: validar RBAC en el wrapper `commands/`, lógica pura en `serv
 **Objetivo:** paridad funcional completa. Un módulo por iteración (orden: Autos → Clientes → Rentas → Reservas → Mantenimiento → Gastos → Comparendos → Usuarios → Alertas → Dashboard → Calendario → Informes).
 
 Plantilla de iteración (por módulo):
+
 1. Listar funcionalidades de la vista Python (tablas, filtros, CRUD, validaciones, diálogos).
 2. Portar queries/servicios ya listos (Fase 4).
 3. Construir la página Svelte con DataTable/Modal/forms; formatos COP y fechas con `src/lib/utils/format.ts`.
@@ -594,6 +634,7 @@ Plantilla de iteración (por módulo):
 1. **Tests Rust:** unit (core), integración (repos/servicios sobre un `.fdb` temporal de Firebird Embedded), ~paridad con `test_services*.py`. Meta: cobertura ≥ 90% de `core/` y `services/` con `tarpaulin`.
 2. **Tests frontend:** Vitest + Testing Library (`tests/frontend/`): login flow, guards de rol, formato COP, componentes clave.
 3. **GitHub Actions:**
+
    ```yaml
    # .github/workflows/ci.yml — on push/PR
    jobs:
@@ -602,6 +643,7 @@ Plantilla de iteración (por módulo):
      web:    # npm ci, npm run check, npm run test
      build:  # tauri-apps/tauri-action@v0 → upload artifact (Windows, incluye resources/firebird)
    ```
+
    - `release.yml`: on tag `v*` → `tauri-action` publica release con instaladores (NSIS `.exe`/`.msi`).
 4. **Empaquetado:** `npm run tauri build` → `src-tauri/target/release/bundle/nsis/*.exe` con `resources/firebird/` incluido. Configurar `productName`, iconos, `identifier`, versionado semántico alineado con `CHANGELOG.md` (partir de v4.0.0).
 5. **Docs:** actualizar README con instrucciones de build; migrar `CONFIGURACION.md` y `SEGURIDAD.md` al nuevo contexto (Firebird Embedded 5.0).
@@ -613,7 +655,7 @@ Plantilla de iteración (por módulo):
 ## 8. Estrategia de pruebas
 
 | Capa | Herramienta | Objetivo |
-|------|-------------|----------|
+| --- | --- | --- |
 | Core Rust (config, crypto, security) | `cargo test` | round-trips, formatos, casos límite |
 | Repositorios | `cargo test` (`.fdb` temporal, Firebird Embedded) | paridad con `test_repositories_*.py` |
 | Servicios | `cargo test` (`.fdb` temporal + fixtures) | paridad numérica con `test_services*.py` |
@@ -655,7 +697,7 @@ Plantilla de iteración (por módulo):
 ## 10. Riesgos y mitigación
 
 | Riesgo | Impacto | Mitigación |
-|--------|---------|------------|
+| --- | --- | --- |
 | Queries heredadas escritas para otros motores (MySQL/SQLite) en repos/servicios | Medio | Los repos ya fueron corregidos a dialecto Firebird en la app Python (CHANGELOG); portar tal cual + tests contra `.fdb` real |
 | Compatibilidad ODS al abrir el `.fdb` con Firebird 5.0 (13.0 → 13.1) | Medio | `gbak` de respaldo antes del primer arranque; validación de paridad (§6.3); si falla, restaurar y migrar vía backup/restore |
 | Driver `rsfbclient` menos difundido que SQLx (sin macros de verificación en compilación) | Medio | Tests de integración sobre `.fdb` real, revisión de queries en PRs, pool `r2d2`; comunidad activa (v0.27, 2026) |
@@ -672,17 +714,17 @@ Plantilla de iteración (por módulo):
 
 ## 11. Referencias
 
-- Tauri V2: https://tauri.app/start/ · CLI: https://v2.tauri.app/reference/cli/ · `tauri.conf.json`: https://v2.tauri.app/reference/config/
-- SvelteKit: https://kit.svelte.dev/docs/introduction · Svelte 5 runes: https://svelte.dev/docs/svelte/what-are-runes
-- Tailwind CSS v4: https://tailwindcss.com/docs/installation/using-vite
-- **rsfbclient** (driver Rust Firebird): https://github.com/fernandobatels/rsfbclient · docs: https://docs.rs/rsfbclient
-- **r2d2_firebird** (pool): https://crates.io/crates/r2d2_firebird
-- **Firebird 5.0** (descargas, zip Windows x64 — kit embedded): https://www.firebirdsql.org/en/firebird-5-0/ · Manual de referencia: https://www.firebirdsql.org/en/reference-manuals/
-- **gbak** (backup/restore Firebird): https://www.firebirdsql.org/file/documentation/html/en/refdocs/fbutils/gbak.html
-- Argon2 (Rust): https://docs.rs/argon2 · OWASP password storage: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
-- Tauri + frontend SvelteKit (guía oficial de framework): https://tauri.app/start/frontend/sveltekit/
-- SheetJS: https://docs.sheetjs.com/
-- `tauri-action` (release CI): https://github.com/tauri-apps/tauri-action
+- Tauri V2: <https://tauri.app/start/> · CLI: <https://v2.tauri.app/reference/cli/> · `tauri.conf.json`: <https://v2.tauri.app/reference/config/>
+- SvelteKit: <https://kit.svelte.dev/docs/introduction> · Svelte 5 runes: <https://svelte.dev/docs/svelte/what-are-runes>
+- Tailwind CSS v4: <https://tailwindcss.com/docs/installation/using-vite>
+- **rsfbclient** (driver Rust Firebird): <https://github.com/fernandobatels/rsfbclient> · docs: <https://docs.rs/rsfbclient>
+- **r2d2_firebird** (pool): <https://crates.io/crates/r2d2_firebird>
+- **Firebird 5.0** (descargas, zip Windows x64 — kit embedded): <https://www.firebirdsql.org/en/firebird-5-0/> · Manual de referencia: <https://www.firebirdsql.org/en/reference-manuals/>
+- **gbak** (backup/restore Firebird): <https://www.firebirdsql.org/file/documentation/html/en/refdocs/fbutils/gbak.html>
+- Argon2 (Rust): <https://docs.rs/argon2> · OWASP password storage: <https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html>
+- Tauri + frontend SvelteKit (guía oficial de framework): <https://tauri.app/start/frontend/sveltekit/>
+- SheetJS: <https://docs.sheetjs.com/>
+- `tauri-action` (release CI): <https://github.com/tauri-apps/tauri-action>
 
 ---
 

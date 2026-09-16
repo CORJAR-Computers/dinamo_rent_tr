@@ -29,8 +29,8 @@ el flujo de trabajo y las convenciones del proyecto.
    bun run check        # svelte-check (tipos)
    bun run test         # vitest (tests frontend)
    cd src-tauri && cargo test  # tests Rust + integración
-   cd .. && cargo fmt --check  # formato Rust
-   cargo clippy -- -D warnings # lints Rust
+   cargo fmt --check                           # formato Rust
+   cargo clippy --all-targets -- -D warnings   # lints Rust (obligatorio)
    ```
 
 5. **Commitea** usando [conventional commits](https://www.conventionalcommits.org/):
@@ -87,7 +87,7 @@ el flujo de trabajo y las convenciones del proyecto.
 - [ ] `bun run check` pasa sin errores
 - [ ] `bun run test` pasa
 - [ ] `cargo test` pasa (incl. integración con BD sembrada)
-- [ ] `cargo clippy` sin warnings
+- [ ] `cargo clippy --all-targets -- -D warnings` sin warnings
 - [ ] `cargo fmt --check` pasa
 - [ ] Si hay migraciones: son idempotentes (EXECUTE BLOCK con guards)
 - [ ] Si hay cambios de UI: responsive y accessible (aria-label, focus-visible)

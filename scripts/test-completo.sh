@@ -2,7 +2,7 @@
 # test-completo.sh — Verifica el entorno de desarrollo y corre los tests del
 # proyecto en un solo comando (Git Bash / MSYS2 en Windows).
 #
-#   bash scripts/test-completo.sh                 # lint + svelte-check + vitest + cargo test --lib
+#   bash scripts/test-completo.sh                 # lint + svelte-check + vitest + clippy + cargo test --lib
 #   bash scripts/test-completo.sh --instalar      # + bun install primero
 #   bash scripts/test-completo.sh --integra       # + tests de integración Rust (requiere BD dev)
 #   bash scripts/test-completo.sh --solo-frontend # solo frontend
@@ -123,6 +123,10 @@ if [ "$SOLO_BACKEND" -eq 0 ]; then
 fi
 
 if [ "$SOLO_FRONTEND" -eq 0 ]; then
+  paso "Lints Rust (cargo clippy -D warnings)"
+  (cd "$SRC_TAURI" && cargo clippy --all-targets -- -D warnings)
+  fin_paso $? "cargo clippy"
+
   paso "Tests backend (cargo test --lib)"
   (cd "$SRC_TAURI" && cargo test --lib)
   fin_paso $? "cargo test --lib"

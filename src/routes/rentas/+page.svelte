@@ -22,7 +22,7 @@
 	import { sid, session } from '$lib/stores/session.svelte';
 	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
+	import { formatCOP, formatContrato, formatDate, formatLocalDateISO } from '$lib/utils/format';
 	import { calcularDiasHoras } from '$lib/utils/calcularDiasHoras';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
@@ -150,8 +150,10 @@
 
 	function defaultForm(): RentaDatos {
 		const hoy = new Date();
-		const maniana = new Date(hoy.getTime() + 86400000);
-		const iso = (d: Date) => d.toISOString().slice(0, 10);
+		const maniana = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
+		// Local, no UTC: `toISOString()` salta al día siguiente en zonas con
+		// offset negativo (Colombia UTC-5) después de las 7:00 PM.
+		const iso = (d: Date) => formatLocalDateISO(d);
 		return {
 			placa: null,
 			idCliente: null,
@@ -191,7 +193,9 @@
 
 	function defaultCierre(): RentaCierreDatos {
 		const hoy = new Date();
-		const iso = (d: Date) => d.toISOString().slice(0, 10);
+		// Local, no UTC: `toISOString()` salta al día siguiente en zonas con
+		// offset negativo (Colombia UTC-5) después de las 7:00 PM.
+		const iso = (d: Date) => formatLocalDateISO(d);
 		return {
 			fechaDevolucionReal: iso(hoy),
 			horaDevolucionReal: '',

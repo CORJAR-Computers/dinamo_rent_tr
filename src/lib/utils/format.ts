@@ -90,3 +90,16 @@ export function formatContrato(
 	if (anio == null || secuencia == null) return '—';
 	return `${anio}-${String(secuencia).padStart(3, '0')}`;
 }
+
+/**
+ * Devuelve la fecha local en formato YYYY-MM-DD sin riesgo de desplazamiento UTC.
+ * Evita el problema de `toISOString().split('T')[0]` que salta al día siguiente
+ * en zonas con offset negativo (p. ej. Colombia UTC-5) después de las 7:00 PM.
+ */
+export function formatLocalDateISO(date: Date = new Date()): string {
+	const y = date.getFullYear();
+	const m = String(date.getMonth() + 1).padStart(2, '0');
+	const d = String(date.getDate()).padStart(2, '0');
+	return `${y}-${m}-${d}`;
+}
+

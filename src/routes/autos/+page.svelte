@@ -11,7 +11,7 @@
 	import { sid, session } from '$lib/stores/session.svelte';
 	import { businessLists } from '$lib/stores/business.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatDate } from '$lib/utils/format';
+	import { formatDate, formatLocalDateISO } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -55,7 +55,8 @@
 	let eliminando = $state(false);
 
 	function today(): string {
-		return new Date().toISOString().slice(0, 10);
+		// Local, no UTC (toISOString salta de día en UTC-5 después de las 7 PM)
+		return formatLocalDateISO();
 	}
 
 	function defaultForm(): AutoDatos {

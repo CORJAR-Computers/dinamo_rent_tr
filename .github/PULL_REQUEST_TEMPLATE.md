@@ -21,7 +21,7 @@
 - [ ] `bun run check` pasa sin errores (svelte-check 0/0)
 - [ ] `bun run test` pasa (vitest)
 - [ ] `cargo test` pasa (incl. integración con BD sembrada)
-- [ ] `cargo clippy -- -D warnings` sin warnings
+- [ ] `cargo clippy --all-targets -- -D warnings` sin warnings
 - [ ] `cargo fmt --check` pasa
 - [ ] Si hay migraciones: son idempotentes y tienen `EXECUTE BLOCK` con guards
 - [ ] Si hay cambios de UI: responsive y accessible (aria-label, focus-visible)

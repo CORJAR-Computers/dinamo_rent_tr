@@ -87,6 +87,12 @@ const GCM_NONCE_LEN: usize = 12;
 /// Longitud del tag de autenticación GCM
 const GCM_TAG_LEN: usize = 16;
 
+/// Tamaño mínimo plausible de un `.fbk` para restaurar. Un backup real de la
+/// BD siempre pesa mucho más (el seed vacío ya tiene cientos de KB); un staging
+/// por debajo de esto indica un archivo vacío o truncado y se rechaza ANTES de
+/// generar la copia pre_restore y de reemplazar la BD.
+const TAMANO_MINIMO_STAGING: u64 = 1024;
+
 /// Nombre de archivo de un backup: `Backup_Dinamo_<YYYYMMDD_HHMMSS>.fbk`
 fn nombre_backup(ahora: &DateTime<Local>) -> String {
     format!("{PREFIJO_BACKUP}{}.fbk", ahora.format("%Y%m%d_%H%M%S"))
@@ -520,6 +526,16 @@ pub fn restaurar_fdb_desde_fbk(
             staging_fbk.display()
         )));
     }
+    // Fast-fail: rechazar un staging vacío o truncado ANTES de invocar gbak.
+    // Un gbak «exitoso» contra un backup trunco puede dejar una BD restaurada
+    // sin datos; la BD actual sería entonces la única copia válida. La copia
+    // pre_restore de salvaguarda también queda reservada para backups plausibles.
+    let tamano_staging = std::fs::metadata(staging_fbk).map(|m| m.len()).unwrap_or(0);
+    if tamano_staging < TAMANO_MINIMO_STAGING {
+        return Err(AppError::Generic(format!(
+            "El backup a restaurar es demasiado pequeño ({tamano_staging} bytes) — probablemente está vacío o corrupto. La BD no fue modificada."
+        )));
+    }
     // gbak -r recrea el destino (NO debe existir) → restauramos a un temporal
     // y renombramos sobre el `.fdb` real al final (swap atómico).
     let destino_tmp = db_path.with_extension("fdb.restore.tmp");
@@ -557,6 +573,24 @@ pub fn restaurar_fdb_desde_fbk(
             return Err(AppError::Generic(
                 "gbak -r terminó OK pero no dejó la BD restaurada".into(),
             ));
+        }
+        // Salvaguarda: si la BD actual existe, crear una copia preventiva con
+        // timestamp antes de reemplazarla, protegiendo al operador si restaura
+        // por error un backup desactualizado o vacío.
+        if db_path.exists() {
+            let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+            let backup_pre = db_path.with_extension(format!("pre_restore_{timestamp}.bak"));
+            if let Err(e) = std::fs::copy(db_path, &backup_pre) {
+                log::warn!(
+                    "No se pudo crear copia preventiva de la BD antes de restaurar ({}): {e}",
+                    backup_pre.display()
+                );
+            } else {
+                log::info!(
+                    "Copia preventiva de la BD creada con éxito en {}",
+                    backup_pre.display()
+                );
+            }
         }
         renombrar_con_reintentos(&destino_tmp, db_path, 30, 500)
     })();
@@ -1386,6 +1420,44 @@ mod tests {
         renombrar_con_reintentos(&origen, &destino, 3, 10).unwrap();
         assert_eq!(fs::read(&destino).unwrap(), b"bd-restaurada");
         assert!(!origen.exists());
+        fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn restaurar_staging_vacio_falla_sin_copias_pre_restore() {
+        // Con un gbak falso (solo debe existir: con staging vacío la guard de
+        // tamaño aborta antes de invocarlo), valida que un backup truncado se
+        // rechace antes de cualquier copia preventiva o reemplazo de la BD.
+        let tmp = std::env::temp_dir().join(format!("restore_vacio_{}", uniq()));
+        fs::create_dir_all(&tmp).unwrap();
+        let mut cfg = config_prueba();
+        let firebird_fake = tmp.join("firebird");
+        fs::create_dir_all(&firebird_fake).unwrap();
+        fs::write(firebird_fake.join("gbak.exe"), b"gbak-falso").unwrap();
+        cfg.resource_dir = tmp.clone();
+        cfg.data_dir = tmp.clone();
+        let fdb = tmp.join("dinamo_rent_v3.fdb");
+        fs::write(&fdb, b"bd-actual").unwrap();
+        cfg.db_path = fdb;
+        let staging = tmp.join("staging_vacio.fbk");
+        fs::write(&staging, b"").unwrap(); // 0 bytes
+
+        let err = restaurar_fdb_desde_fbk(&cfg, &staging, &cfg.db_path).unwrap_err();
+        assert!(
+            err.to_string().contains("demasiado pequeño"),
+            "error: {err}"
+        );
+        assert_eq!(fs::read(&cfg.db_path).unwrap(), b"bd-actual");
+        // Ninguna copia preventiva debe haberse creado para un staging inválido
+        let pre_restore: Vec<_> = fs::read_dir(&tmp)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains("pre_restore"))
+            .collect();
+        assert!(
+            pre_restore.is_empty(),
+            "sin copias pre_restore para staging vacío"
+        );
         fs::remove_dir_all(&tmp).unwrap();
     }
 

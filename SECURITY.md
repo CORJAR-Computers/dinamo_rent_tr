@@ -352,7 +352,7 @@ calidad del binario (no pérdida de clave ni compromiso): los datos **no se perd
 > ejecutada dos veces con claves diferentes), la recuperación requeriría AMBAS claves y el dato
 > sería irrecuperable si la intermedia se perdiera. Por eso la pre-validación del bin aborta
 > antes de escribir si algún token no descifra con la clave vieja (§2.1 Paso 2).
-
+>
 > ℹ️ La normalización real de la BD dev ejecutada el **2026-08-11** se hizo **antes** de que el
 > script registrara el evento de auditoría; esa operación concreta se registró **retroactivamente**
 > después (evento `PII_NORMALIZADA` #2042, ver §4.5). A partir de esa mejora, el script

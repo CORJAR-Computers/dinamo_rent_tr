@@ -3,6 +3,7 @@
 	import { logApi, ApiError } from '$lib/api';
 	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { formatLocalDateISO } from '$lib/utils/format';
 	import { guardSesion, tieneRol } from '$lib/utils/guards';
 	import { goto } from '$app/navigation';
 
@@ -52,7 +53,8 @@
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			const fecha = new Date().toISOString().slice(0, 10);
+			// Local, no UTC (para el nombre del archivo exportado)
+			const fecha = formatLocalDateISO();
 			a.download = `dinamo_rent_logs_${fecha}.txt`;
 			a.click();
 			URL.revokeObjectURL(url);

@@ -4,6 +4,7 @@
 	import { sid } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { guardSesion } from '$lib/utils/guards';
+	import { formatLocalDateISO } from '$lib/utils/format';
 	import {
 		celdasDelMes,
 		diasSemanaCorto,
@@ -53,13 +54,15 @@
 	function limiteInferiorIso(): string {
 		const base = mesActual;
 		const d = new Date(base.getFullYear(), base.getMonth() - 6, 1);
-		return d.toISOString().slice(0, 10);
+		// Local, no UTC (toISOString salta de día en UTC-5 después de las 7 PM)
+		return formatLocalDateISO(d);
 	}
 
 	function limiteSuperiorIso(): string {
 		const base = mesActual;
 		const d = new Date(base.getFullYear(), base.getMonth() + 7, 0);
-		return d.toISOString().slice(0, 10);
+		// Local, no UTC (toISOString salta de día en UTC-5 después de las 7 PM)
+		return formatLocalDateISO(d);
 	}
 
 	async function cargar() {

@@ -49,6 +49,11 @@ const tauriState = vi.hoisted(() => {
 		invoke: (cmd: string, args?: Record<string, unknown>): Promise<unknown> => {
 			const fn = handlers.get(cmd);
 			if (!fn) {
+				// Fallback por defecto para comandos globales informativos que
+				// renderizan componentes base (footer, navegación, etc.)
+				if (cmd === 'app_version') {
+					return Promise.resolve('1.2.1');
+				}
 				return Promise.reject(
 					new Error(
 						`[test] No hay mock registrado para el comando '${cmd}'. Usa tauri.register(...)`

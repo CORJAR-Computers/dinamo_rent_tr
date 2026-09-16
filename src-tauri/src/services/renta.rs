@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{Datelike, NaiveDate, NaiveTime};
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 use rust_decimal::prelude::FromStr as _;
 use rust_decimal::Decimal;
@@ -273,7 +273,9 @@ impl RentaService {
         .unwrap_or((actual.dias_calculados, actual.horas_extras));
         let dias = datos.dias_calculados.unwrap_or(dias_auto).max(0);
         // Si cobrar_horas_extra está desactivado, las horas extras no se cobran (cortesía / hora de gracia)
-        let cobrar_he = datos.cobrar_horas_extra.unwrap_or(actual.cobrar_horas_extra);
+        let cobrar_he = datos
+            .cobrar_horas_extra
+            .unwrap_or(actual.cobrar_horas_extra);
         let horas = if cobrar_he {
             datos.horas_extras.unwrap_or(horas_auto).max(0)
         } else {
@@ -532,24 +534,42 @@ impl RentaService {
             NaiveTime::parse_from_str(&hora_ret, "%H:%M:%S")
                 .map_err(|_| AppError::Validation("Hora de retorno inválida".into()))?,
         );
+        // Guardas de overflow: `chrono::Duration` + `DateTime` entra en pánico
+        // con cantidades extremas (p. ej. un monto/valor pegado en el campo
+        // equivocado de la UI). `checked_add_*` devuelven None en su lugar.
         let nuevo_retorno_dt = if datos.tipo == "horas" {
-            retorno_dt + chrono::Duration::hours(datos.cantidad)
+            retorno_dt
+                .checked_add_signed(chrono::Duration::hours(datos.cantidad))
+                .ok_or_else(|| {
+                    AppError::Validation(
+                        "La extensión produce una fecha de retorno fuera de rango.".into(),
+                    )
+                })?
         } else {
-            retorno_dt + chrono::Duration::days(datos.cantidad)
+            retorno_dt
+                .checked_add_signed(chrono::Duration::days(datos.cantidad))
+                .ok_or_else(|| {
+                    AppError::Validation(
+                        "La extensión produce una fecha de retorno fuera de rango.".into(),
+                    )
+                })?
         };
+        // Límite operativo: los datos reales nunca acercan a este techo; si se
+        // supera es un error de digitación (p. ej. cantidad con dígitos de más).
+        if nuevo_retorno_dt.year() > retorno_dt.year() + 5 {
+            return Err(AppError::Validation(
+                "La extensión no puede desplazar el retorno más de 5 años.".into(),
+            ));
+        }
         let nuevo_fecha = nuevo_retorno_dt.format("%Y-%m-%d").to_string();
         let nueva_hora = nuevo_retorno_dt.format("%H:%M").to_string();
-        // Calcular nuevos totales
-        let nuevo_dias = if datos.tipo == "dias" {
-            actual.dias_calculados + datos.cantidad
-        } else {
-            actual.dias_calculados
-        };
-        let nuevas_horas = if datos.tipo == "horas" {
-            actual.horas_extras + datos.cantidad
-        } else {
-            actual.horas_extras
-        };
+        // Las extensiones se valorizan y acumulan en `valor_dia_extra` (y en el
+        // historial `extensiones_renta`). Los días y horas base del contrato
+        // (`dias_calculados`, `horas_extras`) se preservan como base de
+        // liquidación contractual para evitar doble cobro tanto aquí como en
+        // `calcular_totales` y `ContratoRenta.svelte`.
+        let dias_base = actual.dias_calculados;
+        let horas_base = actual.horas_extras;
         // Recalcular total
         let vdia = dec_str(&actual.valor_dia);
         let vhe = dec_str(&actual.valor_hora_extra);
@@ -569,9 +589,9 @@ impl RentaService {
             &actual.valor_gasolina,
         ]);
         let desc = dec_str(&actual.descuento);
-        let subtotal =
-            (vdia * Decimal::from(nuevo_dias) + vhe * Decimal::from(nuevas_horas) + extras - desc)
-                .max(Decimal::ZERO);
+        let subtotal = (vdia * Decimal::from(dias_base) + vhe * Decimal::from(horas_base) + extras
+            - desc)
+            .max(Decimal::ZERO);
         let imp = if actual.cobra_iva {
             impuesto(cfg)
         } else {
@@ -613,8 +633,8 @@ impl RentaService {
                 params![
                     nuevo_fecha,
                     nueva_hora,
-                    nuevo_dias,
-                    nuevas_horas,
+                    dias_base,
+                    horas_base,
                     nuevo_vde.to_string(),
                     subtotal.round_dp(2).to_string(),
                     impuestos.to_string(),
@@ -718,7 +738,9 @@ impl RentaService {
             impuestos: actual.impuestos.clone(),
             cobra_iva: actual.cobra_iva,
             tiene_comision: actual.tiene_comision,
-            cobrar_horas_extra: datos.cobrar_horas_extra.unwrap_or(actual.cobrar_horas_extra),
+            cobrar_horas_extra: datos
+                .cobrar_horas_extra
+                .unwrap_or(actual.cobrar_horas_extra),
             comision: actual.comision.clone(),
             valor_neto: actual.valor_neto.clone(),
             total: actual.total.clone(),

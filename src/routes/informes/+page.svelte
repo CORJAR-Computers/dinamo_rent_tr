@@ -9,7 +9,7 @@
 	} from '$lib/api';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatCOP, formatDate } from '$lib/utils/format';
+	import { formatCOP, formatDate, formatLocalDateISO } from '$lib/utils/format';
 	import { guardRole, guardSesion, haySesion, tieneRol } from '$lib/utils/guards';
 	import { construirLibroInforme } from '$lib/utils/informeExcel';
 	import { imprimirDocumento } from '$lib/utils/imprimir';
@@ -30,8 +30,8 @@
 	const ahora = new Date();
 	const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
 
-	let fechaInicio = $state(primerDiaMes.toISOString().split('T')[0]);
-	let fechaFin = $state(ahora.toISOString().split('T')[0]);
+	let fechaInicio = $state(formatLocalDateISO(primerDiaMes));
+	let fechaFin = $state(formatLocalDateISO(ahora));
 
 	async function cargar() {
 		// Guard de sesión + rol: nunca consultar sin sesión ni si el usuario
@@ -320,7 +320,7 @@
 							Sin rentas iniciadas este mes.
 						</p>
 					{:else}
-						<div class="overflow-x-auto max-h-[360px] overflow-y-auto">
+						<div class="overflow-x-auto max-h-90 overflow-y-auto">
 							<table class="w-full text-sm">
 								<thead class="sticky top-0 bg-surface">
 									<tr class="border-b border-border text-left">
@@ -341,7 +341,7 @@
 												>#{String(r.id).padStart(4, '0')}</td
 											>
 											<td class="py-2 pr-3 font-mono text-xs">{r.placa || '—'}</td>
-											<td class="py-2 pr-3 text-text-primary truncate max-w-[180px]"
+											<td class="py-2 pr-3 text-text-primary truncate max-w-45"
 												>{r.nombreCliente}</td
 											>
 											<td class="py-2 pr-3 text-text-secondary tabular-nums whitespace-nowrap"
@@ -414,7 +414,7 @@
 									<th class="py-2 pr-3 font-semibold text-text-secondary text-right">Ingresos</th>
 									<th class="py-2 pr-3 font-semibold text-text-secondary text-right">Costos</th>
 									<th class="py-2 pr-3 font-semibold text-text-secondary text-right">Utilidad</th>
-									<th class="py-2 font-semibold text-text-secondary w-[180px]">Rentabilidad</th>
+									<th class="py-2 font-semibold text-text-secondary w-45">Rentabilidad</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-border/60">
@@ -424,7 +424,7 @@
 										maxUtilidad > 0 ? Math.min(100, (Math.abs(util) / maxUtilidad) * 100) : 0}
 									<tr class="hover:bg-alt-row/50 transition-colors">
 										<td class="py-2.5 pr-3 font-mono text-xs font-bold text-primary">{v.placa}</td>
-										<td class="py-2.5 pr-3 text-text-primary truncate max-w-[200px]"
+										<td class="py-2.5 pr-3 text-text-primary truncate max-w-50"
 											>{v.vehiculo || '—'}</td
 										>
 										<td

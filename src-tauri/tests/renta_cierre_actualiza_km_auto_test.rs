@@ -51,8 +51,9 @@ fn cierre_renta_actualiza_kilometraje_auto() {
     };
 
     // ── 1. Leer kilometraje actual del auto ──
-    let auto_antes =
-        AutoRepository::obtener_por_placa(&mut conn, &placa).expect("obtener auto").unwrap();
+    let auto_antes = AutoRepository::obtener_por_placa(&mut conn, &placa)
+        .expect("obtener auto")
+        .unwrap();
     let km_antes = auto_antes.kilometraje;
 
     // ── 2. Crear una renta con km_salida fijo ──
@@ -120,8 +121,9 @@ fn cierre_renta_actualiza_kilometraje_auto() {
     assert_eq!(cerrada.estado, "Cerrada");
 
     // ── 4. Verificar que autos.kilometraje se actualizó ──
-    let auto_despues =
-        AutoRepository::obtener_por_placa(&mut conn, &placa).expect("obtener auto tras cierre").unwrap();
+    let auto_despues = AutoRepository::obtener_por_placa(&mut conn, &placa)
+        .expect("obtener auto tras cierre")
+        .unwrap();
     assert_eq!(
         auto_despues.kilometraje, km_final_esperado,
         "autos.kilometraje debe actualizarse al km_final del cierre"
@@ -151,8 +153,9 @@ fn cierre_renta_sin_km_no_modifica_auto() {
     };
 
     // ── 1. Leer kilometraje actual ──
-    let auto_antes =
-        AutoRepository::obtener_por_placa(&mut conn, &placa).expect("obtener auto").unwrap();
+    let auto_antes = AutoRepository::obtener_por_placa(&mut conn, &placa)
+        .expect("obtener auto")
+        .unwrap();
     let km_antes = auto_antes.kilometraje;
 
     // ── 2. Crear renta ──
@@ -217,8 +220,9 @@ fn cierre_renta_sin_km_no_modifica_auto() {
     RentaService::cerrar(&mut conn, cfg, id, "test", cierre).expect("cerrar");
 
     // ── 4. Verificar que autos.kilometraje NO cambió ──
-    let auto_despues =
-        AutoRepository::obtener_por_placa(&mut conn, &placa).expect("obtener auto tras cierre").unwrap();
+    let auto_despues = AutoRepository::obtener_por_placa(&mut conn, &placa)
+        .expect("obtener auto tras cierre")
+        .unwrap();
     assert_eq!(
         auto_despues.kilometraje, km_antes,
         "sin km_final, autos.kilometraje no debe modificar"

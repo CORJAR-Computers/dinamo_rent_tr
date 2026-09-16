@@ -1,6 +1,13 @@
 // src/lib/utils/format.test.ts — Tests del formateador COP y fechas
 import { describe, it, expect } from 'vitest';
-import { formatCOP, formatContrato, formatDate, formatDateTime, truncate } from './format';
+import {
+	formatCOP,
+	formatContrato,
+	formatDate,
+	formatDateTime,
+	formatLocalDateISO,
+	truncate
+} from './format';
 
 /**
  * Normaliza el espacio no separable (U+00A0) que Intl es-CO inserta
@@ -125,3 +132,19 @@ describe('truncate', () => {
 		expect(truncate('')).toBe('');
 	});
 });
+
+describe('formatLocalDateISO', () => {
+	it('formatea un objeto Date a YYYY-MM-DD local con padding', () => {
+		const d = new Date(2026, 8, 5, 22, 30); // 5 de septiembre a las 10:30 PM
+		expect(formatLocalDateISO(d)).toBe('2026-09-05');
+	});
+
+	it('genera la fecha de hoy por defecto sin saltar de día', () => {
+		const now = new Date();
+		const iso = formatLocalDateISO();
+		expect(iso).toBe(
+			`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+		);
+	});
+});
+

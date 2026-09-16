@@ -19,7 +19,7 @@
 	import type ExcelJS from 'exceljs';
 	import { session } from '$lib/stores/session.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatCOP, formatContrato, formatDate } from '$lib/utils/format';
+	import { formatCOP, formatContrato, formatDate, formatLocalDateISO } from '$lib/utils/format';
 	import { guardSesion, haySesion } from '$lib/utils/guards';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -217,7 +217,9 @@
 
 	function defaultForm(): ComparendoDatos {
 		const hoy = new Date();
-		const iso = (d: Date) => d.toISOString().slice(0, 10);
+		// Local, no UTC: `toISOString()` salta al día siguiente en zonas con
+		// offset negativo (Colombia UTC-5) después de las 7:00 PM.
+		const iso = (d: Date) => formatLocalDateISO(d);
 		return {
 			placa: '',
 			fechaInfraccion: iso(hoy),

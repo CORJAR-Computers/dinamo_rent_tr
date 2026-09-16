@@ -1037,13 +1037,14 @@ fn renta_extender_horas_y_dias() {
     let extendida =
         RentaService::extender(&mut conn, cfg, id, "operador", ext_horas).expect("extender horas");
     assert_eq!(extendida.estado, "Activo", "sigue activa");
-    assert_eq!(extendida.dias_calculados, 3, "días no cambian");
-    assert_eq!(extendida.horas_extras, 2, "+2 horas");
+    assert_eq!(extendida.dias_calculados, 3, "días base no cambian");
+    assert_eq!(
+        extendida.horas_extras, 0,
+        "horas base no cambian; extensión en valor_dia_extra"
+    );
     assert_eq!(extendida.valor_dia_extra, "50000.00", "2h × $25,000 ext");
-    // Total: 3×150,000 (días) + 2×10,000 (horas × valor_hora_extra) + 50,000 (ext)
-    // = 450,000 + 20,000 + 50,000 = 520,000 + 19% IVA = 618,800
-    // Pero el cálculo real usa valor_hora_extra=10,000 para las horas
-    assert_eq!(extendida.total, "618800.00", "total con extensión");
+    // Total correcto: 3×150,000 (días base) + 50,000 (extensión) = 500,000 + 19% IVA = 595,000
+    assert_eq!(extendida.total, "595000.00", "total con extensión");
 
     // ── Extender 1 día más ──
     let ext_dia = ExtensionDatos {
@@ -1054,11 +1055,11 @@ fn renta_extender_horas_y_dias() {
     };
     let extendida2 =
         RentaService::extender(&mut conn, cfg, id, "operador", ext_dia).expect("extender día");
-    assert_eq!(extendida2.dias_calculados, 4, "+1 día");
-    assert_eq!(extendida2.horas_extras, 2, "horas se conservan");
+    assert_eq!(extendida2.dias_calculados, 3, "días base se conservan");
+    assert_eq!(extendida2.horas_extras, 0, "horas base se conservan");
     assert_eq!(extendida2.valor_dia_extra, "200000.00", "50k + 150k");
-    // Total: 4×150,000 + 2×10,000 + 200,000 = 600,000 + 20,000 + 200,000 = 820,000 + 19% IVA
-    assert_eq!(extendida2.total, "975800.00", "total con 2 extensiones");
+    // Total correcto: 3×150,000 + 200,000 = 650,000 + 19% IVA = 773,500
+    assert_eq!(extendida2.total, "773500.00", "total con 2 extensiones");
 
     // ── Validaciones ──
     // No se puede extender renta cerrada
