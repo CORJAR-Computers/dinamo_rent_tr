@@ -17,7 +17,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::engine::general_purpose::URL_SAFE as B64_URL;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL_NOPAD;
 use base64::Engine;
-use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
+use cbc::cipher::{block_padding::Pkcs7, BlockModeDecrypt, KeyIvInit};
 use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};
 use rand::Rng;
 use sha2::{Digest, Sha256};
@@ -144,9 +144,8 @@ pub fn fernet_decrypt(fernet_key_b64: &str, token: &str) -> Option<String> {
     let ct = &header_ct[25..];
     let key: [u8; 16] = raw_key[16..32].try_into().ok()?;
     let mut buf = ct.to_vec();
-    let pt = Aes128CbcDec::new_from_slices(&key, &iv)
-        .ok()?
-        .decrypt_padded_mut::<Pkcs7>(&mut buf)
+    let pt = Aes128CbcDec::new(&key.into(), &iv.into())
+        .decrypt_padded::<Pkcs7>(&mut buf)
         .ok()?;
     String::from_utf8(pt.to_vec()).ok()
 }
