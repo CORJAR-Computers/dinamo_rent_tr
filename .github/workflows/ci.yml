@@ -165,39 +165,41 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      # CRÍTICO: Defender debe excluirse ANTES de que Swatinem restaure la cache.
+      # Si se excluye después, Defender escanea y bloquea .cargo-build-lock durante
+      # la extracción del tar; el lock queda activo cuando cargo intenta abrirlo →
+      # "Access is denied" (os error 5). Swatinem necesita el toolchain ya instalado
+      # para calcular la cache key, por eso este paso va entre Setup Rust y Cache Cargo.
+      - name: Excluir el workspace de Windows Defender
+        shell: powershell
+        run: |
+          Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\src-tauri\target"
+          Add-MpPreference -ExclusionProcess node.exe
+          Add-MpPreference -ExclusionProcess cargo.exe
+          Add-MpPreference -ExclusionProcess rustc.exe
+          Add-MpPreference -ExclusionProcess tauri.exe
+
       # Swatinem scopea la cache por job: la primera corrida de este job
       # compila los deps debug (~3-4 min) y las siguientes los reutilizan.
+      # La exclusión de Defender ya está activa: los archivos del tar se
+      # extraen sin ser escaneados → sin race con .cargo-build-lock.
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # Los runners ejecutan Defender en tiempo real: escanea cada archivo
-      # recién escrito y compite con vite (sync de .svelte-kit) y cargo,
-      # produciendo EPERM (-4048) espurios — corrida 4 del CI: vite murió al
-      # abrir .svelte-kit/env.d.ts. La corrida 3 descartó a la degradación
-      # runas como causa (allí vite corrió bien degradado): es una carrera
-      # con el antivirus. Excluir el workspace ANTES de bun install para que
-      # el proceso de vite/svelte-kit sync nunca compita con el escaneo.
-      # Los steps corren elevados, así que Add-MpPreference aplica.
-      - name: Excluir el workspace de Windows Defender
-        shell: powershell
-        run: |
-          Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE
-          Add-MpPreference -ExclusionProcess node.exe
-          Add-MpPreference -ExclusionProcess cargo.exe
-          Add-MpPreference -ExclusionProcess rustc.exe
-
       - name: Install dependencies (bun)
         run: bun install --frozen-lockfile
 
-      # Limpieza defensiva: si la cache de Cargo restauró target/ con el
-      # .cargo-build-lock de una corrida anterior que falló a mitad de
-      # compilación, cargo check/build falla con "Access is denied" (os error 5).
-      # Remove-Item con -ErrorAction SilentlyContinue es no-op si no existe.
-      - name: Limpiar cargo-build-lock si existe (cache corrupta)
+      # Belt-and-suspenders: elimina el .cargo-build-lock stale si Swatinem lo
+      # restauró (aunque ahora no debería estar bloqueado por Defender).
+      # Cubre debug y release por si el validate job lo dejó en cualquiera.
+      - name: Limpiar cargo-build-lock stale si existe
         shell: pwsh
-        run: Remove-Item -Force "src-tauri/target/debug/.cargo-build-lock" -ErrorAction SilentlyContinue
+        run: |
+          Remove-Item -Force "src-tauri\target\debug\.cargo-build-lock" -ErrorAction SilentlyContinue
+          Remove-Item -Force "src-tauri\target\release\.cargo-build-lock" -ErrorAction SilentlyContinue
 
       # Orquesta: seed_ci en dir temporal → tauri dev (DINAMO_DATA_DIR aislado
       # + CDP 9222) → smoke completo → limpieza de procesos y BD temporal.
