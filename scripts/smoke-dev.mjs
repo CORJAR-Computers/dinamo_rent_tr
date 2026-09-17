@@ -23,7 +23,7 @@
 //      node scripts/smoke-dev.mjs [--mantener]  (conserva el data_dir para inspección)
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const MANTENER = process.argv.includes('--mantener');
@@ -39,18 +39,8 @@ function matarArbol(pid) {
 	spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
 }
 
-/** true si el proceso actual corre con integridad alta (elevado). Los runners
- *  de CI de Windows ejecutan elevados; Chromium (WebView2) ignora la bandera
- *  --remote-debugging-port en procesos elevados, así que allí hay que
- *  degradar el lanzamiento con runas /trustlevel:0x20000. */
-function esElevado() {
-	if (process.platform !== 'win32') return false;
-	const r = spawnSync('whoami', ['/groups'], { encoding: 'utf8' });
-	return /S-1-16-12288/.test(r.stdout || '');
-}
-
-/** Mata los procesos que escuchan en el puerto dado (limpieza precisa de
- *  los huérfanos del árbol lanzado vía runas, cuyo PID no conservamos). */
+/** Mata los procesos que escuchan en el puerto dado (limpieza defensiva
+ *  por si dinamo-rent.exe sobrevive al taskkill /T del árbol principal). */
 async function matarPuerto(puerto) {
 	const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
 	const pids = new Set();
@@ -76,10 +66,9 @@ async function esperarPuertoLibre(puerto, ms) {
 	return false;
 }
 
-/** Espera a que el puerto suba; si `logPath` se vigila (lanzamiento runas),
- *  aborta temprano en cuanto el log muestra que el dev server murió — evita
- *  quemar el timeout completo (7 min) ante un EPERM/panico evidente. */
-async function esperarCdp(puerto, ms, logPath, vigilar) {
+/** Espera a que el puerto CDP suba (polling 1 s). Retorna null si subió,
+ *  'timeout' si expiró el tiempo de espera. */
+async function esperarCdp(puerto, ms) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
 		const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
@@ -87,18 +76,6 @@ async function esperarCdp(puerto, ms, logPath, vigilar) {
 			.split('\n')
 			.some((l) => l.includes(`:${puerto} `) && l.includes('LISTENING'));
 		if (ok) return null;
-		if (vigilar) {
-			try {
-				if (
-					/terminated with a non-zero status code|EPERM|panicked at/.test(
-						readFileSync(logPath, 'utf8')
-					)
-				)
-					return 'el dev server murió durante el arranque';
-			} catch {
-				/* el log aún no existe */
-			}
-		}
 		await sleep(1000);
 	}
 	return 'timeout';
@@ -121,58 +98,38 @@ async function main() {
 	if (existsSync(FDB)) console.log('   BD aislada:', FDB);
 
 	console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
-	// Vite regenera .svelte-kit en el arranque (sync). Cuando el lanzamiento va
-	// degradado (runas, runners de CI), el árbol existente fue creado por el
-	// proceso elevado del checkout: escribirlo desde el proceso de baja
-	// integridad produce EPERM (-4048) espurios en .svelte-kit/env.d.ts
-	// (corridas 4 y 5 del CI; write_if_changed solo escribe si el contenido
-	// difiere, por eso era intermitente). Borrarlo obliga a vite a recrearlo
-	// con su propia propiedad; en local es un directorio generado, sin costo.
+	// Vite regenera .svelte-kit en el arranque (sync). Borrarlo obliga a vite
+	// a recrearlo con su propia propiedad; en local es un directorio generado,
+	// sin costo.
 	rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
 	// Node moderno rechaza spawn de .cmd sin shell (EINVAL, mitigación CVE): en
-	// Windows pasamos por cmd.exe explícito. Si el proceso corre ELEVADO (los
-	// runners de CI), el lanzamiento va por runas /trustlevel:0x20000: Chromium
-	// (WebView2) ignora --remote-debugging-port con integridad alta. Detalle
-	// clave: runas NO hereda el entorno, así que las variables (BD aislada y
-	// bandera CDP) se fijan DENTRO de un batch ejecutado ya degradado, y la
-	// salida se redirige a un log que este orquestador puede leer.
+	// Windows pasamos por cmd.exe explícito con shell:true.
+	// NOTA: la estrategia anterior de degradar con runas /trustlevel:0x20000
+	// (para que Chromium/WebView2 acepte --remote-debugging-port en runners
+	// elevados) fue descartada porque runas retorna inmediatamente sin esperar
+	// al proceso hijo, haciendo que el PID del orquestador sea inútil para
+	// taskkill /T y el árbol quede huérfano. En la práctica, los runners de CI
+	// heredan WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS al proceso cargo→tauri→app
+	// incluso corriendo elevados, porque la variable llega por herencia de
+	// entorno del proceso padre (no por la línea de comandos, que sí bloquea
+	// Chromium con integridad alta). El lanzamiento directo funciona en CI.
 	const esWin = process.platform === 'win32';
-	const elevado = esWin && esElevado();
-	const BAT = join(RAIZ, 'scripts', '.tmp-smoke-run.cmd');
-	const LOG = join(RAIZ, 'scripts', '.tmp-smoke-dev.log');
 	let ejecutable, argv;
 	if (!esWin) {
 		ejecutable = 'npm';
 		argv = ['run', 'tauri', 'dev'];
-	} else if (elevado) {
-		writeFileSync(
-			BAT,
-			[
-				'@echo off',
-				`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
-				`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
-				`cd /d "${RAIZ}"`,
-				`npm run tauri dev > "${LOG}" 2>&1`
-			].join('\r\n')
-		);
-		ejecutable = 'runas';
-		argv = ['/trustlevel:0x20000', `cmd.exe /c "${BAT}"`];
 	} else {
 		ejecutable = 'cmd.exe';
 		argv = ['/d', '/s', '/c', 'npm run tauri dev'];
 	}
-	console.log(
-		`   lanzamiento: ${elevado ? 'degradado (runas + batch con env propio)' : 'directo'}`
-	);
+	console.log('   lanzamiento: directo (env heredado)');
 	const app = spawn(ejecutable, argv, {
 		cwd: RAIZ,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		env: {
 			...process.env,
-			...(elevado ? {} : { DINAMO_DATA_DIR: DATA_DIR }),
-			...(elevado
-				? {}
-				: { WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}` })
+			DINAMO_DATA_DIR: DATA_DIR,
+			WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
 		}
 	});
 	let salida = '';
@@ -188,16 +145,9 @@ async function main() {
 
 	try {
 		// CDP arriba = la ventana WebView2 de la app ya existe (tras compilar).
-		const causa = await esperarCdp(PUERTO_CDP, 420000, LOG, elevado);
+		const causa = await esperarCdp(PUERTO_CDP, 420000);
 		if (causa) {
-			let detalle = salida.slice(-1500);
-			if (elevado) {
-				try {
-					detalle = readFileSync(LOG, 'utf8').slice(-1500);
-				} catch {
-					detalle += '\n(sin log del proceso degradado)';
-				}
-			}
+			const detalle = salida.slice(-1500);
 			throw new Error(`CDP ${PUERTO_CDP} no subió en 7 min (${causa}):\n` + detalle);
 		}
 		await sleep(2000); // margen para que el target page esté servido
@@ -209,18 +159,10 @@ async function main() {
 			env: { ...process.env, CDP_PORT: PUERTO_CDP }
 		});
 		if (r.status !== 0) {
-			// La salida de vite ayuda a distinguir crash (EPERM/overlay) de una
-			// carrera de compilación on-demand: incluirla siempre en el error.
-			let cola = salida.slice(-1000);
-			if (elevado) {
-				try {
-					cola = readFileSync(LOG, 'utf8').slice(-1000);
-				} catch {
-					cola += '\n(sin log del proceso degradado)';
-				}
-			}
+			// La salida de vite/cargo ayuda a distinguir crash de una carrera
+			// de compilación on-demand: incluirla siempre en el error.
 			throw new Error(`smoke falló (exit ${r.status}):
---- cola del dev server ---\n${cola}`);
+--- cola del dev server ---\n${salida.slice(-1000)}`);
 		}
 	} finally {
 		console.log('— cerrando la app y el dev server…');
@@ -228,16 +170,11 @@ async function main() {
 		// El binario de la app puede sobrevivir al árbol npm→cargo: matarlo por
 		// nombre si sigue vivo (target/debug solo existe en desarrollo).
 		spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
-		// Con lanzamiento runas el árbol escapa al PID del orquestador: matar lo
-		// que quede escuchando en los puertos del harness (CDP y Vite).
 		await matarPuerto(PUERTO_CDP);
 		await matarPuerto('5173');
 		await esperarPuertoLibre(PUERTO_CDP, 10000);
 		await esperarPuertoLibre('5173', 10000);
 	}
-
-	rmSync(BAT, { force: true });
-	rmSync(LOG, { force: true });
 	if (MANTENER) {
 		console.log('--mantener: data_dir conservado en ' + DATA_DIR);
 	} else {
