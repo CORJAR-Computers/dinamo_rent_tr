@@ -116,8 +116,19 @@ pub fn run() {
             // ── Configuración ──
             let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             let (resource_dir, data_dir) = if cfg!(debug_assertions) {
-                // En desarrollo usamos las carpetas del proyecto (data/ + resources/)
-                (manifest_dir.join("resources"), manifest_dir.join("../data"))
+                // Override opcional para humo-tests E2E en dev (smoke-dev):
+                // aísla la BD/config del smoke en un directorio temporal sin
+                // tocar la BD de desarrollo. Solo tiene efecto en debug.
+                match std::env::var("DINAMO_DATA_DIR") {
+                    Ok(d) if !d.trim().is_empty() => {
+                        log::info!("DINAMO_DATA_DIR activo (BD aislada para humo-test): {}", d);
+                        (manifest_dir.join("resources"), std::path::PathBuf::from(d))
+                    }
+                    _ => {
+                        // En desarrollo usamos las carpetas del proyecto (data/ + resources/)
+                        (manifest_dir.join("resources"), manifest_dir.join("../data"))
+                    }
+                }
             } else {
                 // En producción usamos las rutas de la app
                 let r = app
