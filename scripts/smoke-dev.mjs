@@ -39,6 +39,30 @@ function matarArbol(pid) {
 	spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
 }
 
+/** true si el proceso actual corre con integridad alta (elevado). Los runners
+ *  de CI de Windows ejecutan elevados; Chromium (WebView2) ignora la bandera
+ *  --remote-debugging-port en procesos elevados, así que allí hay que
+ *  degradar el lanzamiento con runas /trustlevel:0x20000. */
+function esElevado() {
+	if (process.platform !== 'win32') return false;
+	const r = spawnSync('whoami', ['/groups'], { encoding: 'utf8' });
+	return /S-1-16-12288/.test(r.stdout || '');
+}
+
+/** Mata los procesos que escuchan en el puerto dado (limpieza precisa de
+ *  los huérfanos del árbol lanzado vía runas, cuyo PID no conservamos). */
+async function matarPuerto(puerto) {
+	const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
+	const pids = new Set();
+	for (const l of (r.stdout || '').split('\n')) {
+		if (l.includes(`:${puerto} `) && l.includes('LISTENING')) {
+			const pid = l.trim().split(/\s+/).pop();
+			if (/^\d+$/.test(pid) && pid !== '0') pids.add(pid);
+		}
+	}
+	for (const pid of pids) spawnSync('taskkill', ['/PID', pid, '/T', '/F'], { stdio: 'ignore' });
+}
+
 async function esperarPuertoLibre(puerto, ms) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
@@ -82,28 +106,28 @@ async function main() {
 	if (existsSync(FDB)) console.log('   BD aislada:', FDB);
 
 	console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
-	// Node moderno rechaza spawn de .cmd sin shell (EINVAL, mitigación CVE);
-	// en Windows pasamos por cmd.exe explícito — sin shell:true ni DEP0190.
-	const esWindows = process.platform === 'win32';
-	const app = esWindows
-		? spawn('cmd.exe', ['/d', '/s', '/c', 'npm run tauri dev'], {
-				cwd: RAIZ,
-				stdio: ['ignore', 'pipe', 'pipe'],
-				env: {
-					...process.env,
-					DINAMO_DATA_DIR: DATA_DIR,
-					WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
-				}
-			})
-		: spawn('npm', ['run', 'tauri', 'dev'], {
-				cwd: RAIZ,
-				stdio: ['ignore', 'pipe', 'pipe'],
-				env: {
-					...process.env,
-					DINAMO_DATA_DIR: DATA_DIR,
-					WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
-				}
-			});
+	// Node moderno rechaza spawn de .cmd sin shell (EINVAL, mitigación CVE): en
+	// Windows pasamos por cmd.exe explícito. Y si el proceso corre ELEVADO (los
+	// runners de CI), el lanzamiento va por runas /trustlevel:0x20000: Chromium
+	// (WebView2) ignora --remote-debugging-port con integridad alta.
+	const esWin = process.platform === 'win32';
+	const cmdNpm = 'npm run tauri dev';
+	const elevado = esWin && esElevado();
+	const [ejecutable, argv] = !esWin
+		? ['npm', ['run', 'tauri', 'dev']]
+		: elevado
+			? ['runas', ['/trustlevel:0x20000', `cmd.exe /d /s /c "${cmdNpm}"`]]
+			: ['cmd.exe', ['/d', '/s', '/c', cmdNpm]];
+	console.log(`   lanzamiento: ${elevado ? 'runas (proceso degradado)' : 'directo'}`);
+	const app = spawn(ejecutable, argv, {
+		cwd: RAIZ,
+		stdio: ['ignore', 'pipe', 'pipe'],
+		env: {
+			...process.env,
+			DINAMO_DATA_DIR: DATA_DIR,
+			WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
+		}
+	});
 	let salida = '';
 	app.stdout.on('data', (d) => (salida += d));
 	app.stderr.on('data', (d) => (salida += d));
@@ -137,6 +161,10 @@ async function main() {
 		// El binario de la app puede sobrevivir al árbol npm→cargo: matarlo por
 		// nombre si sigue vivo (target/debug solo existe en desarrollo).
 		spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
+		// Con lanzamiento runas el árbol escapa al PID del orquestador: matar lo
+		// que quede escuchando en los puertos del harness (CDP y Vite).
+		await matarPuerto(PUERTO_CDP);
+		await matarPuerto('5173');
 		await esperarPuertoLibre(PUERTO_CDP, 10000);
 		await esperarPuertoLibre('5173', 10000);
 	}
