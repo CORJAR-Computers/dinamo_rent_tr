@@ -1,6 +1,6 @@
 # Resumen Ejecutivo — Dinamo Rent ERP
 
-> **Fecha:** 2026-09-16 · **Estado general:** listo para producción — release v1.2.2 (ronda de QA: fechas locales, doble cobro en extensiones, salvaguardas de restauración; bumpeada, CI verde y publicada con el tag), firmada para el auto-update, con backups de la BD (Fase 8), la versión real de la app en el menú/login y la verificación de despliegue -DryRun en el CI.
+> **Fecha:** 2026-09-17 · **Estado general:** listo para producción — release v1.2.3 (guardrail IPC decimal, red de seguridad decimal_string en DTOs, suite E2E automatizada smoke:dev y CI 100% verde; bumpeada, validada y publicada con el tag), firmada para el auto-update, con backups de la BD (Fase 8), la versión real de la app en el menú/login y la verificación de despliegue -DryRun en el CI.
 
 ---
 
@@ -9,37 +9,22 @@
 | Área | Estado |
 |---|---|
 | **Aplicación** | Todos los módulos operativos (rentas, comparendos + agente SIMIT, alertas, calendario, informes, reservas, contratos) |
-| **Versión estable** | **v1.2.2** — la única release que se distribuye (con auto-update activo) |
+| **Versión estable** | **v1.2.3** — la única release que se distribuye (con auto-update activo) |
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
-| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 254 tests frontend, cargo 92 lib + integración con BD sembrada (backups/restauración con gbak real), clippy -D warnings, importador 16 casos) |
+| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 254 tests frontend, cargo 92 lib + integración con BD sembrada, smoke E2E automatizado, clippy -D warnings, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
-| **Auto-actualización** | ✅ Activa desde la **v1.0.14** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) | ✅ Secret `TAURI_SIGNING_PRIVATE_KEY` configurado; v1.0.4–v1.0.15 publicadas y firmadas (la v1.2.1 sale firmada con el tag) |
-
-### Ronda de QA (16-09)
-
-Correcciones de calidad y fiabilidad operativa validadas localmente (vitest 254 · cargo test 174 (92 lib + 82 integración) · `cargo clippy --all-targets -- -D warnings` 0/0 · `cargo fmt` limpio):
-
-1. **Fechas locales en toda la app** — `formatLocalDateISO()` sustituye a `toISOString().slice(0,10)` en 8 pantallas (rentas, reservas, comparendos, autos, mantenimiento, gastos, logs, calendario e informes). En UTC-5, tras las 7 PM se proponía la fecha de mañana; la más crítica era la **fecha de devolución real** del cierre de rentas.
-2. **Extensiones de renta** — sin doble cobro (la extensión se valoriza solo en `valor_dia_extra` + historial `extensiones_renta`) y sin pánicos por cantidades extremas (`checked_add_signed` + tope de 5 años).
-3. **Restauración de BD más segura** — copia preventiva `pre_restore_<timestamp>.bak` antes del reemplazo y rechazo temprano de backups vacíos/truncados (< 1 KB) antes de invocar gbak.
-4. **Gate de calidad obligatorio** — `cargo clippy --all-targets -- -D warnings` añadido a `scripts/test-completo.sh` y al hook pre-commit (con `--all-targets`); documentación y plantilla de PR alineadas.
+| **Auto-actualización** | ✅ Activa desde la **v1.0.14** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) |
 
 ## 2. Releases en GitHub
 
 | Release | Estado | Para quién |
 |---|---|---|
-| **v1.2.2** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
-| v1.2.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.2 (auto-update o a mano, una vez) |
-| v1.2.0 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.2 (a mano, una vez) |
-| v1.0.26 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.1 (a mano, una vez) |
-| v1.0.15 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.1 (a mano, una vez) |
-| v1.0.9 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.1 (a mano, una vez) |
-| v1.0.3 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.1 (a mano, una vez) |
-| v1.0.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.1 (a mano; transición al auto-update) |
-| v1.0.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.1 (a mano) |
-| v1.0.0 | ⚠️ **Descontinuada** (prerelease + aviso de deprecación) | Solo referencia — **no instalarla** |
+| **v1.2.3** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
+| v1.2.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.3 (auto-update o a mano, una vez) |
+| v1.2.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.3 (auto-update o a mano, una vez) |
+| v1.2.0 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.3 (a mano, una vez) |
 
-**Assets de la v1.2.2:** [`DinamoRent_1.2.2_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.2/DinamoRent_1.2.2_x64-setup.exe) (NSIS, ~21 MB, recomendado; sha256 `65e6e9b9…de7c101`) y [`DinamoRent_1.2.2_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.2/DinamoRent_1.2.2_x64_en-US.msi) (~32 MB, despliegue GPO; sha256 `c61e61c2…8a90eef`). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
+**Assets de la v1.2.3:** [`DinamoRent_1.2.3_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.3/DinamoRent_1.2.3_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.2.3_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.3/DinamoRent_1.2.3_x64_en-US.msi) (~32 MB, despliegue GPO). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
 **Auto-actualización (activa desde la v1.0.14):** la app chequea al arrancar el
 `latest.json` de GitHub Releases y ofrece instalar la versión nueva (firma minisign
@@ -56,6 +41,14 @@ embebida.
 3. **Crash sin el runtime VC++** (`LoadLibraryExW failed`) → `SetDllDirectoryW(firebird/)` encuentra las DLLs que ya viajan en el instalador; no hace falta instalar redistribuibles.
 
 **Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). Cualquier versión anterior → **v1.2.2** (las ≤v1.0.13 se instalan a mano una vez; desde la v1.0.14 las siguientes son automáticas).
+
+**Qué añade la v1.2.3** (17-09):
+
+1. **Guardrail dev IPC bidireccional (`devGuard`)**: control estricto en `invokeCmd` contra tipos TypeScript autogenerados por `ts-rs` para prevenir desalineaciones de contrato en desarrollo.
+2. **Red de seguridad `decimal_string` en DTOs**: deserialización defensiva en backend para montos monetarios enviados como string o number.
+3. **Estandarización de inputs monetarios**: `inputmode="decimal"` en formularios clave (extensión y edición de rentas cerradas).
+4. **Smoke E2E automatizado (`smoke:dev`)**: suite de pruebas de flujo de cobro con base de datos aislada integrada al CI con WebView2 CDP mediante directiva oficial HKLM.
+5. **Estabilidad y hardening de CI**: solución de bloqueos de archivos en Windows Defender y sincronización de dependencias de Tauri.
 
 **Qué añade la v1.2.2** (16-09):
 
@@ -136,4 +129,4 @@ embebida.
 
 ## 6. Veredicto
 
-**El proyecto está listo para producción.** La única release estable es la v1.2.2 (construida por CI, firmada para el auto-update, validada en Windows limpio y verificada en el equipo de operaciones), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater, backups con restauración) está documentado y validado. La **auto-actualización está activa desde la v1.0.14**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
+**El proyecto está listo para producción.** La única release estable es la v1.2.3 (construida por CI, firmada para el auto-update, validada en Windows limpio y verificada en el equipo de operaciones), la suite completa está en verde (local y CI), y el kit de operaciones (instalación, verificación, importación de datos, monitoreo SIMIT, verificación E2E del updater, backups con restauración) está documentado y validado. La **auto-actualización está activa desde la v1.0.14**: el secret `TAURI_SIGNING_PRIVATE_KEY` quedó configurado y los artefactos publicados validan criptográficamente contra la pubkey embebida. Los pendientes conocidos son de mantenimiento fino, no bloqueos.
