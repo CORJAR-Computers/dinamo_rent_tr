@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-09-03** · Estado: **todos los módulos operativos, validación verde · release v1.2.1 publicada · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) con formatos de salida intactos · tests de backups deterministas · log 0.4.34 · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-09-16** · Estado: **todos los módulos operativos, validación verde · release v1.2.2 publicada (ronda de QA: fechas locales en 8 pantallas, doble cobro en extensiones corregido, salvaguardas de restauración, gate de clippy, aes 0.9 + cbc 0.2 con formatos intactos) · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) con formatos de salida intactos · tests de backups deterministas · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24** cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -602,6 +602,17 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
       hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
       automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
+
+### v1.2.2 — Ronda de QA: fechas locales, cobros y salvaguardas (16-09)
+
+- [x] **Fechas locales en toda la app**: `formatLocalDateISO()` (ya existente para informes) sustituye a `toISOString().slice(0,10)` en rentas, reservas, comparendos, autos, mantenimiento, gastos, logs y calendario. En UTC-5 tras las 7 PM se proponía la fecha de mañana; la más crítica: `defaultCierre()` de rentas proponía la devolución real de mañana. El «mañana» se calcula ahora con aritmética local (`new Date(y, m, d+1)`).
+- [x] **Doble cobro en extensiones corregido**: `RentaService::extender` preserva `dias_calculados`/`horas_extras` como base contractual y valoriza la extensión solo en `valor_dia_extra` + `extensiones_renta`; `fecha_retorno`/`hora_retorno` sí se actualizan (calendario/disponibilidad). Coherente con `calcular_totales` y `ContratoRenta.svelte`. Test de integración con totales exactos (3×150.000 + 50.000 + 19% IVA = 595.000).
+- [x] **Hardening de `extender`**: `checked_add_signed` (antes paniqueaba con cantidades extremas) + tope de desplazamiento de 5 años.
+- [x] **Restauración de BD con doble salvaguarda**: copia preventiva `pre_restore_<ts>.bak` antes del swap y fast-fail de staging < 1 KB (antes de gbak y antes de la copia) — test `restaurar_staging_vacio_falla_sin_copias_pre_restore`.
+- [x] **Gate de clippy obligatorio**: `cargo clippy --all-targets -- -D warnings` añadido a `scripts/test-completo.sh` (no lo corría) y `--all-targets` al pre-commit; CONTRIBUTING (bug de ruta corregido) y plantilla de PR alineados.
+- [x] **aes 0.9.3 + cbc 0.2** (dependabot #31 + fix propio): el bump de aes 0.9 rompía la compilación porque `cbc 0.1` usa `cipher 0.4` y `aes 0.9` `cipher 0.5`. Con `cbc 0.2` convergen en `cipher 0.5` (una sola copia de aes/cipher en el lock). Migración mínima en `core::crypto` (trait `BlockModeDecrypt`, `decrypt_padded`, `new()` sin `Result`); 11 tests de crypto en verde — formatos PII/Argon2/backups intactos.
+- [x] **Prettier en el CI**: `format:check` fallaba por 5 archivos sin formatear (syncWeb, format, format.test, reservas, api/index) — reformateados y `format:check` en verde.
+- Validación de la ronda: vitest 254/254 · svelte-check 0/0 · cargo test 174 (92 lib + 82 integración, gbak real) · clippy -D warnings 0/0 · fmt limpio · release v1.2.2 publicada por CI con 5 assets firmados.
 
 ### v1.2.1 — Migración criptográfica y CI determinista (03-09)
 

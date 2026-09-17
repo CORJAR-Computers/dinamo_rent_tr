@@ -6,6 +6,38 @@ Las versiones se publican como [releases en GitHub](https://github.com/CORJAR-Co
 
 ---
 
+## [v1.2.2] — 2026-09-16
+
+### Corregido
+
+- **Fechas locales en toda la app**: `formatLocalDateISO()` sustituye a `toISOString().slice(0,10)`
+  en 8 pantallas (rentas, reservas, comparendos, autos, mantenimiento, gastos, logs, calendario e
+  informes). En zonas UTC-5 (Colombia), tras las 7:00 PM se proponía la fecha de **mañana**; la más
+  crítica era la fecha de devolución real del cierre de rentas.
+- **Doble cobro en extensiones de renta**: al extender (horas/días) se sumaba el valor a la base
+  contractual **y además** a `valor_dia_extra`. Ahora los días/horas base se preservan y la
+  extensión se valoriza solo en `valor_dia_extra` + historial `extensiones_renta`, con fechas de
+  retorno actualizadas para el calendario.
+- **Restauración de BD más segura**: copia preventiva `pre_restore_<timestamp>.bak` antes del
+  reemplazo y rechazo temprano de backups vacíos/truncados (< 1 KB) antes de invocar `gbak -r`.
+
+### Añadido
+
+- **Gate de calidad obligatorio**: `cargo clippy --all-targets -- -D warnings` añadido a
+  `scripts/test-completo.sh` y al hook pre-commit; checklists de CONTRIBUTING y plantilla de PR
+  alineadas.
+- **Hardening de `extender`**: `checked_add_signed` + tope de 5 años — un error de digitación
+  extremo devuelve un error de validación en vez de un pánico.
+
+### Dependencias
+
+- **aes 0.9.3 + cbc 0.2** (dependabot): convergen en `cipher 0.5` — una sola copia de `aes` y
+  `cipher` en el lock. Migración mínima en `core::crypto` (trait `BlockModeDecrypt`,
+  `decrypt_padded`, `new()` sin `Result`); los 11 tests de crypto cubren la lectura de tokens
+  Fernet legacy y los formatos de cifrado PII/Backups quedan intactos.
+
+---
+
 ## [v1.2.1] — 2026-09-03
 
 ### Corregido
@@ -426,6 +458,7 @@ Primera release estable. Migración completa de Python a Tauri V2 + Rust + Fireb
 
 ---
 
+[v1.2.2]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.2
 [v1.2.1]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.1
 [v1.2.0]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.0
 [v1.1.1]: https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.1.1
