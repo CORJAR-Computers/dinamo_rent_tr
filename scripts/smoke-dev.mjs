@@ -4,41 +4,54 @@
 // A diferencia de `smoke:app` (que corre contra la BD que haya), este
 // orquestador garantiza el escenario completo del flujo de cobro:
 //
-//   1. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por git).
-//   2. Lo siembra con `seed_ci <dir>` (compilado antes con `cargo build
-//      --features dev` cuando el seed corre degradado en CI): config.ini +
-//      BD con admin/autos/clientes, pero SIN rentas → la tabla de /rentas
-//      arranca vacía y el smoke entra al branch de "renta de prueba" (el
-//      único que conoce la base monetaria y puede asertar los totales).
-//   3. Compila la app (`cargo build`), levanta vite (dev server) y lanza el
-//      EXE ya compilado con DINAMO_DATA_DIR apuntando al dir temporal y CDP
-//      en 9222 (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS).
+//   1. Compila app + seed_ci (`cargo build --features dev --bins`).
+//   2. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por
+//      git) y lo siembra con `seed_ci <dir>`: config.ini + BD con
+//      admin/autos/clientes, pero SIN rentas → /rentas arranca vacía y el
+//      smoke entra al branch de "renta de prueba" (el único que conoce la
+//      base monetaria y puede asertar los totales de la extensión).
+//   3. Levanta vite (dev server) y lanza el EXE ya compilado con
+//      DINAMO_DATA_DIR apuntando al dir temporal y CDP en 9222
+//      (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS).
 //
-//      ⚠️ POR QUÉ TRES PROCESOS SEPARADOS (en vez de `tauri dev`): en un
-//      proceso ELEVADO (los runners de CI), Chromium/WebView2 IGNORA la
-//      bandera --remote-debugging-port y el puerto CDP nunca abre — probado
-//      localmente con UAC: el mismo exe sin elevar abre 9222 en 1 s y elevado
-//      nunca lo abre, con y sin la variable en el entorno (CI #285). Pero
-//      degradar TODO el árbol con `runas /trustlevel:0x20000` (CI #273-#277)
-//      rompió la compilación: el token restringido pierde los ACE del grupo
-//      Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre
-//      `.svelte-kit`. Solución: compilar y servir ELEVADOS, y degradar el
-//      seed_ci y SOLO el proceso de la app (los procesos que tocan Firebird:
-//      un mapeo de memoria de la BD creado elevado no es accesible para el
-//      token restringido → "Wrong file for memory mapping", CI run #286).
-//      Detalle clave: runas NO hereda el entorno del orquestador, así que el
-//      env del humo (BD aislada + bandera CDP) se fija DENTRO del batch que
-//      se ejecuta ya degradado; el log va a un archivo que este orquestador
-//      lee — tanto para el diagnóstico como para esperar el fin del seed
-//      (marca EXIT:<code> al final del log, pues runas retorna de inmediato).
+//      ⚠️ EJECUCIÓN DESDE UN PROCESO ELEVADO (runners de CI): tres
+//      restricciones descubiertas a fuerza de corridas:
+//      a) WebView2 IGNORA --remote-debugging-port en un proceso ELEVADO
+//         (probado con UAC: el mismo exe sin elevar abre 9222 en 1 s y
+//         elevado nunca lo abre, con y sin la variable en el entorno;
+//         CI #285). Y degradar la compilación/servido con runas
+//         /trustlevel:0x20000 rompe TODO (CI #273-#277): el token
+//         restringido pierde los ACE de Administrators →
+//         .cargo-build-lock denegado y EPERM de vite sobre .svelte-kit.
+//      b) Firebird embedded exige que TODOS los procesos que tocan la BD
+//         compartan el MISMO token: sembrar elevado y abrir la app
+//         degradada falla ("Wrong file for memory mapping", run #286), y
+//         sembrar degradado vía runas falla IGUAL (runs #287-#288): el
+//         token RESTRINGIDO de Basic User no puede mapear las secciones
+//         de memoria compartida de Firebird (firebird.msg, tablas de
+//         locks), pase lo que pase antes.
+//      c) runas y `schtasks /Run` retornan de inmediato: no se puede
+//         esperar al hijo por PID; el batch deja marcas de fase
+//         (SEED-EXIT:<code> / APP-EXIT) al final de su log y el
+//         orquestador las sondea.
+//      SOLUCIÓN: compilar y servir ELEVADOS (vite borra .svelte-kit y lo
+//      recrea con su propia propiedad), y correr TODO lo que toca Firebird
+//      o WebView2 (seed_ci + app) en un token de usuario NORMAL vía tarea
+//      programada: `schtasks /Create /RL LIMITED /IT` + un batch que fija
+//      el env del humo (las tareas NO heredan el entorno del orquestador)
+//      y corre seed → app con logs en archivo para el diagnóstico. El
+//      token LIMITED/IT es el equivalente exacto a una sesión dev normal
+//      (donde todo esto funciona de punta a punta), sin las restricciones
+//      de Basic User que runas impone a Firebird.
 //
 //   4. Corre `smoke-test-app.mjs`: login → renta de prueba (5 días ×
 //      $150.000, sin IVA) → pago → extensión decimal (+2 h × $25.000,5 =
 //      $50.001 → total $800.001) → segunda extensión acumulativa (+1 día ×
 //      $50.000 → total $850.001) → orden → contrato → gate anti-[devGuard].
-//   5. Limpia procesos (vite/app por árbol e imagen, CDP por puerto) y
-//      reporta si quedaron residuos del data_dir (Windows puede sostener el
-//      .fdb unos segundos tras matar el proceso).
+//   5. Limpia procesos (vite/app/seed por árbol e imagen, CDP por puerto,
+//      tarea programada) y reporta si quedaron residuos del data_dir
+//      (Windows puede sostener el .fdb unos segundos tras matar el
+//      proceso).
 //
 // Uso: npm run smoke:dev
 //      node scripts/smoke-dev.mjs [--mantener]  (conserva el data_dir para inspección)
@@ -54,10 +67,9 @@ const FDB = join(DATA_DIR, 'dinamo_rent_v3.fdb');
 const PUERTO_CDP = process.env.CDP_PORT || '9222';
 const EXE_APP = join(RAIZ, 'src-tauri', 'target', 'debug', 'dinamo-rent.exe');
 const EXE_SEED = join(RAIZ, 'src-tauri', 'target', 'debug', 'seed_ci.exe');
-const BAT_APP = join(RAIZ, 'scripts', '.tmp-smoke-app.cmd');
-const LOG_APP = join(RAIZ, 'scripts', '.tmp-smoke-app.log');
-const BAT_SEED = join(RAIZ, 'scripts', '.tmp-smoke-seed.cmd');
-const LOG_SEED = join(RAIZ, 'scripts', '.tmp-smoke-seed.log');
+const BAT_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.cmd');
+const LOG_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.log');
+const TAREA = 'DinamoSmokeDev';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,8 +86,16 @@ function matarArbol(pid) {
 	spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
 }
 
+/** true si algún proceso escucha en el puerto dado (netstat). */
+function puertoEscuchando(puerto) {
+	const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
+	return (r.stdout || '')
+		.split('\n')
+		.some((l) => l.includes(`:${puerto} `) && l.includes('LISTENING'));
+}
+
 /** Mata los procesos que escuchan en el puerto dado (limpieza defensiva:
- *  la app lanzada vía runas escapa al PID del orquestador). */
+ *  la app lanzada fuera del orquestador escapa a su árbol de PID). */
 async function matarPuerto(puerto) {
 	const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
 	const pids = new Set();
@@ -91,11 +111,7 @@ async function matarPuerto(puerto) {
 async function esperarPuertoLibre(puerto, ms) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
-		const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
-		const ocupado = (r.stdout || '')
-			.split('\n')
-			.some((l) => l.includes(`:${puerto} `) && l.includes('LISTENING'));
-		if (!ocupado) return true;
+		if (!puertoEscuchando(puerto)) return true;
 		await sleep(500);
 	}
 	return false;
@@ -105,14 +121,22 @@ async function esperarPuertoLibre(puerto, ms) {
 async function esperarPuertoOcupado(puerto, ms) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
-		const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
-		const ok = (r.stdout || '')
-			.split('\n')
-			.some((l) => l.includes(`:${puerto} `) && l.includes('LISTENING'));
-		if (ok) return true;
+		if (puertoEscuchando(puerto)) return true;
 		await sleep(1000);
 	}
 	return false;
+}
+
+/** Espera a que el CDP suba. null = arriba; 'app-murio' = el batch escribió
+ *  APP-EXIT (la app murió antes de abrir el puerto); 'timeout' = venció. */
+async function esperarCdp(puerto, ms) {
+	const fin = Date.now() + ms;
+	while (Date.now() < fin) {
+		if (puertoEscuchando(puerto)) return null;
+		if (/APP-EXIT\s*$/.test(colaLog(LOG_HUMO, 200))) return 'app-murio';
+		await sleep(1000);
+	}
+	return 'timeout';
 }
 
 /** Cola de un archivo de log para adjuntar al diagnóstico de fallo. */
@@ -124,112 +148,138 @@ function colaLog(ruta, n = 1500) {
 	}
 }
 
-/** Lanza un batch DEGRADADO vía runas y espera a que el proceso termine
- *  leyendo el marcador `EXIT:<code>` que el batch escribe al final del log
- *  (runas retorna de inmediato y no deja esperar al hijo por PID). */
-async function correrBatchDegradado(bat, log, ms) {
-	spawn('runas', ['/trustlevel:0x20000', `cmd.exe /c "${bat}"`], {
-		cwd: RAIZ,
-		stdio: 'ignore'
-	});
-	const MARCA = /\r?\nEXIT:(\d+)\s*$/;
+/** Escribe el batch del humo para la fase dada. Fija el env del humo (las
+ *  tareas programadas NO heredan el entorno del orquestador), redirige todo
+ *  al log y deja marcas de corte de fase (SEED-EXIT / APP-EXIT) que el
+ *  orquestador sondea, porque runas y `schtasks /Run` retornan de inmediato. */
+function escribirBatchHumo(fase) {
+	const lineas = [
+		'@echo off',
+		`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
+		`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
+		`cd /d "${RAIZ}"`
+	];
+	if (fase === 'seed') {
+		lineas.push(
+			`"${EXE_SEED}" "${DATA_DIR}" >> "${LOG_HUMO}" 2>&1`,
+			'set "EC=%ERRORLEVEL%"',
+			`>> "${LOG_HUMO}" echo SEED-EXIT:%EC%`
+		);
+	} else {
+		lineas.push(`"${EXE_APP}" >> "${LOG_HUMO}" 2>&1`, `>> "${LOG_HUMO}" echo APP-EXIT`);
+	}
+	writeFileSync(BAT_HUMO, lineas.join('\r\n'));
+}
+
+/** Crea (o reemplaza) la tarea programada que corre el batch del humo.
+ *  /RL LIMITED: token de usuario normal (lo que WebView2 y Firebird exigen);
+ *  /IT: solo con sesión interactiva activa (los runners la tienen). Sin /RU
+ *  no pide contraseña: corre como el usuario del orquestador. */
+function crearTarea() {
+	const r = spawnSync(
+		'schtasks',
+		[
+			'/Create', '/F', '/TN', TAREA,
+			'/TR', `"${BAT_HUMO}"`,
+			'/SC', 'ONCE', '/SD', '01/01/2000', '/ST', '00:00',
+			'/RL', 'LIMITED', '/IT'
+		],
+		{ encoding: 'utf8' }
+	);
+	if (r.status !== 0) {
+		throw new Error('schtasks /Create falló:\n' + (r.stdout || '') + (r.stderr || ''));
+	}
+}
+
+/** Lanza la tarea (retorna de inmediato; el orquestador espera por marcas
+ *  en el log, no por PID). */
+function correrTarea() {
+	const r = spawnSync('schtasks', ['/Run', '/TN', TAREA], { encoding: 'utf8' });
+	if (r.status !== 0) {
+		throw new Error('schtasks /Run falló:\n' + (r.stdout || '') + (r.stderr || ''));
+	}
+}
+
+function borrarTarea() {
+	spawnSync('schtasks', ['/Delete', '/TN', TAREA, '/F'], { stdio: 'ignore' });
+}
+
+/** Espera la marca SEED-EXIT del batch degradado (polling 1 s). */
+async function esperarMarcaSeed(ms) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
-		const m = MARCA.exec(colaLog(log, 200));
+		const m = /\r?\nSEED-EXIT:(\d+)\s*$/.exec(colaLog(LOG_HUMO, 200));
 		if (m) return Number(m[1]);
 		await sleep(1000);
 	}
-	throw new Error(`el proceso degradado no terminó en ${Math.round(ms / 1000)} s:\n--- log ---\n${colaLog(log)}`);
+	spawnSync('taskkill', ['/IM', 'seed_ci.exe', '/F'], { stdio: 'ignore' });
+	throw new Error('seed_ci degradado no terminó en 5 min:\n' + colaLog(LOG_HUMO));
 }
 
-/** Escribe un batch que fija el env dado, corre un exe y deja la marca
- *  `EXIT:<code>` al final del log (para correrBatchDegradado). */
-function escribirBatch(rutaBat, rutaLog, exe, env, msTimeout) {
-	writeFileSync(
-		rutaBat,
-		[
-			'@echo off',
-			...Object.entries(env).map(([k, v]) => `set "${k}=${v}"`),
-			`cd /d "${RAIZ}"`,
-			`"${exe}" >> "${rutaLog}" 2>&1`,
-			'set "EC=%ERRORLEVEL%"',
-			`>> "${rutaLog}" echo EXIT:%EC%`,
-			...(msTimeout ? [`timeout /t ${Math.ceil(msTimeout / 1000)} /nobreak > nul`] : [])
-		].join('\r\n')
-	);
+/** Levanta vite como hijo del orquestador: su salida sirve de diagnóstico y
+ *  muere con taskkill /T. (Elevado NO tiene el EPERM de antes: ese lo
+ *  causaba escribir .svelte-kit desde un proceso de baja integridad.) */
+async function levantarVite() {
+	console.log('— lanzando vite (dev server)…');
+	const vite = spawn('cmd.exe', ['/d', '/s', '/c', 'npm run dev'], {
+		cwd: RAIZ,
+		stdio: ['ignore', 'pipe', 'pipe'],
+		env: { ...process.env }
+	});
+	let salida = '';
+	vite.stdout.on('data', (d) => (salida += d));
+	vite.stderr.on('data', (d) => (salida += d));
+	const fin = () => {
+		try {
+			if (vite.pid) matarArbol(vite.pid);
+		} catch {
+			/* noop */
+		}
+	};
+	if (!(await esperarPuertoOcupado('5173', 120000))) {
+		fin();
+		throw new Error('vite (5173) no subió en 2 min:\n' + salida.slice(-1500));
+	}
+	return { fin, cola: () => salida.slice(-1000) };
+}
+
+/** Ejecuta smoke-test-app.mjs contra el CDP ya arriba. */
+function correrSmoke() {
+	return new Promise((resolveP, rejectP) => {
+		const r = spawnSync('node', [join(RAIZ, 'scripts', 'smoke-test-app.mjs')], {
+			cwd: RAIZ,
+			stdio: 'inherit',
+			env: { ...process.env, CDP_PORT: PUERTO_CDP }
+		});
+		if (r.status !== 0) rejectP(new Error(`smoke falló (exit ${r.status})`));
+		else resolveP();
+	});
 }
 
 async function main() {
 	console.log('== smoke:dev — flujo completo con BD aislada y vacía ==');
 	// Temporales de corridas abortadas fuera del camino.
-	rmSync(BAT_APP, { force: true });
-	rmSync(LOG_APP, { force: true });
-	rmSync(BAT_SEED, { force: true });
-	rmSync(LOG_SEED, { force: true });
+	rmSync(BAT_HUMO, { force: true });
+	rmSync(LOG_HUMO, { force: true });
 
 	const esWin = process.platform === 'win32';
-	const elevado = esWin ? esElevado() : false;
-
-	// Compilar ANTES de sembrar cuando el seed irá degradado (CI): necesita
-	// seed_ci.exe ya compilado — el token restringido no puede escribir en
-	// target/. (Sin elevar, el `cargo run` del seed compila por su cuenta.)
-	// seed_ci tiene required-features=["dev"] (feature vacío, solo gate del
-	// binario para excluirlo del bundle de release): sin --features dev el
-	// build lo salta y el exe no existe (fallo de la corrida 287). --bins
-	// evita compilar los demás binarios dev que el humo no usa.
-	if (esWin && elevado) {
-		console.log('— compilando app + seed_ci (cargo build --features dev, elevado)…');
-		const rc = spawnSync(
-			'cargo',
-			['build', '--features', 'dev', '--bin', 'dinamo-rent', '--bin', 'seed_ci'],
-			{
-				cwd: join(RAIZ, 'src-tauri'),
-				stdio: 'inherit'
-			}
-		);
-		if (rc.status !== 0) throw new Error(`cargo build falló (exit ${rc.status})`);
-	}
-
-	if (!existsSync(FDB)) {
-		console.log('— sembrando BD aislada (seed_ci)…');
-		if (esWin && elevado) {
-			// El seed corre DEGRADADO (mismo contexto que la app): Firebird
-			// embedded mapea la BD y sus locks en memoria compartida y un mapeo
-			// creado por el proceso elevado no es accesible para el token
-			// restringido de la app degradada → "Wrong file for memory mapping"
-			// (CI run #286). Para esperar su fin vía runas, el batch deja una
-			// marca EXIT:<code> al final del log.
-			if (!existsSync(EXE_SEED)) throw new Error('no existe el binario seed_ci: ' + EXE_SEED);
-			escribirBatch(BAT_SEED, LOG_SEED, EXE_SEED, {}, 30000);
-			const code = await correrBatchDegradado(BAT_SEED, LOG_SEED, 300000);
-			if (code !== 0) throw new Error(`seed_ci falló (exit ${code}):\n${colaLog(LOG_SEED)}`);
-		} else {
-			const r = spawnSync('cargo', ['run', '--features', 'dev', '--bin', 'seed_ci', '--', DATA_DIR], {
-				cwd: join(RAIZ, 'src-tauri'),
-				stdio: 'inherit'
-			});
-			if (r.status !== 0) throw new Error('seed_ci falló');
-		}
-	} else {
-		console.log(
-			'— BD aislada ya sembrada (reutilizando; borra scripts/.tmp-smoke-data para renovar)'
-		);
-	}
-	if (existsSync(FDB)) console.log('   BD aislada:', FDB);
-
-	// Vite regenera .svelte-kit en el arranque (sync). Borrarlo obliga a vite
-	// a recrearlo con su propia propiedad; en local es un directorio generado,
-	// sin costo.
-	rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
-
-	const finApp = () => {
-		// La app puede sobrevivir a su árbol (runas suelta el PID): matarla por
-		// nombre (target/debug solo existe en desarrollo).
-		if (esWin) spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
-	};
+	const elevado = esWin && esElevado();
 
 	// ── Rama no-Windows: sin concepto de elevación, `tauri dev` completo. ──
 	if (!esWin) {
+		console.log('— sembrando BD aislada (seed_ci)…');
+		const rs = spawnSync('cargo', ['run', '--features', 'dev', '--bin', 'seed_ci', '--', DATA_DIR], {
+			cwd: join(RAIZ, 'src-tauri'),
+			stdio: 'inherit'
+		});
+		if (rs.status !== 0) throw new Error('seed_ci falló');
+		if (existsSync(FDB)) console.log('   BD aislada:', FDB);
+
+		// Vite regenera .svelte-kit en el arranque (sync). Borrarlo obliga a
+		// vite a recrearlo con su propia propiedad; en local es un directorio
+		// generado, sin costo.
+		rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
+
 		console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
 		const dev = spawn('npm', ['run', 'tauri', 'dev'], {
 			cwd: RAIZ,
@@ -258,76 +308,85 @@ async function main() {
 			}
 		}
 	} else {
-		// ── Rama Windows (CI elevado y dev local): tres procesos separados. ──
-
-		// 1) Compilar ANTES (proceso elevado): el runas sólo lanza el exe ya
-		//    compilado — el token restringido no puede escribir en target/
-		//    (no-op si ya se compiló para el seed degradado).
-		console.log('— compilando la app (cargo build, elevado)…');
-		const rb = spawnSync('cargo', ['build'], {
+		// ── Rama Windows (CI elevado y dev local). ──
+		// Compilar primero: seed_ci tiene required-features=["dev"] (feature
+		// vacío que solo lo excluye del bundle de release) — sin --features
+		// dev el build lo salta y el exe no existe (corrida 287). --bins
+		// acota el build a los binarios; la app se compila aquí también
+		// porque el lanzamiento por tarea/batch no compila nada.
+		console.log('— compilando app + seed_ci (cargo build --features dev --bins)…');
+		const rc = spawnSync('cargo', ['build', '--features', 'dev', '--bins'], {
 			cwd: join(RAIZ, 'src-tauri'),
 			stdio: 'inherit'
 		});
-		if (rb.status !== 0) throw new Error(`cargo build falló (exit ${rb.status})`);
+		if (rc.status !== 0) throw new Error(`cargo build falló (exit ${rc.status})`);
 		if (!existsSync(EXE_APP)) throw new Error('no existe el binario compilado: ' + EXE_APP);
+		if (!existsSync(EXE_SEED)) throw new Error('no existe el binario seed_ci: ' + EXE_SEED);
 
-		// 2) Vite elevado, hijo del orquestador: su salida sirve de diagnóstico
-		//    y muere con taskkill /T. (Elevado NO tiene el EPERM de antes: ese
-		//    lo causaba escribir .svelte-kit desde el proceso DEGRADADO.)
-		console.log('— lanzando vite (dev server)…');
-		const vite = spawn('cmd.exe', ['/d', '/s', '/c', 'npm run dev'], {
-			cwd: RAIZ,
-			stdio: ['ignore', 'pipe', 'pipe'],
-			env: { ...process.env }
-		});
-		let salidaVite = '';
-		vite.stdout.on('data', (d) => (salidaVite += d));
-		vite.stderr.on('data', (d) => (salidaVite += d));
-		const finVite = () => {
-			try {
-				if (vite.pid) matarArbol(vite.pid);
-			} catch {
-				/* noop */
-			}
-		};
-		if (!(await esperarPuertoOcupado('5173', 120000))) {
-			finVite();
-			throw new Error('vite (5173) no subió en 2 min:\n' + salidaVite.slice(-1500));
-		}
+		// Vite regenera .svelte-kit en el arranque (sync). Borrarlo obliga a
+		// vite a recrearlo con su propia propiedad (crítico si el checkout lo
+		// creó elevado y el humo corre con un token distinto).
+		rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
 
-		// 3) Batch con el env del humo (runas no hereda entorno) + lanzamiento
-		//    degradado SOLO de la app: es el proceso que debe aceptar la bandera
-		//    CDP; compilación y dev server siguen elevados.
-		escribirBatch(BAT_APP, LOG_APP, EXE_APP, {
-			DINAMO_DATA_DIR: DATA_DIR,
-			WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
-		});
-		console.log(
-			'— lanzando la app (' +
-				(elevado ? 'degradada vía runas: solo el proceso de la app' : 'directa') +
-				', CDP ' +
-				PUERTO_CDP +
-				')…'
-		);
+		// ── Semilla ──
 		if (elevado) {
-			// runas retorna de inmediato: el batch queda vivo por su cuenta y el
-			// log de la app se captura en archivo (no por pipe).
-			spawn('runas', ['/trustlevel:0x20000', `cmd.exe /c "${BAT_APP}"`], {
-				cwd: RAIZ,
-				stdio: 'ignore'
-			});
+			// Degradada vía tarea programada: MISMO token que la app. Firebird
+			// embedded mapea la BD y sus locks en memoria compartida; si el
+			// seed corre con un token distinto al de la app (elevado vs
+			// restringido), el otro proceso no puede mapearlos → "Wrong file
+			// for memory mapping" (runs #286-#288).
+			console.log('— sembrando BD aislada (seed_ci en token de usuario normal vía tarea)…');
+			rmSync(LOG_HUMO, { force: true });
+			escribirBatchHumo('seed');
+			crearTarea();
+			correrTarea();
+			const code = await esperarMarcaSeed(300000);
+			if (code !== 0) throw new Error(`seed_ci falló (exit ${code}):\n` + colaLog(LOG_HUMO));
+			// Margen para que la instancia de la tarea termine de verdad antes
+			// de reusarla para la app (schtasks /Run sobre una instancia viva
+			// falla con "already running").
+			await sleep(3000);
 		} else {
-			spawn('cmd.exe', ['/d', '/s', '/c', BAT_APP], { cwd: RAIZ, stdio: 'ignore' });
+			console.log('— sembrando BD aislada (seed_ci)…');
+			const rs = spawnSync(EXE_SEED, [DATA_DIR], { stdio: 'inherit' });
+			if (rs.status !== 0) throw new Error('seed_ci falló');
+		}
+		if (existsSync(FDB)) console.log('   BD aislada:', FDB);
+
+		// ── Vite (elevado, hijo del orquestador) ──
+		const vite = await levantarVite();
+
+		const finApp = () => {
+			// La app puede sobrevivir a su árbol (tarea/runas sueltan el PID):
+			// matarla por nombre (target/debug solo existe en desarrollo).
+			spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
+		};
+
+		// ── App ──
+		if (elevado) {
+			console.log(
+				'— lanzando la app (token de usuario normal vía tarea, CDP ' + PUERTO_CDP + ')…'
+			);
+			rmSync(LOG_HUMO, { force: true }); // log limpio para la fase app
+			escribirBatchHumo('app');
+			correrTarea();
+		} else {
+			console.log('— lanzando la app (directa, CDP ' + PUERTO_CDP + ')…');
+			escribirBatchHumo('app');
+			spawn('cmd.exe', ['/d', '/s', '/c', BAT_HUMO], { cwd: RAIZ, stdio: 'ignore' });
 		}
 
 		try {
-			// CDP arriba = la ventana WebView2 de la app ya existe.
-			if (!(await esperarPuertoOcupado(PUERTO_CDP, 420000))) {
+			const razon = await esperarCdp(PUERTO_CDP, 420000);
+			if (razon === 'timeout') {
 				throw new Error(
 					`CDP ${PUERTO_CDP} no subió en 7 min (timeout):\n` +
-						`--- log de la app ---\n${colaLog(LOG_APP)}\n` +
-						`--- cola del dev server ---\n${salidaVite.slice(-1000)}`
+						`--- log del humo ---\n${colaLog(LOG_HUMO)}\n` +
+						`--- cola del dev server ---\n${vite.cola()}`
 				);
+			}
+			if (razon === 'app-murio') {
+				throw new Error('la app murió antes de abrir CDP:\n' + colaLog(LOG_HUMO));
 			}
 			await sleep(2000); // margen para que el target page esté servido
 			await correrSmoke();
@@ -337,8 +396,15 @@ async function main() {
 			await matarPuerto('5173');
 			await esperarPuertoLibre(PUERTO_CDP, 10000);
 			await esperarPuertoLibre('5173', 10000);
-			finVite();
+			vite.fin();
+			borrarTarea();
 		}
+	}
+
+	// Limpieza defensiva por imagen: seed_ci puede quedar colgado si la
+	// espera por marca venció, y el .fdb quedaría retenido.
+	if (esWin) {
+		spawnSync('taskkill', ['/IM', 'seed_ci.exe', '/F'], { stdio: 'ignore' });
 	}
 
 	if (MANTENER) {
@@ -348,24 +414,9 @@ async function main() {
 		if (!existsSync(DATA_DIR)) console.log('✓ limpieza: data_dir aislado eliminado');
 		else console.log('⚠ el data_dir quedó bloqueado (BORRAR A MANO): ' + DATA_DIR);
 	}
-	rmSync(BAT_APP, { force: true });
-	rmSync(LOG_APP, { force: true });
-	rmSync(BAT_SEED, { force: true });
-	rmSync(LOG_SEED, { force: true });
+	rmSync(BAT_HUMO, { force: true });
+	rmSync(LOG_HUMO, { force: true });
 	console.log('LISTO — smoke:dev OK');
-}
-
-/** Ejecuta smoke-test-app.mjs contra el CDP ya arriba. */
-function correrSmoke() {
-	return new Promise((resolveP, rejectP) => {
-		const r = spawnSync('node', [join(RAIZ, 'scripts', 'smoke-test-app.mjs')], {
-			cwd: RAIZ,
-			stdio: 'inherit',
-			env: { ...process.env, CDP_PORT: PUERTO_CDP }
-		});
-		if (r.status !== 0) rejectP(new Error(`smoke falló (exit ${r.status})`));
-		else resolveP();
-	});
 }
 
 main()

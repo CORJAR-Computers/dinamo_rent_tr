@@ -1003,21 +1003,23 @@ Mientras que `npm run smoke:app` corre contra la BD que haya (y omite la extensi
 renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
 `smoke:dev` garantiza el escenario completo de cobro de punta a punta:
 
-1. Crea `scripts/.tmp-smoke-data/` (ignorado por git) y lo siembra con
-   `cargo run --features dev --bin seed_ci -- <dir>` (en CI, degradado vía runas —
-   ver el motivo más abajo): admin/autos/clientes pero **sin rentas** → `/rentas`
-   arranca vacía y el smoke entra al branch de renta de prueba (5 días × $150.000,
-   sin IVA — la única base conocida que permite asertar totales).
-2. Compila la app (`cargo build`) y levanta vite; lanza el EXE ya compilado con
-   **`DINAMO_DATA_DIR`** apuntando al dir temporal (override solo-debug en `lib.rs` —
-   aísla BD/config del humo sin tocar la BD dev) y CDP en 9222.
+1. Compila app + seed_ci (`cargo build --features dev --bins`; el feature
+   `dev` es vacío y solo excluye esos binarios del bundle de release — sin él
+   `cargo build` no produce `seed_ci.exe`, corrida 287).
+2. Crea `scripts/.tmp-smoke-data/` (ignorado por git) y lo siembra con
+   `seed_ci <dir>` (en CI, en token de usuario normal vía tarea programada —
+   ver el motivo más abajo): admin/autos/clientes pero **sin rentas** →
+   `/rentas` arranca vacía y el smoke entra al branch de renta de prueba
+   (5 días × $150.000, sin IVA — la única base conocida que permite asertar
+   totales).
 3. Corre `smoke-test-app.mjs`: renta de prueba → pago → **extensión decimal** (+2 h ×
    $25.000,5 = $50.001 → total $800.001 SIN doble cobro; segunda extensión acumulativa
    $850.001) → orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier
    aviso del guardrail).
-4. Limpia: la app por nombre de imagen (`dinamo-rent.exe`, el runas suelta el PID del
-   orquestador), CDP y vite por puerto, y borrado del data_dir (`--mantener` lo
-   conserva para inspección; Windows puede retener el `.fdb` unos segundos).
+4. Limpia: la app y el seed por nombre de imagen (la tarea suelta el PID del
+   orquestador), CDP y vite por puerto, la tarea programada, y borrado del
+   data_dir (`--mantener` lo conserva para inspección; Windows puede retener
+   el `.fdb` unos segundos).
 
 Mantenimiento: si cambian labels/placeholders del modal de nueva renta o del modal de
 extensión, actualizar el branch de renta de prueba de `scripts/smoke-test-app.mjs`
@@ -1036,20 +1038,27 @@ en el entorno). Degradar TODO el árbol con `runas /trustlevel:0x20000` rompió 
 compilación (CI #273-#277): el token restringido pierde los ACE del grupo
 Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre `.svelte-kit`
 (el árbol fue creado por el proceso elevado del checkout; `write_if_changed` lo hace
-intermitente). Solución final: compilar y servir ELEVADOS, y degradar SOLO el proceso
-de la app (lo único que debe aceptar la bandera CDP) — vite corre elevado y borra
-`.svelte-kit` antes de arrancar para recrearlo con su propia propiedad. Detalle clave:
-runas NO hereda el entorno del orquestador, así que el env del humo (BD aislada +
-bandera CDP) se fija DENTRO del batch degradado, y el log de la app va a un archivo
-(`scripts/.tmp-smoke-app.log`) que el orquestador adjunta al diagnóstico de fallo.
-Corolario (run #286): el SEED también corre degradado. Firebird embedded mapea la BD
-y sus locks en memoria compartida y un mapeo creado por el proceso elevado no es
-accesible para el token restringido de la app degradada → "Wrong file for memory
-mapping" al conectar. Como runas no deja esperar al hijo por PID, el batch degradado
-dejaba una marca `EXIT:<code>` al final de su log y el orquestador la sondea (con
-30 s de gracia antes de morir, para que la marca sobreviva a corridas abortadas). El
-smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico (URL,
-cuerpo y consola de la página + captura).
+intermitente). Resumen de lo que NO funcionó degradando con `runas
+/trustlevel:0x20000`: degradar TODO el árbol rompió la compilación (CI #273-#277: el
+token restringido pierde los ACE de Administrators → `.cargo-build-lock` denegado y
+`EPERM` de vite sobre `.svelte-kit`); degradar solo la app no sirvió porque WebView2
+siguió sin abrir el CDP... hasta descubrir que el fallo real era otro: sembrar la BD
+ELEVADO y abrirla degradada produce "Wrong file for memory mapping" (run #286 —
+Firebird embedded mapea la BD y sus locks en memoria compartida que el otro token no
+puede abrir); y sembrar TAMBIÉN degradado vía runas falla IGUAL (runs #287-#288): el
+token RESTRINGIDO de Basic User no puede mapear las secciones de memoria compartida
+de Firebird (firebird.msg, tablas de locks), pase lo que pase antes. Solución final:
+compilar y servir ELEVADOS (vite borra `.svelte-kit` y lo recrea con su propia
+propiedad) y correr TODO lo que toca Firebird o WebView2 (seed_ci + app) en un token
+de usuario NORMAL vía tarea programada `schtasks /Create /RL LIMITED /IT` + batch
+que fija el env del humo (las tareas NO heredan el entorno del orquestador) y corre
+seed → app con logs en archivo para el diagnóstico. El token LIMITED/IT es el
+equivalente exacto a una sesión dev normal (donde todo esto funciona de punta a
+punta), sin las restricciones de Basic User. Como `schtasks /Run` retorna de
+inmediato, el batch deja marcas de corte de fase (`SEED-EXIT:<code>` / `APP-EXIT`)
+que el orquestador sondea, con 30 s de gracia antes de morir para que la marca
+sobreviva a corridas abortadas. El smoke además tolera el arranque frío: ventana de
+login de 2 min con diagnóstico (URL, cuerpo y consola de la página + captura).
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
