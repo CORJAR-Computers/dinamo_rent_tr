@@ -201,10 +201,11 @@ jobs:
           Remove-Item -Force "src-tauri\target\debug\.cargo-build-lock" -ErrorAction SilentlyContinue
           Remove-Item -Force "src-tauri\target\release\.cargo-build-lock" -ErrorAction SilentlyContinue
 
-      # Orquesta: seed_ci en dir temporal → cargo build + vite ELEVADOS y SOLO
-      # el exe de la app degradado vía runas (WebView2 ignora la bandera CDP en
-      # procesos elevados; el env del humo va dentro del batch degradado) →
-      # smoke completo → limpieza de procesos y BD temporal.
+      # Orquesta: cargo build + vite ELEVADOS; seed_ci y el exe de la app
+      # DEGRADADOS vía runas (WebView2 ignora la bandera CDP en procesos
+      # elevados, y Firebird exige que seed y app compartan el mismo token;
+      # el env del humo va dentro del batch degradado) → smoke completo →
+      # limpieza de procesos y BD temporal.
       - name: Smoke E2E del flujo de cobro (smoke:dev)
         run: npm run smoke:dev
 

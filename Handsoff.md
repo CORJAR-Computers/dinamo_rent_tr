@@ -1004,9 +1004,10 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
 `smoke:dev` garantiza el escenario completo de cobro de punta a punta:
 
 1. Crea `scripts/.tmp-smoke-data/` (ignorado por git) y lo siembra con
-   `cargo run --features dev --bin seed_ci -- <dir>`: admin/autos/clientes pero **sin
-   rentas** → `/rentas` arranca vacía y el smoke entra al branch de renta de prueba
-   (5 días × $150.000, sin IVA — la única base conocida que permite asertar totales).
+   `cargo run --features dev --bin seed_ci -- <dir>` (en CI, degradado vía runas —
+   ver el motivo más abajo): admin/autos/clientes pero **sin rentas** → `/rentas`
+   arranca vacía y el smoke entra al branch de renta de prueba (5 días × $150.000,
+   sin IVA — la única base conocida que permite asertar totales).
 2. Compila la app (`cargo build`) y levanta vite; lanza el EXE ya compilado con
    **`DINAMO_DATA_DIR`** apuntando al dir temporal (override solo-debug en `lib.rs` —
    aísla BD/config del humo sin tocar la BD dev) y CDP en 9222.
@@ -1040,7 +1041,13 @@ de la app (lo único que debe aceptar la bandera CDP) — vite corre elevado y b
 `.svelte-kit` antes de arrancar para recrearlo con su propia propiedad. Detalle clave:
 runas NO hereda el entorno del orquestador, así que el env del humo (BD aislada +
 bandera CDP) se fija DENTRO del batch degradado, y el log de la app va a un archivo
-(`scripts/.tmp-smoke-app.log`) que el orquestador adjunta al diagnóstico de fallo. El
+(`scripts/.tmp-smoke-app.log`) que el orquestador adjunta al diagnóstico de fallo.
+Corolario (run #286): el SEED también corre degradado. Firebird embedded mapea la BD
+y sus locks en memoria compartida y un mapeo creado por el proceso elevado no es
+accesible para el token restringido de la app degradada → "Wrong file for memory
+mapping" al conectar. Como runas no deja esperar al hijo por PID, el batch degradado
+dejaba una marca `EXIT:<code>` al final de su log y el orquestador la sondea (con
+30 s de gracia antes de morir, para que la marca sobreviva a corridas abortadas). El
 smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico (URL,
 cuerpo y consola de la página + captura).
 
