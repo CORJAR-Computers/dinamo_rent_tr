@@ -16,8 +16,7 @@
 //      DINAMO_DATA_DIR apuntando al dir temporal y CDP en 9222
 //      (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS).
 //
-//      ⚠️ TOKENS Y RUTAS DE WINDOWS EN CI (descubierto a fuerza de
-//      corridas):
+//      ⚠️ TOKENS DE WINDOWS EN CI (descubierto a fuerza de corridas):
 //      a) En un proceso ELEVADO, WebView2 IGNORA --remote-debugging-port
 //         (probado con UAC: el mismo exe sin elevar abre 9222 en 1 s y
 //         elevado nunca lo abre; CI #285). Los runners de GitHub van más
@@ -25,31 +24,26 @@
 //         heredar — ni schtasks /RL LIMITED ni explorer.exe producen uno
 //         (runs #289-#290: whoami mostró High Mandatory Level incluso bajo
 //         la tarea / el shell).
-//      b) El workspace de los runners vive en un VHD montado en D:\a: la
-//         MISMA ruta física se resuelve con dos formas (D:\a\... y
-//         \Device\HarddiskVolume6\a\...) y Firebird compara las rutas de
-//         sus mapeos como STRINGS → "Wrong file for memory mapping:
-//         expected ... already mapped ..." (runs #286, #288, #291-#293;
-//         con locks únicos por corrida también falló #293, porque el
-//         propio seed mapea fb50_trace con ambas formas dentro del VHD).
-//         En un volumen REAL ambas formas coinciden: por eso el humo
-//         siempre pasó en dev.
-//      c) SOLUCIÓN: TODO el humo (seed_ci + app) vía `runas
-//         /trustlevel:0x20000` — MISMO token de integridad media con SIDs
-//         restringidos para ambos (el mapeo de locks de Firebird embedded
-//         no sobrevive a tokens distintos en ninguna dirección: #286
-//         sembró elevado y la app degradada no pudo abrir la BD; #294 al
-//         revés) — y TODO lo que Firebird mapea FUERA del VHD de D:\a, en
-//         el temp de C: (volumen real: una sola forma de ruta; en el VHD
-//         la misma ruta se resuelve como D:\a\... y
-//         \Device\HarddiskVolume6\a\... y Firebird, que compara strings,
-//         chocaba consigo mismo incluso con locks únicos, #293). Everyone
-//         concedido (icacls *S-1-1-0:(OI)(CI)F) en resources/firebird y
-//         la raíz del repo: los abre la app restringida.
+//      b) La alternativa es `runas /trustlevel:0x20000`, que crea un token
+//         de INTEGRIDAD MEDIA con SIDs RESTRINGIDOS (Basic User). WebView2
+//         le honra la bandera CDP (integridad media), pero su check de
+//         acceso a secciones de memoria mapeadas exige que la DACL del
+//         archivo conceda algo a los SIDs restringidos: los archivos del
+//         checkout (creados elevado) solo conceden a
+//         Administrators/SYSTEM/Usuarios autentificados → Firebird muere
+//         con "Wrong file for memory mapping" al mapear firebird.msg o la
+//         BD (runs #286 y #288).
+//      c) SOLUCIÓN: endurecer las ACLs de lo que Firebird mapea
+//         (`icacls /grant *S-1-1-0:(OI)(CI)F` — Todos/Everyone — sobre el
+//         data_dir y resources/firebird, con herencia para los archivos
+//         que seed/app creen después). Con Everyone en la DACL, el
+//         intersect con CUALQUIER conjunto de SIDs restringidos es no
+//         vacío y el mapeo procede. En Windows el humo corre SIEMPRE vía
+//         runas (local y CI comparten el mismo camino de código).
 //      d) runas retorna de inmediato: no se puede esperar al hijo por PID;
-//         el batch deja marcas de fase (APP-EXIT) al final de su log y el
-//         orquestador las sondea. Cada fase registra además una huella
-//         compacta de `whoami /groups` para diagnosticar el token real.
+//         el batch deja marcas de fase (SEED-EXIT:<code> / APP-EXIT) al
+//         final de su log y el orquestador las sondea. Cada fase registra
+//         además `whoami /groups` para diagnosticar el token real.
 //
 //   4. Corre `smoke-test-app.mjs`: login → renta de prueba (5 días ×
 //      $150.000, sin IVA) → pago → extensión decimal (+2 h × $25.000,5 =
@@ -71,38 +65,34 @@ import {
 	rmSync,
 	writeFileSync
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const MANTENER = process.argv.includes('--mantener');
 const RAIZ = resolve(import.meta.dirname, '..');
+const DATA_DIR = join(RAIZ, 'scripts', '.tmp-smoke-data');
+const FDB = join(DATA_DIR, 'dinamo_rent_v3.fdb');
 const PUERTO_CDP = process.env.CDP_PORT || '9222';
 const EXE_APP = join(RAIZ, 'src-tauri', 'target', 'debug', 'dinamo-rent.exe');
 const EXE_SEED = join(RAIZ, 'src-tauri', 'target', 'debug', 'seed_ci.exe');
 const BAT_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.cmd');
 const LOG_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.log');
 const FIREBIRD_RES = join(RAIZ, 'src-tauri', 'resources', 'firebird');
+// Firebird mapea su tabla de locks (respaldada en ARCHIVO) en el directorio
+// de locks; fuera del data_dir concedido fallaría el mapeo en CI (run
+// #291). FIREBIRD_LOCK/FIREBIRD_TMP la reubican dentro del data_dir.
+// ÚNICO POR INVOCACIÓN (runs #291-#292): Firebird en Windows compara las
+// rutas de los mapeos como STRINGS y una misma ruta física puede aparecer
+// como `D:\a\...` (forma de unidad) o `\Device\HarddiskVolume6\a\...`
+// (forma de kernel) — con un directorio FIJO, un fb50_trace ya mapeado por
+// otro proceso con la otra forma produce "Wrong file for memory mapping:
+// expected ... already mapped ...". Con directorio propio por corrida, el
+// archivo de locks es físicamente nuevo y no existe mapeo previo posible.
+const FB_RUN_ID = `${Date.now()}_${process.pid}`;
+const FB_LOCK_DIR = join(DATA_DIR, `fblock_${FB_RUN_ID}`);
+const FB_TMP_DIR = join(DATA_DIR, `fbtmp_${FB_RUN_ID}`);
+const FIREBIRD_LOG = join(FIREBIRD_RES, 'firebird.log');
 // SID de Todos/Everyone (S-1-1-0): independiente del idioma del SO.
 const GRANT_TODOS = '*S-1-1-0:(OI)(CI)F';
-
-// ── Ubicación del humo FUERA del volumen del checkout ──
-// En los runners de GitHub el workspace vive en un VHD montado en D:\a: la
-// MISMA ruta física se resuelve con dos formas distintas (D:\a\... y
-// \Device\HarddiskVolume6\a\...) y Firebird compara las rutas de sus
-// mapeos como STRINGS → "Wrong file for memory mapping: expected ...
-// already mapped ..." (runs #286, #288, #291-#293; el error salió incluso
-// con locks únicos por corrida, porque el propio seed mapea fb50_trace con
-// ambas formas dentro del VHD). En un volumen REAL (el disco local) ambas
-// formas coinciden y todo funciona — por eso el humo siempre pasó en dev.
-// Solución: data_dir (BD + config + locks + temp de Firebird) en el
-// temporal del usuario (C:), único por corrida para que además ningún
-// mapeo de una corrida anterior choque con el actual.
-const FB_RUN_ID = `${Date.now()}_${process.pid}`;
-const DATA_DIR = join(tmpdir(), `dinamo-smoke-${FB_RUN_ID}`);
-const FDB = join(DATA_DIR, 'dinamo_rent_v3.fdb');
-const FB_LOCK_DIR = join(DATA_DIR, 'fblock');
-const FB_TMP_DIR = join(DATA_DIR, 'fbtmp');
-const FIREBIRD_LOG = join(FIREBIRD_RES, 'firebird.log');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -181,36 +171,36 @@ function colaLog(ruta, n = 1500) {
 	}
 }
 
-/** Borra los data_dirs de corridas anteriores en el temp (si un proceso
- *  fue matado a lo bruto pueden quedar residuos con mapeos
- *  conflictivos). */
+/** Borra los directorios de locks/temp de corridas anteriores (si un
+ *  proceso fue matado a lo bruto pueden quedar residuos con mapeos
+ *  conflictivos). Se llama antes de endurecerAcls, con el data_dir ya
+ *  creado. */
 function limpiarLocksStale() {
-	try {
-		for (const entry of readdirSync(tmpdir())) {
-			if (entry.startsWith('dinamo-smoke-')) {
-				try {
-					rmSync(join(tmpdir(), entry), { recursive: true, force: true });
-				} catch {
-					/* noop: el run id único de esta corrida evita el conflicto. */
-				}
+	if (!existsSync(DATA_DIR)) return;
+	for (const entry of readdirSync(DATA_DIR)) {
+		if (entry.startsWith('fblock_') || entry.startsWith('fbtmp_')) {
+			try {
+				rmSync(join(DATA_DIR, entry), { recursive: true, force: true });
+			} catch {
+				/* noop: si quedó mapeado por un zombie, el run id nuevo evita el
+				   conflicto de todos modos. */
 			}
 		}
-	} catch {
-		/* noop */
 	}
 }
 
 /** Concede Full Control a Everyone (con herencia a lo nuevo) sobre las
- *  rutas que la APP degradada debe abrir: los recursos embebidos de
- *  Firebird (firebird.msg, ICU, tzdata y el firebird.log) y la raíz del
- *  repo (CWD del humo, .tmp-print). El data_dir NO se toca: vive en el
- *  temp de C: y lo crea el seed con DACLs por defecto (Usuarios
- *  autentificados ya tienen acceso). Best-effort: si icacls falla en
- *  algún archivo puntual se continúa (el fallo real aparecería al
- *  abrirlo). */
+ *  rutas que Firebird mapea en memoria: el data_dir (con sus subdirs de
+ *  locks y temp), los recursos embebidos (firebird.msg, ICU, tzdata y el
+ *  firebird.log que pueda crearse allí) y la raíz del repo (CWD del humo).
+ *  Sin esto, el token restringido del runas no puede mapear archivos
+ *  creados por el checkout elevado → "Wrong file for memory mapping"
+ *  (runs #286/#288). Best-effort: si icacls falla en algún archivo
+ *  puntual se continúa (el fallo real aparecería al mapear). */
 function endurecerAcls() {
-	console.log('— concediendo Full Control a Everyone en recursos Firebird y raíz del repo…');
-	for (const ruta of [FIREBIRD_RES, RAIZ]) {
+	console.log('— concediendo Full Control a Everyone en data_dir, recursos Firebird y raíz…');
+	for (const ruta of [DATA_DIR, FIREBIRD_RES, RAIZ]) {
+		if (!existsSync(ruta)) continue;
 		const r = spawnSync(
 			'icacls',
 			[ruta, '/grant', GRANT_TODOS, '/t', '/c', '/q'],
@@ -222,6 +212,24 @@ function endurecerAcls() {
 	}
 }
 
+/** Lanza seed_ci elevado con el token del orquestador: no necesita CDP
+ *  (solo crea el .fdb y aplica migraciones). La app luego lo abre con su
+ *  propio directorio de locks único. */
+function lanzarSeedElevado() {
+	console.log('— sembrando BD aislada (seed_ci elevado)…');
+	const rs = spawnSync(EXE_SEED, [DATA_DIR], {
+		cwd: RAIZ,
+		stdio: 'inherit',
+		env: {
+			...process.env,
+			DINAMO_DATA_DIR: DATA_DIR
+		}
+	});
+	if (rs.status !== 0) throw new Error(`seed_ci falló (exit ${rs.status})`);
+	// Re-endurecer ACLs tras la creación de dinamo_rent_v3.fdb para que la app degradada tenga Full Control
+	endurecerAcls();
+}
+
 /** Escribe el batch del humo para la fase dada. Fija el env del humo (el
  *  runas NO hereda el entorno del orquestador), registra el token real de
  *  la fase (whoami /groups), redirige todo al log y deja marcas de corte
@@ -231,9 +239,10 @@ function escribirBatchHumo(fase) {
 		'@echo off',
 		`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
 		`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
-		// Locks/temp/mensajes de Firebird dentro del data_dir (temp de C:,
-		// volumen real): la tabla de locks es un mapeo respaldado en ARCHIVO
-		// y su ubicación por defecto va bajo el root de Firebird.
+		// Locks/temp/mensajes de Firebird dentro del árbol con Everyone en la
+		// DACL: la tabla de locks es un mapeo respaldado en ARCHIVO y su
+		// ubicación por defecto (bajo el root de Firebird) no está concedida
+		// a los SIDs restringidos del runas en CI (run #291).
 		`set "FIREBIRD_LOCK=${FB_LOCK_DIR}"`,
 		`set "FIREBIRD_TMP=${FB_TMP_DIR}"`,
 		`set "FIREBIRD_MSG=${join(FIREBIRD_RES, 'firebird.msg')}"`,
@@ -394,32 +403,20 @@ async function main() {
 		// creó con otro token).
 		rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
 
-		// Corridas anteriores abortadas fuera del temp (mapeos conflictivos).
+		// El data_dir debe existir ANTES del icacls para que la ACE con
+		// herencia cubra todo lo que seed/app creen dentro (incluidos los
+		// fblock_*/fbtmp_* únicos por corrida que crea el batch).
+		mkdirSync(DATA_DIR, { recursive: true });
 		limpiarLocksStale();
-		// Recursos Firebird y raíz del repo con Everyone: los abre la app
-		// degradada (el seed elevado no lo necesita).
 		endurecerAcls();
 
-		// ── Semilla (vía runas: MISMO token restringido que la app — el
-		// mapeo de locks de Firebird embedded no sobrevive a tokens distintos
-		// en ninguna dirección, runs #286 y #294) sobre el data_dir del temp
-		// de C: — volumen REAL, fuera del VHD de D:\a donde la misma ruta se
-		// resuelve con dos formas (unidad vs kernel) y Firebird, que compara
-		// strings, chocaba consigo mismo (#291-#293, incluso con locks
-		// únicos). El run id único por corrida evita además choques con
-		// mapeos de corridas abortadas.
-		console.log('— sembrando BD aislada (seed_ci vía runas, data_dir en temp de C:)…');
-		mkdirSync(DATA_DIR, { recursive: true });
-		rmSync(LOG_HUMO, { force: true });
-		escribirBatchHumo('seed');
-		lanzarDegradado();
-		const code = await esperarMarcaSeed(300000);
-		if (code !== 0) {
-			throw new Error(
-				`seed_ci falló (exit ${code}):\n${colaLog(LOG_HUMO)}\n` +
-					`\n--- firebird.log ---\n${colaLog(FIREBIRD_LOG, 2000)}`
-			);
-		}
+		// ── Semilla ELEVADA (no vía runas: el token restringido de runas
+		// causa que Windows resuelva las rutas de memory-mapped files de
+		// forma inconsistente, y Firebird falla con "Wrong file for memory
+		// mapping". seed_ci no necesita CDP — solo crea un .fdb — así que
+		// corre con el token del orquestador. La APP después abre la BD ya
+		// creada con su propio directorio de locks único.) ──
+		lanzarSeedElevado();
 		if (!existsSync(FDB)) throw new Error('seed_ci no produjo la BD: ' + FDB);
 		console.log('   BD aislada:', FDB);
 
@@ -433,9 +430,7 @@ async function main() {
 		};
 
 		// ── App (degradada: WebView2 solo honra la bandera CDP con
-		// integridad media; el token del runas la tiene). Abre la BD creada
-		// por el seed elevado SOLO tras los grants de Everyone (#286 falló
-		// justo porque sembraba elevado sin conceder nada). ──
+		// integridad media; el token del runas la tiene) ──
 		console.log(
 			'— lanzando la app (' +
 				(elevado ? 'orquestador elevado' : 'orquestador sin elevar') +

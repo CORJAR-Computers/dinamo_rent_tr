@@ -1006,19 +1006,25 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
 1. Compila app + seed_ci (`cargo build --features dev --bins`; el feature
    `dev` es vacío y solo excluye esos binarios del bundle de release — sin él
    `cargo build` no produce `seed_ci.exe`, corrida 287).
-2. Crea un data_dir temporal único (`%TEMP%\dinamo-smoke-<ts>_<pid>`, en
-   el temp de C: — volumen real, fuera del VHD del workspace) y lo siembra
-   con `seed_ci <dir>` (vía runas: el MISMO token que la app — ver el
-   motivo más abajo): admin/autos/clientes pero **sin rentas** → `/rentas`
-   arranca vacía y el smoke entra al branch de renta de prueba (5 días ×
-   $150.000, sin IVA — la única base conocida que permite asertar
-   totales).
-3. Corre `smoke-test-app.mjs`: renta de prueba → pago → **extensión decimal** (+2 h ×
-   $25.000,5 = $50.001 → total $800.001 SIN doble cobro; segunda extensión acumulativa
-   $850.001) → orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier
-   aviso del guardrail).
+   `cargo build` no produce `seed_ci.exe`, corrida 287).
+2. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por git)
+   y lo siembra con `seed_ci <dir>` de forma ELEVADA (con el token del
+   orquestador: no necesita CDP y evita la discrepancia de nombres de ruta de
+   memoria mapeada del token restringido de runas). Tras la creación del .fdb,
+   se concede Full Control a Everyone (`*S-1-1-0:(OI)(CI)F`) sobre `DATA_DIR`,
+   los recursos de Firebird y la raíz del repo. La BD arranca con
+   admin/autos/clientes pero **sin rentas** → `/rentas` arranca vacía y el
+   smoke entra al branch de renta de prueba (5 días × $150.000, sin IVA — la
+   única base conocida que permite asertar totales).
+3. Corre `smoke-test-app.mjs`: la app se lanza vía `runas /trustlevel:0x20000`
+   (integridad media para que WebView2 honre la bandera CDP 9222) con su
+   propio directorio de locks único por corrida (`FIREBIRD_LOCK=fblock_<ts>_<pid>`).
+   Flujo: renta de prueba → pago → **extensión decimal** (+2 h × $25.000,5 = $50.001
+   → total $800.001 SIN doble cobro; segunda extensión acumulativa $850.001) →
+   orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier aviso
+   del guardrail).
 4. Limpia: la app por nombre de imagen (el runas suelta el PID del
-   orquestador), CDP y vite por puerto, y borrado del data_dir del temp
+   orquestador), CDP y vite por puerto, y borrado del data_dir
    (`--mantener` lo conserva para inspección; Windows puede retener el
    `.fdb` unos segundos).
 
@@ -1039,27 +1045,17 @@ en el entorno). Degradar TODO el árbol con `runas /trustlevel:0x20000` rompió 
 compilación (CI #273-#277): el token restringido pierde los ACE del grupo
 Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre `.svelte-kit`
 (el árbol fue creado por el proceso elevado del checkout; `write_if_changed` lo hace
-intermitente). Historia de la degradación: degradar TODO el árbol con `runas
-/trustlevel:0x20000` rompió la compilación (CI #273-#277: el token restringido
-pierde los ACE de Administrators → `.cargo-build-lock` denegado y `EPERM` de vite
-sobre `.svelte-kit`); ni schtasks /RL LIMITED /IT ni explorer.exe sirven en runners
-(runs #289-#290: GitHub deshabilita UAC y NO existe token medio que heredar —
-whoami mostró High Mandatory Level incluso bajo la tarea y el shell). Y la serie de
-"Wrong file for memory mapping" de Firebird (runs #286, #288, #291-#293) no era de
-ACLs: el workspace de los runners vive en un VHD montado en D:\a, la MISMA ruta
-física se resuelve con dos formas (D:\a\... y \Device\HarddiskVolume6\a\...) y
-Firebird compara las rutas de sus mapeos como STRINGS — con el seed degradado el
-propio fb50_trace queda mapeado con ambas formas dentro del VHD (falló incluso con
-locks únicos por corrida, run #293). En un volumen REAL ambas formas coinciden:por eso el humo siempre pasó en dev. SOLUCIÓN: TODO el humo (seed_ci + app) vía
-`runas /trustlevel:0x20000` — MISMO token de integridad media con SIDs restringidos
-(el mapeo de locks no sobrevive a tokens distintos en ninguna dirección: #286 sembró
-elevado y la app degradada no pudo abrir la BD; #294 al revés, seed elevado en temp
-de C: OK pero la app degradada tampoco) — y TODO lo que Firebird mapea FUERA del VHD,
-en el temp de C: (volumen real, una sola forma de ruta), con FIREBIRD_LOCK y
-FIREBIRD_TMP dentro del data_dir del temp. Everyone concedido
-(icacls *S-1-1-0:(OI)(CI)F) en resources/firebird y la raíz del repo: los abre la
-app restringida. El
-batch degradado fija el env del humo (runas NO hereda entorno), registra una huella
+intermitente). SOLUCIÓN IMPLEMENTADA (arquitectura de dos fases y tokens diferenciados):
+- **Fase Seed**: `seed_ci` corre elevado con el token del orquestador (sin runas). Al no
+  necesitar CDP, genera el .fdb y aplica las 28 migraciones sin interferencia del kernel
+  de memoria mapeada de LUA.
+- **Fase ACLs**: Inmediatamente tras crear el .fdb, se re-endurecen las ACLs con
+  `icacls /grant *S-1-1-0:(OI)(CI)F` en el data_dir y recursos de Firebird para que
+  cualquier usuario (incluido el token restringido) tenga Full Control.
+- **Fase App**: La app corre degradada vía `runas /trustlevel:0x20000` (necesario para
+  que WebView2 active CDP 9222), usando directorios de locks y temporales únicos por
+  invocación (`fblock_<ts>_<pid>`), evitando choques de mapeo previo con Firebird.
+El batch degradado fija el env del humo (runas NO hereda entorno), registra una huella
 compacta de `whoami /groups` y deja la marca `APP-EXIT` que el orquestador sondea
 porque runas retorna de inmediato; los logs van a archivo para el diagnóstico. El
 smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico
