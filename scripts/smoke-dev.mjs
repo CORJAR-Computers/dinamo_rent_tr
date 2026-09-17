@@ -4,7 +4,9 @@
 // A diferencia de `smoke:app` (que corre contra la BD que haya), este
 // orquestador garantiza el escenario completo del flujo de cobro:
 //
-//   1. Compila app + seed_ci (`cargo build --features dev --bins`).
+//   1. Compila app + seed_ci (`cargo build --features dev --bins`; el
+//      feature `dev` es vacío y solo excluye esos binarios del bundle de
+//      release — sin él `cargo build` no produce seed_ci.exe, corrida 287).
 //   2. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por
 //      git) y lo siembra con `seed_ci <dir>`: config.ini + BD con
 //      admin/autos/clientes, pero SIN rentas → /rentas arranca vacía y el
@@ -14,49 +16,48 @@
 //      DINAMO_DATA_DIR apuntando al dir temporal y CDP en 9222
 //      (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS).
 //
-//      ⚠️ EJECUCIÓN DESDE UN PROCESO ELEVADO (runners de CI): tres
-//      restricciones descubiertas a fuerza de corridas:
-//      a) WebView2 IGNORA --remote-debugging-port en un proceso ELEVADO
+//      ⚠️ TOKENS DE WINDOWS EN CI (descubierto a fuerza de corridas):
+//      a) En un proceso ELEVADO, WebView2 IGNORA --remote-debugging-port
 //         (probado con UAC: el mismo exe sin elevar abre 9222 en 1 s y
-//         elevado nunca lo abre, con y sin la variable en el entorno;
-//         CI #285). Y degradar la compilación/servido con runas
-//         /trustlevel:0x20000 rompe TODO (CI #273-#277): el token
-//         restringido pierde los ACE de Administrators →
-//         .cargo-build-lock denegado y EPERM de vite sobre .svelte-kit.
-//      b) Firebird embedded exige que TODOS los procesos que tocan la BD
-//         compartan el MISMO token: sembrar elevado y abrir la app
-//         degradada falla ("Wrong file for memory mapping", run #286), y
-//         sembrar degradado vía runas falla IGUAL (runs #287-#288): el
-//         token RESTRINGIDO de Basic User no puede mapear las secciones
-//         de memoria compartida de Firebird (firebird.msg, tablas de
-//         locks), pase lo que pase antes.
-//      c) runas y `schtasks /Run` retornan de inmediato: no se puede
-//         esperar al hijo por PID; el batch deja marcas de fase
-//         (SEED-EXIT:<code> / APP-EXIT) al final de su log y el
-//         orquestador las sondea.
-//      SOLUCIÓN: compilar y servir ELEVADOS (vite borra .svelte-kit y lo
-//      recrea con su propia propiedad), y correr TODO lo que toca Firebird
-//      o WebView2 (seed_ci + app) en un token de usuario NORMAL vía tarea
-//      normal: `explorer.exe <batch>` + un batch que fija el env del humo
-//      (explorer NO hereda el entorno del orquestador) y corre seed → app
-//      con logs en archivo para el diagnóstico. El token del shell es el
-//      equivalente exacto a una sesión dev normal (donde todo esto
-//      funciona de punta a punta), sin las restricciones de Basic User que
-//      runas impone a Firebird ni la sesión aparte de schtasks.
+//         elevado nunca lo abre; CI #285). Los runners de GitHub van más
+//         lejos: UAC DESHABILITADO, así que NO existe token medio que
+//         heredar — ni schtasks /RL LIMITED ni explorer.exe producen uno
+//         (runs #289-#290: whoami mostró High Mandatory Level incluso bajo
+//         la tarea / el shell).
+//      b) La alternativa es `runas /trustlevel:0x20000`, que crea un token
+//         de INTEGRIDAD MEDIA con SIDs RESTRINGIDOS (Basic User). WebView2
+//         le honra la bandera CDP (integridad media), pero su check de
+//         acceso a secciones de memoria mapeadas exige que la DACL del
+//         archivo conceda algo a los SIDs restringidos: los archivos del
+//         checkout (creados elevado) solo conceden a
+//         Administrators/SYSTEM/Usuarios autentificados → Firebird muere
+//         con "Wrong file for memory mapping" al mapear firebird.msg o la
+//         BD (runs #286 y #288).
+//      c) SOLUCIÓN: endurecer las ACLs de lo que Firebird mapea
+//         (`icacls /grant *S-1-1-0:(OI)(CI)F` — Todos/Everyone — sobre el
+//         data_dir y resources/firebird, con herencia para los archivos
+//         que seed/app creen después). Con Everyone en la DACL, el
+//         intersect con CUALQUIER conjunto de SIDs restringidos es no
+//         vacío y el mapeo procede. En Windows el humo corre SIEMPRE vía
+//         runas (local y CI comparten el mismo camino de código).
+//      d) runas retorna de inmediato: no se puede esperar al hijo por PID;
+//         el batch deja marcas de fase (SEED-EXIT:<code> / APP-EXIT) al
+//         final de su log y el orquestador las sondea. Cada fase registra
+//         además `whoami /groups` para diagnosticar el token real.
 //
 //   4. Corre `smoke-test-app.mjs`: login → renta de prueba (5 días ×
 //      $150.000, sin IVA) → pago → extensión decimal (+2 h × $25.000,5 =
 //      $50.001 → total $800.001) → segunda extensión acumulativa (+1 día ×
 //      $50.000 → total $850.001) → orden → contrato → gate anti-[devGuard].
-//   5. Limpia procesos (vite/app/seed por árbol e imagen, CDP por puerto)
-//      y reporta si quedaron residuos del data_dir (Windows puede sostener
-//      el .fdb unos segundos tras matar el proceso).
+//   5. Limpia procesos (vite por árbol, app/seed por imagen, CDP por
+//      puerto) y reporta si quedaron residuos del data_dir (Windows puede
+//      sostener el .fdb unos segundos tras matar el proceso).
 //
 // Uso: npm run smoke:dev
 //      node scripts/smoke-dev.mjs [--mantener]  (conserva el data_dir para inspección)
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const MANTENER = process.argv.includes('--mantener');
@@ -68,11 +69,14 @@ const EXE_APP = join(RAIZ, 'src-tauri', 'target', 'debug', 'dinamo-rent.exe');
 const EXE_SEED = join(RAIZ, 'src-tauri', 'target', 'debug', 'seed_ci.exe');
 const BAT_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.cmd');
 const LOG_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.log');
+const FIREBIRD_RES = join(RAIZ, 'src-tauri', 'resources', 'firebird');
+// SID de Todos/Everyone (S-1-1-0): independiente del idioma del SO.
+const GRANT_TODOS = '*S-1-1-0:(OI)(CI)F';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** true si el proceso actual corre con integridad alta (elevado). Los runners
- *  de CI de Windows ejecutan elevados y ahí WebView2 ignora --remote-debugging-port. */
+/** true si el proceso actual corre con integridad alta (elevado). Solo
+ *  informativo: en Windows el humo corre SIEMPRE vía runas. */
 function esElevado() {
 	if (process.platform !== 'win32') return false;
 	const r = spawnSync('whoami', ['/groups'], { encoding: 'utf8' });
@@ -93,7 +97,7 @@ function puertoEscuchando(puerto) {
 }
 
 /** Mata los procesos que escuchan en el puerto dado (limpieza defensiva:
- *  la app lanzada fuera del orquestador escapa a su árbol de PID). */
+ *  la app lanzada vía runas escapa al PID del orquestador). */
 async function matarPuerto(puerto) {
 	const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
 	const pids = new Set();
@@ -146,19 +150,38 @@ function colaLog(ruta, n = 1500) {
 	}
 }
 
-/** Escribe el batch del humo para la fase dada. Fija el env del humo (las
- *  tareas programadas NO heredan el entorno del orquestador), redirige todo
- *  al log y deja marcas de corte de fase (SEED-EXIT / APP-EXIT) que el
- *  orquestador sondea, porque runas, schtasks /Run y el lanzamiento vía
- *  explorer retornan de inmediato. whoami registra el token real de la
- *  fase (integridad + sesión) para el diagnóstico. */
+/** Concede Full Control a Everyone (con herencia a lo nuevo) sobre las
+ *  rutas que Firebird mapea en memoria: el data_dir y los recursos
+ *  embebidos (firebird.msg, ICU, tzdata, y el firebird.log que pueda
+ *  crearse allí). Sin esto, el token restringido del runas no puede mapear
+ *  archivos creados por el checkout elevado → "Wrong file for memory
+ *  mapping" (runs #286/#288). Best-effort: si icacls falla en algún
+ *  archivo puntual se continúa (el fallo real aparecería al mapear). */
+function endurecerAcls() {
+	console.log('— concediendo Full Control a Everyone en data_dir y recursos Firebird…');
+	for (const ruta of [DATA_DIR, FIREBIRD_RES]) {
+		const r = spawnSync(
+			'icacls',
+			[ruta, '/grant', GRANT_TODOS, '/t', '/c', '/q'],
+			{ encoding: 'utf8' }
+		);
+		if (r.status !== 0) {
+			console.warn('⚠ icacls terminó con errores en ' + ruta + ':\n' + (r.stderr || r.stdout || ''));
+		}
+	}
+}
+
+/** Escribe el batch del humo para la fase dada. Fija el env del humo (el
+ *  runas NO hereda el entorno del orquestador), registra el token real de
+ *  la fase (whoami /groups), redirige todo al log y deja marcas de corte
+ *  de fase (SEED-EXIT / APP-EXIT) que el orquestador sondea. */
 function escribirBatchHumo(fase) {
 	const lineas = [
 		'@echo off',
 		`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
 		`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
 		`cd /d "${RAIZ}"`,
-		`echo TOKEN-DE-LA-FASE >> "${LOG_HUMO}" 2>&1`,
+		`echo === TOKEN-DE-LA-FASE === >> "${LOG_HUMO}" 2>&1`,
 		`whoami /groups >> "${LOG_HUMO}" 2>&1`
 	];
 	if (fase === 'seed') {
@@ -173,21 +196,16 @@ function escribirBatchHumo(fase) {
 	writeFileSync(BAT_HUMO, lineas.join('\r\n'));
 }
 
-/** Lanza el batch del humo en token de usuario NORMAL delegando en
- *  explorer.exe: el shell de la sesión interactiva corre con el token medio
- *  del usuario y ShellExecute hace que el hijo herede ESE token — ni
- *  elevado ni restringido (corridas #273-#289: runas/Basic User no puede
- *  mapear la memoria compartida de Firebird, y bajo schtasks /RL LIMITED
- *  /IT el WebView2 de la app no abrió CDP pese a que el seed funcionó).
- *  explorer retorna de inmediato: el orquestador espera por las marcas del
- *  log, no por PID. */
-function lanzarHumo() {
-	const r = spawn('cmd.exe', ['/d', '/s', '/c', `start "" explorer.exe "${BAT_HUMO}"`], {
+/** Lanza el batch vía runas degradado (token de integridad media con SIDs
+ *  restringidos: WebView2 honra la bandera CDP y Firebird puede mapear
+ *  gracias al grant de Everyone). runas retorna de inmediato: el
+ *  orquestador espera por las marcas del log, no por PID. */
+function lanzarDegradado() {
+	const r = spawn('runas', ['/trustlevel:0x20000', `cmd.exe /c "${BAT_HUMO}"`], {
 		cwd: RAIZ,
-		stdio: 'ignore',
-		windowsVerbatimArguments: true
+		stdio: 'ignore'
 	});
-	if (!r.pid) throw new Error('no se pudo lanzar explorer.exe');
+	if (!r.pid) throw new Error('no se pudo lanzar runas');
 }
 
 /** Espera la marca SEED-EXIT del batch degradado (polling 1 s). */
@@ -203,8 +221,9 @@ async function esperarMarcaSeed(ms) {
 }
 
 /** Levanta vite como hijo del orquestador: su salida sirve de diagnóstico y
- *  muere con taskkill /T. (Elevado NO tiene el EPERM de antes: ese lo
- *  causaba escribir .svelte-kit desde un proceso de baja integridad.) */
+ *  muere con taskkill /T. El dev server corre con el token del orquestador
+ *  (elevado en CI): no toca Firebird ni WebView2, y degradarlo rompía la
+ *  compilación por los ACE de Administrators (CI #273-#277). */
 async function levantarVite() {
 	console.log('— lanzando vite (dev server)…');
 	const vite = spawn('cmd.exe', ['/d', '/s', '/c', 'npm run dev'], {
@@ -249,7 +268,6 @@ async function main() {
 	rmSync(LOG_HUMO, { force: true });
 
 	const esWin = process.platform === 'win32';
-	const elevado = esWin && esElevado();
 
 	// ── Rama no-Windows: sin concepto de elevación, `tauri dev` completo. ──
 	if (!esWin) {
@@ -294,12 +312,13 @@ async function main() {
 			}
 		}
 	} else {
-		// ── Rama Windows (CI elevado y dev local). ──
-		// Compilar primero: seed_ci tiene required-features=["dev"] (feature
-		// vacío que solo lo excluye del bundle de release) — sin --features
-		// dev el build lo salta y el exe no existe (corrida 287). --bins
-		// acota el build a los binarios; la app se compila aquí también
-		// porque el lanzamiento por tarea/batch no compila nada.
+		// ── Rama Windows (CI elevado y dev local): un solo camino. ──
+		const elevado = esElevado();
+
+		// Compilar con el token del orquestador: seed_ci tiene
+		// required-features=["dev"] (feature vacío que solo lo excluye del
+		// bundle de release) — sin --features dev el build lo salta y el exe
+		// no existe (corrida 287). --bins acota el build a los binarios.
 		console.log('— compilando app + seed_ci (cargo build --features dev --bins)…');
 		const rc = spawnSync('cargo', ['build', '--features', 'dev', '--bins'], {
 			cwd: join(RAIZ, 'src-tauri'),
@@ -311,49 +330,47 @@ async function main() {
 
 		// Vite regenera .svelte-kit en el arranque (sync). Borrarlo obliga a
 		// vite a recrearlo con su propia propiedad (crítico si el checkout lo
-		// creó elevado y el humo corre con un token distinto).
+		// creó con otro token).
 		rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
 
-		// ── Semilla ──
-		if (elevado) {
-			// En token de usuario normal vía explorer: MISMO token que la app.
-			// Firebird embedded mapea la BD y sus locks en memoria compartida;
-			// si el seed corre con un token distinto al de la app, el otro
-			// proceso no puede mapearlos → "Wrong file for memory mapping"
-			// (runs #286-#288).
-			console.log('— sembrando BD aislada (seed_ci en token de usuario normal vía explorer)…');
-			rmSync(LOG_HUMO, { force: true });
-			escribirBatchHumo('seed');
-			lanzarHumo();
-			const code = await esperarMarcaSeed(300000);
-			if (code !== 0) throw new Error(`seed_ci falló (exit ${code}):\n` + colaLog(LOG_HUMO));
-		} else {
-			console.log('— sembrando BD aislada (seed_ci)…');
-			const rs = spawnSync(EXE_SEED, [DATA_DIR], { stdio: 'inherit' });
-			if (rs.status !== 0) throw new Error('seed_ci falló');
-		}
-		if (existsSync(FDB)) console.log('   BD aislada:', FDB);
+		// El data_dir debe existir ANTES del icacls para que la ACE con
+		// herencia cubra todo lo que seed/app creen dentro.
+		mkdirSync(DATA_DIR, { recursive: true });
+		endurecerAcls();
 
-		// ── Vite (elevado, hijo del orquestador) ──
+		// ── Semilla (degradada: MISMO token que la app — Firebird embedded
+		// mapea la BD y sus locks en memoria compartida y exige que ambos
+		// procesos los puedan abrir) ──
+		console.log('— sembrando BD aislada (seed_ci vía runas)…');
+		rmSync(LOG_HUMO, { force: true });
+		escribirBatchHumo('seed');
+		lanzarDegradado();
+		const code = await esperarMarcaSeed(300000);
+		if (code !== 0) throw new Error(`seed_ci falló (exit ${code}):\n` + colaLog(LOG_HUMO));
+		if (!existsSync(FDB)) throw new Error('seed_ci no produjo la BD: ' + FDB);
+		console.log('   BD aislada:', FDB);
+
+		// ── Vite (token del orquestador) ──
 		const vite = await levantarVite();
 
 		const finApp = () => {
-			// La app puede sobrevivir a su árbol (tarea/runas sueltan el PID):
+			// La app puede sobrevivir a su árbol (runas suelta el PID):
 			// matarla por nombre (target/debug solo existe en desarrollo).
 			spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
 		};
 
-		// ── App ──
-		if (elevado) {
-			console.log('— lanzando la app (token de usuario normal vía explorer, CDP ' + PUERTO_CDP + ')…');
-			rmSync(LOG_HUMO, { force: true }); // log limpio para la fase app
-			escribirBatchHumo('app');
-			lanzarHumo();
-		} else {
-			console.log('— lanzando la app (directa, CDP ' + PUERTO_CDP + ')…');
-			escribirBatchHumo('app');
-			spawn('cmd.exe', ['/d', '/s', '/c', BAT_HUMO], { cwd: RAIZ, stdio: 'ignore' });
-		}
+		// ── App (degradada: WebView2 solo honra la bandera CDP con
+		// integridad media; el token del runas la tiene) ──
+		console.log(
+			'— lanzando la app (' +
+				(elevado ? 'orquestador elevado' : 'orquestador sin elevar') +
+				', app vía runas, CDP ' +
+				PUERTO_CDP +
+				')…'
+		);
+		rmSync(LOG_HUMO, { force: true }); // log limpio para la fase app
+		escribirBatchHumo('app');
+		lanzarDegradado();
 
 		try {
 			const razon = await esperarCdp(PUERTO_CDP, 420000);

@@ -201,11 +201,12 @@ jobs:
           Remove-Item -Force "src-tauri\target\debug\.cargo-build-lock" -ErrorAction SilentlyContinue
           Remove-Item -Force "src-tauri\target\release\.cargo-build-lock" -ErrorAction SilentlyContinue
 
-      # Orquesta: cargo build + vite ELEVADOS; seed_ci y la app en token de
-      # usuario normal vía explorer.exe (WebView2 ignora la bandera CDP en
-      # procesos elevados; el token restringido de runas no puede mapear la
-      # memoria compartida de Firebird; y bajo schtasks /RL LIMITED el
-      # WebView2 tampoco abrió el CDP) → smoke completo → limpieza.
+      # Orquesta: cargo build + vite ELEVADOS; el humo (seed_ci + app) vía
+      # runas /trustlevel:0x20000 con ACLs endurecidas (icacls grant
+      # Everyone sobre data_dir y resources/firebird: el token restringido
+      # necesita esa ACE para mapear la memoria compartida de Firebird, y
+      # WebView2 solo honra la bandera CDP con integridad media) → smoke
+      # completo → limpieza.
       - name: Smoke E2E del flujo de cobro (smoke:dev)
         run: npm run smoke:dev
 
