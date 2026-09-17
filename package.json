@@ -19,6 +19,7 @@
 		"verificar:paginacion": "node scripts/verificar-paginacion.mjs",
 		"test:paginacion": "node scripts/test-verificar-paginacion.mjs",
 		"smoke:app": "node scripts/smoke-test-app.mjs",
+		"smoke:dev": "node scripts/smoke-dev.mjs",
 		"gen:devguard": "cd src-tauri && cargo run --features dev --bin gen_devguard",
 		"watch:simit": "node scripts/watch-simit.mjs",
 		"check:simit": "node scripts/check-simit.mjs",
