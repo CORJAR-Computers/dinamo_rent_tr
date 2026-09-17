@@ -1,6 +1,6 @@
-# Plan de despliegue en equipos de clientes — Dinamo Rent v1.2.1
+# Plan de despliegue en equipos de clientes — Dinamo Rent v1.2.2
 
-> Procedimiento operativo para dejar los equipos de los clientes en la **v1.2.1** (última
+> Procedimiento operativo para dejar los equipos de los clientes en la **v1.2.2** (última
 > versión estable, con **auto-actualización** activa desde la v1.0.14): instalación
 > silenciosa, verificación post-instalación y rollback. **Este es el último despliegue
 > manual por equipo**: desde la v1.0.14 la app detecta y ofrece las versiones nuevas al
@@ -11,7 +11,7 @@
 
 ## 0. Reglas de oro
 
-1. **Siempre la v1.2.1 (o superior)** — la v1.0.0 está descontinuada (falla en
+1. **Siempre la v1.2.2 (o superior)** — la v1.0.0 está descontinuada (falla en
    instalaciones nuevas) y la v1.0.2 no tiene updater. OJO: las v1.0.3–v1.0.13 **no
    pudieron auto-actualizarse** (faltaba el permiso ACL del plugin updater en
    capabilities; el check fallaba en silencio). La **v1.0.14 es la primera con
@@ -55,14 +55,14 @@
 
 ```powershell
 # NSIS — silenciosa total (sin atajos, sin ejecutar al final)
-& "D:\deploy\DinamoRent_1.2.1_x64-setup.exe" /S
+& "D:\deploy\DinamoRent_1.2.2_x64-setup.exe" /S
 # Esperar a que termine (NSIS /S es síncrono al esperar al proceso)
-# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.2.1_x64-setup.exe" -ArgumentList "/S"
+# Start-Process -Wait -FilePath "D:\deploy\DinamoRent_1.2.2_x64-setup.exe" -ArgumentList "/S"
 ```
 
 ```powershell
 # MSI — para GPO / Intune / SCCM
-msiexec /i "D:\deploy\DinamoRent_1.2.1_x64_en-US.msi" /qn /norestart
+msiexec /i "D:\deploy\DinamoRent_1.2.2_x64_en-US.msi" /qn /norestart
 ```
 
 > **WebView2**: si el equipo no lo tiene, el instalador lo descarga e instala
@@ -78,7 +78,7 @@ equipos y ejecutar con una herramienta de gestión (Intune, SCCM, GPO `msi` + `c
 
 ```powershell
 # Ejemplo con psexec (máquina de operaciones):
-psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.2.1_x64-setup.exe" /S
+psexec \\PC-CLIENTE-01 -s -d "D:\deploy\DinamoRent_1.2.2_x64-setup.exe" /S
 ```
 
 ---
@@ -107,14 +107,14 @@ powershell -ExecutionPolicy Bypass -File scripts\verificar-despliegue.ps1 -DryRu
 
 | # | Comprobación | Esperado |
 |---|---|---|
-| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.2.1** |
+| 1 | Exe instalado (`%LOCALAPPDATA%\DinamoRent\dinamo-rent.exe`) | existe, versión **1.2.2** |
 | 2 | Arranque: proceso vivo a los 10 s | **no** se cuelga ni muere (el bug del v1.0.0) |
 | 3 | `%APPDATA%\com.corjar.dinamorent\` | existe (la crea el **primer arranque**; por eso se comprueba después del arranque) |
 | 4 | `config.ini` | existe |
 | 5 | `dinamo_rent_v3.fdb` | existe y pesa > 0 (BD creada o migrada) |
 | 6 | Migraciones: `schema_migrations` tiene 23 versiones (0001–0023) | 23 (comprobación opcional con tooling dev) |
 | 7 | Login manual | `admin` + contraseña del cliente (primer ingreso: cambio forzado) |
-| 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.2.1 ya es la vigente) |
+| 8 | Auto-update al día | la app **no** muestra «Actualización disponible» al arrancar (la v1.2.2 ya es la vigente) |
 
 > Desde la v1.0.14 la app incluye el updater funcional: al arrancar con internet chequea la release
 > vigente y no muestra nada si ya está al día. Si apareciera el diálogo «Actualización
@@ -133,7 +133,7 @@ operativo con el auto-update:
 3. Comprobación opcional desde la máquina de operaciones: el endpoint del auto-update
    debe responder con la versión instalada:
    `curl -s https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/latest/download/latest.json`
-   → `"version": "1.2.1"`.
+   → `"version": "1.2.2"`.
 
 > Los equipos **sin internet** no pueden auto-actualizarse: el chequeo falla silencioso y
 > la app sigue funcionando. Para esos casos, actualizar a mano con el instalador de la
@@ -143,8 +143,8 @@ operativo con el auto-update:
 
 | Síntoma | Acción |
 |---|---|
-| Exe no aparece / versión no es 1.2.1 | Reinstalar (¿el instalador correcto? ¿se descargó una versión anterior?) |
-| `config.ini` pero NO la BD | No borrar nada: reinstalar la v1.2.1 (el arranque crea la BD). Si persiste, revisar exclusión de Defender sobre la carpeta |
+| Exe no aparece / versión no es 1.2.2 | Reinstalar (¿el instalador correcto? ¿se descargó una versión anterior?) |
+| `config.ini` pero NO la BD | No borrar nada: reinstalar la v1.2.2 (el arranque crea la BD). Si persiste, revisar exclusión de Defender sobre la carpeta |
 | Proceso muere en <10 s | Capturar Event Log de Aplicación (módulo con errores) y volcar aquí |
 | La BD existente "no abre" | Nunca borrar la carpeta. Restaurar el backup (ver §4) y reinstalar |
 
@@ -189,7 +189,7 @@ Copy-Item "$env:APPDATA\com.corjar.dinamorent\dinamo_rent_v3.fdb" "D:\backups\di
 
 ```
 [ ] Backup de la BD creado (si el equipo tiene datos)
-[ ] Instalador v1.2.1 descargado y verificado:
+[ ] Instalador v1.2.2 descargado y verificado:
       sha256 NSIS: 6f086a6cb23e82343ae32305a789c903e9d0191e356a57addfbed0bbefef0039
       sha256 MSI:  6f00145efc5791d0de7dbff61eab6315c7ee2053821295dff816e1238dec5b85
 [ ] Instalación silenciosa OK (código 0)
@@ -199,6 +199,6 @@ Copy-Item "$env:APPDATA\com.corjar.dinamorent\dinamo_rent_v3.fdb" "D:\backups\di
 [ ] Agente SIMIT operativo (si aplica)
 [ ] Credenciales iniciales registradas y contraseña rotada si era admin123
 [ ] Auto-update confirmado: la app arrancó sin diálogo «Actualización disponible» y
-      latest.json responde version 1.2.1 (ver §3.1)
-    - la v1.2.1 es la última estable al momento de escribir esto (02-09)
+      latest.json responde version 1.2.2 (ver §3.1)
+    - la v1.2.2 es la última estable al momento de escribir esto (02-09)
 ```
