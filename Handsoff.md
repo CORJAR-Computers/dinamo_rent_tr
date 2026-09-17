@@ -108,13 +108,13 @@
 > defecto `linking` de `rsfbclient` exige `fbclient.lib` en build time; localmente compilaba
 > porque la máquina de desarrollo tiene el SDK de Firebird, el runner limpio de GitHub no.
 > Fix (**commit `4a0721b`**): `rsfbclient = { default-features = false, features =
-> ["dynamic_loading"] }` — el proyecto solo usa carga dinámica (`.with_dyn_load`),
+["dynamic_loading"] }` — el proyecto solo usa carga dinámica (`.with_dyn_load`),
 > `linking` sobraba. Verificado localmente (`cargo build --release --lib` linkea sin él) y
 > CI verde en el segundo intento → **v1.0.1 es el primer instalador verificado íntegramente
 > por CI**, reproducible en cualquier runner sin SDK de Firebird.
 
 > ℹ️ **Comportamiento del CI (13-08):** `ci.yml` usa `concurrency: { group:
-> workflow-ref, cancel-in-progress: true }` → un push nuevo a la misma rama **cancela el run
+workflow-ref, cancel-in-progress: true }` → un push nuevo a la misma rama **cancela el run
 > en curso** del push anterior. En una cadena de pushes rápida, los commits intermedios
 > aparecen como `cancelled` y solo el **tope de la rama** queda con run completo (por eso los
 > runs por `head_sha` de commits intermedios salen vacíos/cancelled). Es intencional (ahorra
@@ -151,6 +151,7 @@
 
 > **Herramientas de monitoreo y test del Agente SIMIT (11-08):** tras la validación E2E, el
 > monitoreo del portal quedó consolidado en `scripts/`:
+>
 > - **`check-simit.mjs`** (`npm run check:simit`) — ante un **401 sin token** ya no declara el
 >   portal caído: corre una **sonda E2E con token real** (PoW de UNA solución, Fase 1) y solo
 >   reporta operativo si la consulta responde 200. El flujo quedó cubierto por el test
@@ -166,8 +167,8 @@
 >   `jar_portal_real_captura_cookies_adc` (`services/simit.rs`): corre siembra + captcha contra el
 >   portal real y falla si el jar no captura `aiovg_rand_seed` + `ADC_CONN_*` + `ADC_REQ_*`
 >   (en verde: mismas cookies que la sonda Node).
-> Suite al cierre: `cargo test --lib` **37 passed + 1 ignored** · `test-check-simit` ✅ ambos
-> escenarios. Detalle y referencias en `SIMIT_MIGRACION_PYTHON_RUST.md` §4 y §6.
+>   Suite al cierre: `cargo test --lib` **37 passed + 1 ignored** · `test-check-simit` ✅ ambos
+>   escenarios. Detalle y referencias en `SIMIT_MIGRACION_PYTHON_RUST.md` §4 y §6.
 
 > **E2E del Agente SIMIT validada contra el portal real (11-08):** el microservicio de consulta
 > volvió a estar operativo y se validó el flujo completo sobre la BD dev con un binario de
@@ -202,7 +203,7 @@
 > persistente (`cookie_store`), **siembra de sesión** con `GET https://www.fcm.org.co/` (una vez
 > por proceso + re-siembra ante 401), **token PoW de una sola solución** (como el Python `[:1]`) y
 > **reintento con token fresco tras 401** (el token parece de un solo uso). Validación: `cargo
-> check --lib` 0/0 · `cargo test --lib` **37/37** (5 tests nuevos: jar compartido entre peticiones,
+check --lib` 0/0 · `cargo test --lib` **37/37** (5 tests nuevos: jar compartido entre peticiones,
 > siembra deja la cookie en el jar, 401 clasificado como `Unauthorized` con body, recorte del
 > token) · clippy sin warnings nuevos. E2E sigue pendiente solo por disponibilidad del micro.
 > ⚠️ racha larga del `os error 32` de Defender durante el build (8+ fallos seguidos, incluso con
@@ -243,8 +244,8 @@
 > obligatorios («Sin Origin y Referer el servidor rechaza la petición») → añadidos en
 > `services/simit.rs` (`con_headers_browser()`, aplicado a captcha y consulta; 9/9 tests unitarios
 > verdes); (4) ❌ el **microservicio de consulta sigue caído**: página principal `503
-> Server-unavailable!` y el endpoint de consulta responde `401 {"codigo":5,"descripcion":"Autenticación
-> fallida: Acceso denegado. No se puede definir la política de seguridad."}` a **CUALQUIER** petición
+Server-unavailable!` y el endpoint de consulta responde `401 {"codigo":5,"descripcion":"Autenticación
+fallida: Acceso denegado. No se puede definir la política de seguridad."}` a **CUALQUIER** petición
 > (con token válido de Rust, de Node/undici, o sin token) → fallo del gateway/auth, NO del contrato.
 > La verificación end-to-end (insertar/dedup, sync de estado, reporte HTML, Excel) sigue pendiente
 > hasta que el microservicio vuelva. Nota del gateway: expone auth por headers `token`/`ticket`
@@ -303,15 +304,15 @@
 Proyecto de renta de vehículos: frontend **SvelteKit 5** (`src/`), backend **Tauri/Rust**
 (`src-tauri/`) con **Firebird 5** embebido y pool `r2d2` (`rsfbclient`).
 
-| Validación | Resultado |
-|---|---|
-| Vitest (frontend) | **190/190** en 25 archivos |
-| `npm run check` (svelte-check) | **0 errores / 0 warnings** |
-| `npm run build` (vite) | ✅ |
-| `cargo test` (Rust) | ✅ unit (32, incl. 9 del Agente SIMIT) + integraciones por módulo (comparendos ahora 4) |
-| `cargo check --tests` | ✅ 0 errores |
-| `cargo clippy --lib` | ✅ código nuevo limpio; quedan 6 warnings pre-existentes (migrations.rs ×2, informe.rs ×1, renta.rs ×2, services/renta.rs ×1) |
-| `npm run lint` | ✅ **0 problemas** (config corregida el 10-08 — ver §3) |
+| Validación                     | Resultado                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Vitest (frontend)              | **190/190** en 25 archivos                                                                                                    |
+| `npm run check` (svelte-check) | **0 errores / 0 warnings**                                                                                                    |
+| `npm run build` (vite)         | ✅                                                                                                                            |
+| `cargo test` (Rust)            | ✅ unit (32, incl. 9 del Agente SIMIT) + integraciones por módulo (comparendos ahora 4)                                       |
+| `cargo check --tests`          | ✅ 0 errores                                                                                                                  |
+| `cargo clippy --lib`           | ✅ código nuevo limpio; quedan 6 warnings pre-existentes (migrations.rs ×2, informe.rs ×1, renta.rs ×2, services/renta.rs ×1) |
+| `npm run lint`                 | ✅ **0 problemas** (config corregida el 10-08 — ver §3)                                                                       |
 
 **Regla crítica de rsfbclient:** solo implementa `FromRow` para tuplas de **≤26 elementos**
 y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en dos consultas
@@ -323,6 +324,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 ## 2. Módulos implementados (5 pendientes → 5 completos)
 
 ### ✅ Rentas (`/rentas`)
+
 - **Backend:** `repositories/renta.rs` (CRUD + pagos + inspecciones, consulta dividida 26+15),
   `services/renta.rs` (totales con impuesto `business.impuesto_porcentaje`, cierre con
   devolución real, pagos/abono/saldo, inspecciones Salida/Entrada, cancelación),
@@ -355,7 +357,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   usuario, created_at). `RentaService::extender()` valida renta Activa, calcula nuevo retorno,
   acumula `horas_extras`/`dias_calculados` y `valor_dia_extra`, recalcula totales y registra
   auditoría `EXTENSION RENTA`. Múltiples extensiones son acumulables y cada una se persiste
-  en el historial. Comando `extender_renta` + `listar_extensiones_renta`.  Frontend: botón «Extender»
+  en el historial. Comando `extender_renta` + `listar_extensiones_renta`. Frontend: botón «Extender»
   (+) en rentas activas, modal con selector de tipo, cantidad, valor unitario, preview del
   nuevo retorno y tabla de historial de extensiones previas.
 - **Checkbox «Cobrar Horas Extra»** (migración `0026_cobrar_horas_extra.sql`): campo `cobrar_horas_extra`
@@ -368,6 +370,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   `renta_extender_horas_y_dias` y cobrar_horas_extra) · `src/routes/rentas/rentas.test.ts` (16).
 
 ### ✅ Comparendos (`/comparendos`)
+
 - **Backend:** `repositories/comparendo.rs`, `services/comparendo.rs` (valida placa existente en
   autos, estados Pendiente/Pagado, `marcar_pagado`), `commands/comparendo.rs`.
 - **Frontend:** `api.ts` (`comparendoApi`), `+page.svelte` (filtros por estado/placa, CRUD, marcar pagado,
@@ -375,14 +378,15 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 - **Tests:** `tests/comparendos_integration.rs` (4) · `src/routes/comparendos/comparendos.test.ts` (8).
 
 ### ✅ Agente SIMIT (comparendos automáticos por placa)
+
 - **Backend:** `services/simit.rs` —
   - `resolver_captcha()`: `POST https://qxcaptcha.fcm.org.co/api.php` (form `endpoint=question`)
     → `{error, data:{question, recommended_difficulty}}`; PoW: `difficulty` nonces primos cuyo
     SHA256 hex de `{"question":q,"time":t,"nonce":n}` empiece con `0000` → token = array JSON
     de los objetos de verificación. Dependencia HTTP nueva: **`ureq` 2.12** (features `json`).
   - `consultar_placa(placa)`: `POST https://consultasimit.fcm.org.co/simit/microservices/
-    estado-cuenta-simit/estadocuenta/consulta` con `{"filtro":placa,"reCaptchaDTO":{"response":
-    token,"consumidor":"1"}}` → `multas[]` (comparendo, numeroComparendo, valorPagar,
+estado-cuenta-simit/estadocuenta/consulta` con `{"filtro":placa,"reCaptchaDTO":{"response":
+token,"consumidor":"1"}}` → `multas[]` (comparendo, numeroComparendo, valorPagar,
     estadoComparendo, fechaComparendo, organismoTransito, infracciones[]). Se conservan
     comparendos y multas; estado mapeado (PAGA*/COBR* → «Pagado»; resto → «Pendiente»).
   - `sincronizar()`: lista `AutoRepository::placas_activas` (**excluye Vendido/Baja**), consulta
@@ -416,8 +420,8 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   por placa. Estado manejado por Tauri vía `EstadoAgenteSimitManaged` (no amplía `AppState` →
   no toca los tests de integración).
 - **Migración `0015_comparendo_numero_simit.sql`:** `comparendos.numero_comparendo VARCHAR(30)`
-  + índice `IX_COMPARENDOS_NUMERO` (guards RDB$, idempotente). **YA aplicada a la BD dev**
-  (vía test temporal `aplicar_migraciones_dev_temporal.rs`, eliminado después).
+  - índice `IX_COMPARENDOS_NUMERO` (guards RDB$, idempotente). **YA aplicada a la BD dev**
+    (vía test temporal `aplicar_migraciones_dev_temporal.rs`, eliminado después).
 - **Config `[simit]`** (defaults en `core/config.rs` + `data/config.ini.example`): `enabled=true`,
   `interval_hours=2`, `polite_delay_ms=2500`, `report_dir=informes_simit`,
   `start_delay_minutes=10` (retraso de la primera corrida tras el arranque; 0 = inmediata).
@@ -437,22 +441,25 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   🐛 headers `Origin`/`Referer` añadidos (`con_headers_browser()`), ❌ micro caído ese día (401 a
   toda petición + 503). El **11-08 el micro volvió** y la E2E quedó **validada**: 21/21 placas,
   27 comparendos reales insertados (dedup en 2ª corrida: 0 nuevos / 30 duplicados), reporte HTML
-  + Excel verificados; 🐛 **2 bugs corregidos** (fechas `fechaComparendo` en **DD/MM/YYYY** — las
-  multas se descartaban — y orden del pre-check de fecha que abortaba la sincronización). Ver §3.
+  - Excel verificados; 🐛 **2 bugs corregidos** (fechas `fechaComparendo` en **DD/MM/YYYY** — las
+    multas se descartaban — y orden del pre-check de fecha que abortaba la sincronización). Ver §3.
 
 ### ✅ Alertas (`/alertas`)
+
 - **Sin backend nuevo:** consolida `autoApi.alertas` (vencimientos SOAT/tecno-mecánica/extintor/
   batería), `mantenimientoApi.alertasKm`, rentas activas por vencer (retorno ≤3 días) y comparendos
   pendientes. Filtro "solo críticas" + refrescar.
 - **Tests:** `src/routes/alertas/alertas.test.ts` (4).
 
 ### ✅ Calendario (`/calendario`)
+
 - **Sin backend nuevo:** `utils/calendario.ts` (funciones puras: `celdasDelMes` con semana
   iniciando lunes, `rangoCubreDia`, `detectarSolapamientos`). Página mensual con chips de renta
   (azul) / reserva (ámbar), conflicto en rojo, panel de detalle por día.
 - **Tests:** `src/lib/utils/calendario.test.ts` (7) · `src/routes/calendario/calendario.test.ts` (5).
 
 ### ✅ Informes (`/informes`)
+
 - **Backend:** `repositories/informe.rs` (sumas por **rango de fechas** `inicio`/`fin` con
   comparación directa en fechas + consultas por placa para utilidad), `services/informe.rs`
   (balance = pagos + abonos reservas − gastos − mantenimiento − comparendos; **utilidad por
@@ -476,12 +483,14 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   recogida de la reserva.
 
 ### ✅ Reservas — impresión (`OrdenReserva.svelte`)
+
 - **Frontend:** `+page.svelte` de reservas incluye botón imprimir que abre modal con
   `reports/OrdenReserva.svelte` (orden **Carta** con itinerario, tarifas, saldo pendiente,
   firmas). Misma mecánica de impresión que Rentas (`imprimirDocumento()` + `.print-area`).
 - **Tests:** `src/routes/reservas/reservas.test.ts` (2) — listado con estado y estado vacío.
 
 ### ✅ Contrato de renta (`ContratoRenta.svelte`)
+
 - **Frontend:** `reports/ContratoRenta.svelte` — **documento independiente** de la orden de
   renta, en **papel Carta/Letter**. Texto legal real tomado de `Contrato_Dinamo.docx` (fuente
   de verdad): 14 cláusulas completas (objeto, estado del vehículo, pagos y garantías, plazo,
@@ -491,6 +500,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   desde el botón «Ver contrato (Carta)» del modal de impresión de rentas.
 
 ### ✅ Impresión unificada (`utils/imprimir.ts` + `app.css`)
+
 - **Bug corregido:** dos `.print-area` anidados (orden + contrato) con `position: fixed` en
   `@media print` → el contrato interno ganaba y solo se imprimía el contrato (y en 1 página
   recortada).
@@ -510,6 +520,7 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
   recorten. Páginas migradas: rentas, reservas, comparendos, informes.
 
 ### ✅ Backups de la BD (`/backups` — Fase 8 del plan, completa el 19-08)
+
 - **Backend:** `services/backup.rs` — scheduler automático en `[backup] schedule_times`
   (4 horarios por defecto: 09:00, 13:00, 19:00, 23:00, revisado cada `check_interval_ms`),
   rotación a `backup_max_copies` (10), **cifrado opcional** AES-256-GCM por chunks de 1 MiB
@@ -538,15 +549,15 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
 
 ## 3. Pendiente / mejoras sugeridas
 
-- [x] **PRIMERO — Probar el Agente SIMIT contra el portal real.** *HECHO el 11-08 — E2E validada
+- [x] **PRIMERO — Probar el Agente SIMIT contra el portal real.** _HECHO el 11-08 — E2E validada
       contra el portal real: 27 comparendos insertados (BD dev), dedup en 2ª corrida, reporte HTML +
       Excel verificados, 2 bugs corregidos (fechas DD/MM/YYYY y orden del pre-check) — resumen en la
-      nota de portada y detalle en `SIMIT_MIGRACION_PYTHON_RUST.md` §4.      Herramientas:
+      nota de portada y detalle en `SIMIT_MIGRACION_PYTHON_RUST.md` §4. Herramientas:
       `cargo run --features dev --bin sync_dev` (sincronización E2E sin Tauri, dump JSON en
       `data/simit_watch/sync_result.json`), `node scripts/verificar-excel-simit.mjs` (valida el
       export Excel contra el resultado) y el monitoreo/test de hoy (`check-simit` con sonda E2E y
       `--multas`, `watch-simit` con alerta de total, `test-check-simit`, test `#[ignore]` del jar) —
-      resumen en la nota de portada.* Historial: el 10-08 se probó el flujo HTTP real por
+      resumen en la nota de portada._ Historial: el 10-08 se probó el flujo HTTP real por
       primera vez (el captcha qxcaptcha volvió a estar arriba):
       (1) ✅ **captcha PoW aceptado** — el riesgo de TLS fingerprinting NO se materializó (probado
       con ureq/rustls, Node/undici y curl); (2) ✅ **token 1:1 con la referencia** (HashHelper.cs /
@@ -572,15 +583,15 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       arg `r` de informeExcel). Validación: `npm run lint` 0 problemas, `npm run check` 0/0,
       `npm run test` 190/190, `npm run build` ✅ — el pre-commit (`bun run lint`) ya no bloquea.
 - [x] **Configurar `business.impuesto_porcentaje`** en el `config.ini` real de producción (dev usa 19).
-      *Hecho (10-08): el config real (`%APPDATA%\com.corjar.dinamorent\config.ini`) ya trae
+      _Hecho (10-08): el config real (`%APPDATA%\com.corjar.dinamorent\config.ini`) ya trae
       `impuesto_porcentaje = 19` en `[business]` (auto-generado con los defaults) y la app lo lee al
       arrancar. Para CAMBIAR la tasa en producción: editar esa clave en `[business]` del config.ini y
       reiniciar la app (sin rebuild; `AppConfig::save()` preserva la clave — no la pisa). Se documentó
-      también en `data/config.ini.example`.*
+      también en `data/config.ini.example`._
 - [x] **Auditar índices** de `mantenimiento_vehiculos` y `informes` para los filtros por rango de
       fechas (pagos.fecha, reservas.fecha_recogida, gastos.fecha, comparendos.fecha_infraccion).
-      *Hecho en 0010-0013 (dedup + consolidación; los `IDX_*_FECHA` de 0002 se conservan porque no
-      están subsumidos) — ver sección 5 y README §Migraciones.*
+      _Hecho en 0010-0013 (dedup + consolidación; los `IDX_*_FECHA` de 0002 se conservan porque no
+      están subsumidos) — ver sección 5 y README §Migraciones._
 - [ ] **Revisión visual en Tauri**: la **orden de reserva, notificación de comparendo y orden
       de renta + contrato** ya se revisaron en navegador (dev server + mock de Tauri) con
       capturas en `static/preview-shots/*.png` y audit de layout (0 desbordes, 0 imágenes rotas).
@@ -592,16 +603,16 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
       Agente SIMIT** en la app real (ver primera tarea de §3).
 - [x] **Mostrar la versión REAL de la app en la barra de menú lateral.** El 14-08 el usuario
       reportó que el menú lateral muestra **v3.2.0** (versión heredada del proyecto anterior).
-      *HECHO (18-08, commit `81c55a5` feat: version real de la app): comando Tauri `app_version`
+      _HECHO (18-08, commit `81c55a5` feat: version real de la app): comando Tauri `app_version`
       (backend, `package_info` → Cargo.toml / tauri.conf.json en el build) + store
       `src/lib/stores/app.svelte.ts`; `+layout.svelte` y `login/+page.svelte` renderizan la
       versión real (`v{version}`) en vez del literal, con test de integración (`15a2311`).
-      Repaso visual completado.*
+      Repaso visual completado._
 - [-] **Setup wizard de primera ejecución y diálogo de config BD** — **descartados (19-08):**
-      el proyecto es de **uso interno de Dinamo**; la instalación con defaults (auto-create del
-      `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
-      hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
-      automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
+  el proyecto es de **uso interno de Dinamo**; la instalación con defaults (auto-create del
+  `.fdb` + `seed_admin` al arrancar, config en `data_dir`) es suficiente. Se retoman solo si
+  hay despliegues externos. Con esto la **Fase 8 del plan quedó completa** (backups
+  automáticos + cifrado + restauración — ver §2 «Backups de la BD»).
 
 ### v1.2.2 — Ronda de QA: fechas locales, cobros y salvaguardas (16-09)
 
@@ -673,20 +684,21 @@ y `IntoParams` para tuplas de **≤15**. Cualquier SELECT largo debe partirse en
     Página de error global `+error.svelte` (404/5xx) con botones reintentar/ir-al-dashboard.
     Navegación `<nav>` con `aria-label="Navegación principal"`.
 11. **Normalización de texto (mayúsculas automáticas):** todos los campos de texto libre se
-   convierten a MAYÚSCULAS en `services/X.rs::normalizar()` con el helper `core::validators::mayusculas()`
-   (trim + `to_uppercase()`). **Excepciones** (se mantienen tal cual): `email`, `rol`, `web`, fechas,
-   horas, montos y códigos postales. Los `<select>` del frontend (categoría/tipo en gastos y
-   mantenimiento) transforman sus opciones a uppercase (`.map(c => c.toUpperCase())`) para que
-   coincidan con los valores de la DB y el edit-form siempre muestre el valor correcto.
-   Las **validaciones contra listas permitidas** (categoría de gastos, tipo de mantenimiento)
-   son **case-insensitive**: compara `trim().to_uppercase()` del valor contra la lista
-   uppercased, para que no fallen con valores de config.ini en camelCase.
-   `TIPO_CAMBIO_ACEITE` en mantenimiento también se compara case-insensitive para que la
-   sincronización de `proximo_aceite` funcione con el valor stored en mayúsculas.
+    convierten a MAYÚSCULAS en `services/X.rs::normalizar()` con el helper `core::validators::mayusculas()`
+    (trim + `to_uppercase()`). **Excepciones** (se mantienen tal cual): `email`, `rol`, `web`, fechas,
+    horas, montos y códigos postales. Los `<select>` del frontend (categoría/tipo en gastos y
+    mantenimiento) transforman sus opciones a uppercase (`.map(c => c.toUpperCase())`) para que
+    coincidan con los valores de la DB y el edit-form siempre muestre el valor correcto.
+    Las **validaciones contra listas permitidas** (categoría de gastos, tipo de mantenimiento)
+    son **case-insensitive**: compara `trim().to_uppercase()` del valor contra la lista
+    uppercased, para que no fallen con valores de config.ini en camelCase.
+    `TIPO_CAMBIO_ACEITE` en mantenimiento también se compara case-insensitive para que la
+    sincronización de `proximo_aceite` funcione con el valor stored en mayúsculas.
 
 ---
 
 ### 4.1 Dependencias y tooling
+
 - **Dependabot** (`.github/dependabot.yml`): actualizaciones semanales (lunes) de npm (frontend),
   Cargo (backend) y mensuales de GitHub Actions. Grupos: svelte, testing, eslint (npm);
   firebird, crypto (cargo). Prefijos de commit: `chore(deps)`, `chore(ci)`.
@@ -773,16 +785,16 @@ END;
 
 Guards por objeto (catálogo Firebird):
 
-| Objeto | Catálogo |
-|---|---|
-| Tabla (crear) | `RDB$RELATIONS.RDB$RELATION_NAME` |
+| Objeto                        | Catálogo                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Tabla (crear)                 | `RDB$RELATIONS.RDB$RELATION_NAME`                                                                            |
 | Tabla (DROP residual de test) | `RDB$RELATIONS` + `RDB$SYSTEM_FLAG = 0` + `RDB$RELATION_TYPE = 0` + esquema exacto vía `RDB$RELATION_FIELDS` |
-| Columna | `RDB$RELATION_FIELDS` (relation+field); NOT NULL → `RDB$NULL_FLAG = 1` |
-| Índice | `RDB$INDICES.RDB$INDEX_NAME` |
-| Índice por columnas | `RDB$INDEX_SEGMENTS` (`FIELD_NAME` + `FIELD_POSITION`) |
-| Constraint CHECK | `RDB$RELATION_CONSTRAINTS.RDB$CONSTRAINT_NAME` |
-| Generator | `RDB$GENERATORS.RDB$GENERATOR_NAME` |
-| Trigger | `RECREATE TRIGGER` (crea o recrea, sin guard) |
+| Columna                       | `RDB$RELATION_FIELDS` (relation+field); NOT NULL → `RDB$NULL_FLAG = 1`                                       |
+| Índice                        | `RDB$INDICES.RDB$INDEX_NAME`                                                                                 |
+| Índice por columnas           | `RDB$INDEX_SEGMENTS` (`FIELD_NAME` + `FIELD_POSITION`)                                                       |
+| Constraint CHECK              | `RDB$RELATION_CONSTRAINTS.RDB$CONSTRAINT_NAME`                                                               |
+| Generator                     | `RDB$GENERATORS.RDB$GENERATOR_NAME`                                                                          |
+| Trigger                       | `RECREATE TRIGGER` (crea o recrea, sin guard)                                                                |
 
 **DROP condicional (consolidación de índices, patrón 0011-0013):** solo se elimina un índice si
 queda OTRO índice no-sistema de la misma tabla que cubra la columna como **primer segmento**
@@ -798,6 +810,7 @@ vía git HEAD). Una tabla futura con el mismo nombre pero otro esquema **NO** se
 en la cabecera de 0014).
 
 Reglas de oro:
+
 - Comillas simples de los literales **duplicadas** (`''...''`) por ir dentro del literal de
   `EXECUTE STATEMENT`.
 - **NUNCA `--` dentro de un literal**: `split_sql_statements` recorta los comentarios de cada
@@ -845,10 +858,10 @@ Lleva datos de **AUTOS** y **CLIENTES** a la BD de una instalación DinamoRent d
 o desde una hoja de cálculo. Caso de uso: el cliente tiene una copia de su BD (exportada a
 SQL) o los datos están recopilados en Excel y hay que poblar la instalación.
 
-| Modo | Fuente | Notas |
-|---|---|---|
-| `--sql dump.sql` | Sentencias `INSERT INTO autos (...)` / `INSERT INTO clientes (...)` | El resto del archivo se ignora — sirve cualquier dump con INSERTs |
-| `--excel datos.xlsx` | Hojas `autos` y `clientes` (primera fila = encabezados) | Acepta encabezados en español o iguales a la columna de la BD (sin tildes/mayúsculas) |
+| Modo                 | Fuente                                                              | Notas                                                                                 |
+| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `--sql dump.sql`     | Sentencias `INSERT INTO autos (...)` / `INSERT INTO clientes (...)` | El resto del archivo se ignora — sirve cualquier dump con INSERTs                     |
+| `--excel datos.xlsx` | Hojas `autos` y `clientes` (primera fila = encabezados)             | Acepta encabezados en español o iguales a la columna de la BD (sin tildes/mayúsculas) |
 
 **Comportamiento (upsert idempotente):** clave = **placa** (autos, PK) y **no_doc** (clientes,
 índice único; si viene vacío se inserta siempre). Si la clave existe → actualiza; si no →
@@ -898,14 +911,15 @@ actualizados) → auditoría registrada. Fixtures de ejemplo en `scripts/fixture
 Post-instalación en el equipo del cliente: comprueba exe **v1.0.15** instalado, **arranca la
 app** y verifica que siga viva 10 s (el check crítico — el bug del v1.0.0 moría ahí), y luego
 valida los datos que crea el **primer arranque** (`%APPDATA%\com.corjar.dinamorent`: `config.ini`
-+ `dinamo_rent_v3.fdb`). Veredicto `OK` / `FALLOS` con checks numerados, exit 0/1.
+
+- `dinamo_rent_v3.fdb`). Veredicto `OK` / `FALLOS` con checks numerados, exit 0/1.
 
 > **Orden de checks (fix 12-08):** primero se arranca la app y después se comprueban los
-datos — la carpeta `%APPDATA%\com.corjar.dinamorent` se crea en el primer arranque (el
-propio fix de instalación limpia), así que comprobarla antes producía FALLOS falsos.
-Validado de punta a punta en Windows Sandbox con la v1.0.1 oficial: **VEREDICTO OK (6/6)**.
-Harness reutilizable: `scripts/verificar-despliegue-sandbox.ps1` +
-`scripts/dinamorent-sandbox-verificar.wsb`. Ver `DEPLOYMENT_CLIENTES.md` para el plan completo.
+> datos — la carpeta `%APPDATA%\com.corjar.dinamorent` se crea en el primer arranque (el
+> propio fix de instalación limpia), así que comprobarla antes producía FALLOS falsos.
+> Validado de punta a punta en Windows Sandbox con la v1.0.1 oficial: **VEREDICTO OK (6/6)**.
+> Harness reutilizable: `scripts/verificar-despliegue-sandbox.ps1` +
+> `scripts/dinamorent-sandbox-verificar.wsb`. Ver `DEPLOYMENT_CLIENTES.md` para el plan completo.
 
 > **Modo `-DryRun` (17-08):** `-DryRun` ejecuta los mismos chequeos y el veredicto reales
 > contra un ambiente simulado en `%TEMP%` (exe, carpeta de datos y BD fake), sin tocar la
@@ -936,7 +950,7 @@ indica correr el setup (antes se omitían silenciosamente):
    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
    — clave local al clon, nunca al repo.
 4. **Sembrar flota de prueba**: `python scripts/importar_autos_clientes.py
-   --sql scripts/fixtures/dump_autos_clientes.sql --db data/dinamo_rent_v3.fdb`
+--sql scripts/fixtures/dump_autos_clientes.sql --db data/dinamo_rent_v3.fdb`
    — primero dry-run (sin `--commit`) y luego `--commit` (transaccional). Inserta 2 autos +
    2 clientes con PII cifrada y auditoría `IMPORTACION_DATOS`. Necesario para el test 0016
    (`expect("hay autos en la BD dev")`) y para que las suites de rentas corran de verdad
@@ -1074,6 +1088,7 @@ coincidencias). Los tests de página que tocaban los `<select>` viejos ahora
 interactúan con el combobox (rentas, comparendos, mantenimiento).
 
 Validación: vitest 233/233, svelte-check 0/0, lint ✅.
+
 ### 7.4 — Cálculo unificado de días/horas + formulario de reserva estilo renta + seed CI
 
 **Cálculo de días y horas extra unificado** (`src/lib/utils/calcularDiasHoras.ts`):
@@ -1112,6 +1127,7 @@ baja el MAX).
 
 Validación: vitest 239/239, svelte-check 0/0, lint ✅, build ✅, cargo test
 --tests ✅ contra BD fresca (seed_ci) y contra la BD dev.
+
 ### 7.5 — Crear renta desde una reserva (precarga del formulario)
 
 Nueva acción «Crear renta» en las filas de reservas **Confirmada** o **Pendiente**
@@ -1139,6 +1155,7 @@ abre solo y la renta guardada lleva idReserva, placa, fechas, tarifas, abono y
 km autocompletado.
 
 Validación: vitest 242/242, svelte-check 0/0, lint ✅, build ✅.
+
 #### Completar la reserva automáticamente
 
 Al crear la renta con `idReserva`, el backend **completa la reserva en la misma
@@ -1157,6 +1174,7 @@ Tests de integración nuevos (BD dev y BD fresca de CI):
 `renta_creada_desde_reserva_completa_la_reserva` (completa + rechaza reuso) y
 `renta_desde_reserva_cancelada_rechazada` (reserva cancelada no genera renta).
 Validación: cargo test --tests ✅, vitest 242/242 ✅, svelte-check 0/0 ✅, lint ✅.
+
 ### 7.6 — CI en Node 24 y fin de los flakes de los tests SIMIT (2026-08-17)
 
 **CI: actions a runtime Node 24.** GitHub deprecó Node.js 20 en los runners
