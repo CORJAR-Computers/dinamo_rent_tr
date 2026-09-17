@@ -23,7 +23,7 @@
 //      node scripts/smoke-dev.mjs [--mantener]  (conserva el data_dir para inspección)
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const MANTENER = process.argv.includes('--mantener');
@@ -107,25 +107,49 @@ async function main() {
 
 	console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
 	// Node moderno rechaza spawn de .cmd sin shell (EINVAL, mitigación CVE): en
-	// Windows pasamos por cmd.exe explícito. Y si el proceso corre ELEVADO (los
+	// Windows pasamos por cmd.exe explícito. Si el proceso corre ELEVADO (los
 	// runners de CI), el lanzamiento va por runas /trustlevel:0x20000: Chromium
-	// (WebView2) ignora --remote-debugging-port con integridad alta.
+	// (WebView2) ignora --remote-debugging-port con integridad alta. Detalle
+	// clave: runas NO hereda el entorno, así que las variables (BD aislada y
+	// bandera CDP) se fijan DENTRO de un batch ejecutado ya degradado, y la
+	// salida se redirige a un log que este orquestador puede leer.
 	const esWin = process.platform === 'win32';
-	const cmdNpm = 'npm run tauri dev';
 	const elevado = esWin && esElevado();
-	const [ejecutable, argv] = !esWin
-		? ['npm', ['run', 'tauri', 'dev']]
-		: elevado
-			? ['runas', ['/trustlevel:0x20000', `cmd.exe /d /s /c "${cmdNpm}"`]]
-			: ['cmd.exe', ['/d', '/s', '/c', cmdNpm]];
-	console.log(`   lanzamiento: ${elevado ? 'runas (proceso degradado)' : 'directo'}`);
+	const BAT = join(RAIZ, 'scripts', '.tmp-smoke-run.cmd');
+	const LOG = join(RAIZ, 'scripts', '.tmp-smoke-dev.log');
+	let ejecutable, argv;
+	if (!esWin) {
+		ejecutable = 'npm';
+		argv = ['run', 'tauri', 'dev'];
+	} else if (elevado) {
+		writeFileSync(
+			BAT,
+			[
+				'@echo off',
+				`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
+				`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
+				`cd /d "${RAIZ}"`,
+				`npm run tauri dev > "${LOG}" 2>&1`
+			].join('\r\n')
+		);
+		ejecutable = 'runas';
+		argv = ['/trustlevel:0x20000', `cmd.exe /c "${BAT}"`];
+	} else {
+		ejecutable = 'cmd.exe';
+		argv = ['/d', '/s', '/c', 'npm run tauri dev'];
+	}
+	console.log(
+		`   lanzamiento: ${elevado ? 'degradado (runas + batch con env propio)' : 'directo'}`
+	);
 	const app = spawn(ejecutable, argv, {
 		cwd: RAIZ,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		env: {
 			...process.env,
-			DINAMO_DATA_DIR: DATA_DIR,
-			WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
+			...(elevado ? {} : { DINAMO_DATA_DIR: DATA_DIR }),
+			...(elevado
+				? {}
+				: { WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}` })
 		}
 	});
 	let salida = '';
@@ -142,9 +166,15 @@ async function main() {
 	try {
 		// CDP arriba = la ventana WebView2 de la app ya existe (tras compilar).
 		if (!(await esperarPuertoOcupado(PUERTO_CDP, 420000))) {
-			throw new Error(
-				'CDP 9222 no subió en 7 min (fallo de compilación?):\n' + salida.slice(-1500)
-			);
+			let detalle = salida.slice(-1500);
+			if (elevado) {
+				try {
+					detalle = readFileSync(LOG, 'utf8').slice(-1500);
+				} catch {
+					detalle += '\n(sin log del proceso degradado)';
+				}
+			}
+			throw new Error('CDP 9222 no subió en 7 min (fallo de compilación?):\n' + detalle);
 		}
 		await sleep(2000); // margen para que el target page esté servido
 
@@ -169,6 +199,8 @@ async function main() {
 		await esperarPuertoLibre('5173', 10000);
 	}
 
+	rmSync(BAT, { force: true });
+	rmSync(LOG, { force: true });
 	if (MANTENER) {
 		console.log('--mantener: data_dir conservado en ' + DATA_DIR);
 	} else {
