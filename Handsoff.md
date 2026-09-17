@@ -1007,7 +1007,7 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
    `dev` es vacío y solo excluye esos binarios del bundle de release — sin él
    `cargo build` no produce `seed_ci.exe`, corrida 287).
 2. Crea `scripts/.tmp-smoke-data/` (ignorado por git) y lo siembra con
-   `seed_ci <dir>` (en CI, en token de usuario normal vía tarea programada —
+   `seed_ci <dir>` (en CI, con el token medio del usuario vía explorer.exe —
    ver el motivo más abajo): admin/autos/clientes pero **sin rentas** →
    `/rentas` arranca vacía y el smoke entra al branch de renta de prueba
    (5 días × $150.000, sin IVA — la única base conocida que permite asertar
@@ -1041,24 +1041,25 @@ Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre `.svelte
 intermitente). Resumen de lo que NO funcionó degradando con `runas
 /trustlevel:0x20000`: degradar TODO el árbol rompió la compilación (CI #273-#277: el
 token restringido pierde los ACE de Administrators → `.cargo-build-lock` denegado y
-`EPERM` de vite sobre `.svelte-kit`); degradar solo la app no sirvió porque WebView2
-siguió sin abrir el CDP... hasta descubrir que el fallo real era otro: sembrar la BD
-ELEVADO y abrirla degradada produce "Wrong file for memory mapping" (run #286 —
-Firebird embedded mapea la BD y sus locks en memoria compartida que el otro token no
-puede abrir); y sembrar TAMBIÉN degradado vía runas falla IGUAL (runs #287-#288): el
-token RESTRINGIDO de Basic User no puede mapear las secciones de memoria compartida
-de Firebird (firebird.msg, tablas de locks), pase lo que pase antes. Solución final:
-compilar y servir ELEVADOS (vite borra `.svelte-kit` y lo recrea con su propia
-propiedad) y correr TODO lo que toca Firebird o WebView2 (seed_ci + app) en un token
-de usuario NORMAL vía tarea programada `schtasks /Create /RL LIMITED /IT` + batch
-que fija el env del humo (las tareas NO heredan el entorno del orquestador) y corre
-seed → app con logs en archivo para el diagnóstico. El token LIMITED/IT es el
-equivalente exacto a una sesión dev normal (donde todo esto funciona de punta a
-punta), sin las restricciones de Basic User. Como `schtasks /Run` retorna de
-inmediato, el batch deja marcas de corte de fase (`SEED-EXIT:<code>` / `APP-EXIT`)
-que el orquestador sondea, con 30 s de gracia antes de morir para que la marca
-sobreviva a corridas abortadas. El smoke además tolera el arranque frío: ventana de
-login de 2 min con diagnóstico (URL, cuerpo y consola de la página + captura).
+`EPERM` de vite sobre `.svelte-kit`); sembrar la BD ELEVADO y abrirla degradada
+produce "Wrong file for memory mapping" (run #286 — Firebird embedded mapea la BD y
+sus locks en memoria compartida que el otro token no puede abrir); y sembrar TAMBIÉN
+degradado vía runas falla IGUAL (runs #287-#288): el token RESTRINGIDO de Basic User
+no puede mapear las secciones de memoria compartida de Firebird (firebird.msg,
+tablas de locks), pase lo que pase antes. Ni siquiera schtasks /RL LIMITED /IT sirvió
+para la app (run #289): la tarea corrió el seed sin problema pero el WebView2 de la
+app no abrió CDP (sesión/desktop distinta pese a /IT). Solución final: compilar y
+servir ELEVADOS (vite borra `.svelte-kit` y lo recrea con su propia propiedad) y
+correr TODO lo que toca Firebird o WebView2 (seed_ci + app) con el TOKEN MEDIO del
+usuario delegando en `explorer.exe <batch>`: el shell de la sesión interactiva corre
+con el token medio del usuario y ShellExecute hace que el hijo herede ESE token
+(verificado con `whoami /groups`: etiqueta S-1-16-8192 y Administrators en
+modo deny-only — usuario normal real, ni elevado ni restringido). El batch fija el
+env del humo (explorer NO hereda el entorno del orquestador) y deja marcas de corte
+de fase (`SEED-EXIT:<code>` / `APP-EXIT`) que el orquestador sondea porque explorer
+retorna de inmediato; los logs van a archivo para el diagnóstico. El smoke además
+tolera el arranque frío: ventana de login de 2 min con diagnóstico (URL, cuerpo y
+consola de la página + captura).
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
