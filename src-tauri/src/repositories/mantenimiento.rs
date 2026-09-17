@@ -7,6 +7,7 @@
 
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
+use crate::core::decimal_string::decimal_string;
 use crate::core::error::AppError;
 use crate::core::PooledConnection;
 // Helpers centralizados (Bloque 4 / TAREA 4.2): antes estaban duplicados
@@ -39,7 +40,7 @@ pub struct Mantenimiento {
 }
 
 /// Datos de entrada para crear/actualizar (validados por el servicio)
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MantenimientoDatos {
     pub placa: String,
@@ -47,6 +48,7 @@ pub struct MantenimientoDatos {
     pub fecha: String,
     pub descripcion: Option<String>,
     pub observaciones: Option<String>,
+    #[serde(deserialize_with = "decimal_string")]
     pub costo: String,
     pub km_proximo_cambio_aceite: Option<i64>,
 }

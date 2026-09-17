@@ -11,6 +11,7 @@
 
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
+use crate::core::decimal_string::decimal_string;
 use crate::core::error::AppError;
 use crate::core::repository::{map_fb_error_fk, opt_str, params, parse_fecha, parse_hora_opt};
 use crate::core::PooledConnection;
@@ -48,7 +49,7 @@ pub struct Reserva {
 }
 
 /// Datos de entrada para crear/actualizar (validados por el servicio)
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ReservaDatos {
     pub id_cliente: Option<i64>,
@@ -64,10 +65,16 @@ pub struct ReservaDatos {
     pub ubicacion_retorno: Option<String>,
     pub dias_calculados: i64,
     pub horas_extras: i64,
+    // Montos monetarios tolerantes a números JSON (ver core::decimal_string).
+    #[serde(deserialize_with = "decimal_string")]
     pub valor_dia: String,
+    #[serde(deserialize_with = "decimal_string")]
     pub valor_hora_adic: String,
+    #[serde(deserialize_with = "decimal_string")]
     pub costo_lavado: String,
+    #[serde(deserialize_with = "decimal_string")]
     pub abono: String,
+    #[serde(deserialize_with = "decimal_string")]
     pub total: String,
     pub observaciones: Option<String>,
     pub estado: String,

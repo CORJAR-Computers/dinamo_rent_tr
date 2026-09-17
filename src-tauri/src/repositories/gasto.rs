@@ -11,6 +11,7 @@
 
 use rsfbclient::{Execute, IntoParam, ParamsType, Queryable};
 
+use crate::core::decimal_string::decimal_string;
 use crate::core::error::AppError;
 use crate::core::repository::{map_fb_error_fk, opt_str, params, parse_fecha};
 use crate::core::PooledConnection;
@@ -35,13 +36,14 @@ pub struct Gasto {
 }
 
 /// Datos de entrada para crear/actualizar (validados por el servicio)
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GastoDatos {
     pub placa: Option<String>,
     pub fecha: String,
     pub categoria: String,
     pub descripcion: String,
+    #[serde(deserialize_with = "decimal_string")]
     pub monto: String,
     pub comprobante: Option<String>,
 }

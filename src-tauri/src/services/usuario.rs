@@ -21,7 +21,7 @@ use crate::core::PooledConnection;
 use crate::repositories::usuario::{Usuario, UsuarioRepository};
 
 /// Datos para crear un usuario (validados por el servicio)
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UsuarioDatos {
     pub username: String,
@@ -34,7 +34,7 @@ pub struct UsuarioDatos {
 }
 
 /// Datos para actualizar un usuario (sin password — la contraseña se gestiona aparte)
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UsuarioDatosActualizar {
     pub nombre: String,

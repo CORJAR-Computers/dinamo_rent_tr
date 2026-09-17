@@ -4,6 +4,9 @@ pub mod audit;
 pub mod config;
 pub mod crypto;
 pub mod db;
+/// Deserializadores tolerantes de montos monetarios (`String` | número JSON)
+/// para los DTOs de comandos Tauri. Ver el módulo para la motivación.
+pub mod decimal_string;
 pub mod error;
 pub mod migrations;
 pub mod rbac;

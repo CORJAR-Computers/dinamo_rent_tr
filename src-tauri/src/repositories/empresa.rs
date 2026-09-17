@@ -27,7 +27,7 @@ pub struct EmpresaConfig {
 }
 
 /// Datos recibidos al guardar (logo como data URL o null para quitar).
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct EmpresaConfigDatos {
     pub nombre: Option<String>,

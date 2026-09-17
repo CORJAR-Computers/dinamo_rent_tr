@@ -12,6 +12,7 @@
 
 use rsfbclient::{Execute, ParamsType, Queryable};
 
+use crate::core::decimal_string::decimal_string;
 use crate::core::error::AppError;
 use crate::core::repository::{map_fb_error_dup, map_fb_error_fk, opt_str};
 use crate::core::PooledConnection;
@@ -61,7 +62,7 @@ macro_rules! params {
 }
 
 /// Datos de entrada para crear/actualizar (validados por el servicio)
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AutoDatos {
     pub placa: String,
@@ -77,6 +78,7 @@ pub struct AutoDatos {
     pub no_chasis: Option<String>,
     pub propietario: Option<String>,
     pub estado: String,
+    #[serde(deserialize_with = "decimal_string")]
     pub costo_fijo_mensual: String,
     pub kilometraje: f64,
     pub ubicacion: Option<String>,

@@ -46,7 +46,7 @@ pub struct Cliente {
 }
 
 /// Datos de entrada para crear/actualizar (PII en claro; el servicio cifra)
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ClienteDatos {
     pub tipo_doc: Option<String>,
