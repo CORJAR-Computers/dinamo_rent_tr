@@ -172,6 +172,21 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # Los runners ejecutan Defender en tiempo real: escanea cada archivo
+      # recién escrito y compite con vite (sync de .svelte-kit) y cargo,
+      # produciendo EPERM (-4048) espurios — corrida 4 del CI: vite murió al
+      # abrir .svelte-kit/env.d.ts. La corrida 3 descartó a la degradación
+      # runas como causa (allí vite corrió bien degradado): es una carrera
+      # con el antivirus. Excluir el workspace y los procesos del build la
+      # elimina. Los steps corren elevados, así que Add-MpPreference aplica.
+      - name: Excluir el workspace de Windows Defender
+        shell: powershell
+        run: |
+          Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE
+          Add-MpPreference -ExclusionProcess node.exe
+          Add-MpPreference -ExclusionProcess cargo.exe
+          Add-MpPreference -ExclusionProcess rustc.exe
+
       - name: Install dependencies (bun)
         run: bun install --frozen-lockfile
 
@@ -179,6 +194,19 @@ jobs:
       # + CDP 9222) → smoke completo → limpieza de procesos y BD temporal.
       - name: Smoke E2E del flujo de cobro (smoke:dev)
         run: npm run smoke:dev
+
+      # Artefactos del smoke en corridas EXITOSAS: los PDFs reales de orden
+      # y contrato generados por el flujo de cobro, más las capturas de los
+      # modales (Page.printToPDF sobre el pipeline de impresión real).
+      # Retención corta: son evidencia, no diagnóstico (eso va en el paso
+      # siguiente, con 7 días).
+      - name: Subir artefactos del smoke (PDFs y capturas, solo en éxito)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artefactos
+          path: .tmp-print/
+          retention-days: 3
 
       - name: Subir capturas de diagnóstico (solo en fallo)
         if: failure()

@@ -1021,6 +1021,14 @@ extensión, actualizar el branch de renta de prueba de `scripts/smoke-test-app.m
 (los dos inputs de fecha comparten `type="date"` — seleccionar por índice, no por
 selector único; la placa es un `SearchSelect`: combobox + `li[role="option"]`).
 
+En CI (job `smoke-e2e`): los PDFs de orden/contrato y las capturas de los modales se
+publican como artefacto `smoke-artefactos` en corridas **exitosas** (retención 3 días;
+el diagnóstico de fallos va como `smoke-diagnostico`, 7 días). El job excluye el
+workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar:
+los runners ejecutan Defender en tiempo real y la carrera con vite/cargo produce
+`EPERM (-4048)` espurios (causa real del fallo de la corrida 4; la degradación `runas`
+quedó descartada porque en la corrida 3 vite corrió bien ya degradado).
+
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
 La app permite a cada empresa configurar su identidad visual y datos de contacto
