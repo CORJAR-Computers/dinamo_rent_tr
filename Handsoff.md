@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-09-16** · Estado: **todos los módulos operativos, validación verde · release v1.2.2 publicada (ronda de QA: fechas locales en 8 pantallas, doble cobro en extensiones corregido, salvaguardas de restauración, gate de clippy, aes 0.9 + cbc 0.2 con formatos intactos) · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) con formatos de salida intactos · tests de backups deterministas · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24** cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-09-17** · Estado: **todos los módulos operativos, validación verde · red de seguridad `decimal_string` en DTOs + guardrail dev de contrato IPC (`devGuard` en `invokeCmd`) + inputs monetarios en `inputmode="decimal"` (convención §4.12; incidente `extender_renta` resuelto) · release v1.2.2 publicada (ronda de QA: fechas locales en 8 pantallas, doble cobro en extensiones corregido, salvaguardas de restauración, gate de clippy, aes 0.9 + cbc 0.2 con formatos intactos) · migración de deps criptográficas (rand 0.10, argon2 0.6, hmac 0.13, aes-gcm 0.11) con formatos de salida intactos · tests de backups deterministas · cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24** cierre de rentas con valor día extra y horas extras editables · gasolina en extras · desglose completo en el contrato · reportes pulidos · Bloques 1-4 aplicados (tracing, informes optimizados, repository DRY, accesibilidad WCAG 2.1, dependabot, ts-rs) · edición de rentas cerradas · extensiones acumulables · mayúsculas automáticas · backups de la BD (Fase 8) · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).
@@ -694,6 +694,30 @@ token,"consumidor":"1"}}` → `multas[]` (comparendo, numeroComparendo, valorPag
     uppercased, para que no fallen con valores de config.ini en camelCase.
     `TIPO_CAMBIO_ACEITE` en mantenimiento también se compara case-insensitive para que la
     sincronización de `proximo_aceite` funcione con el valor stored en mayúsculas.
+12. **Inputs monetarios y contrato de tipos IPC:** los montos viajan como **String** end-to-end
+    (convención 3). En la UI, los inputs de montos usan `inputmode="decimal"` (o
+    `inputmode="numeric"` si solo aceptan enteros, p. ej. kilometraje de la inspección)
+    **nunca `type="number"`** ligado con `bind:value` a un campo string: Svelte 5
+    coerciona el valor del DOM a `number` y el payload viaja mal tipado (causa del
+    incidente de `extender_renta`, corregido el 16-09). **Red de seguridad backend:**
+    los campos monetarios de los DTOs de entrada llevan
+    `#[serde(deserialize_with = "decimal_string")]` (u `option_decimal_string` en
+    `Option<String>`) — definidos en `src-tauri/src/core/decimal_string.rs` — y
+    aceptan string o número JSON sin perder precisión (`visit_u64`/`visit_i64`
+    nativos, probado con 2^53+1); `null` → `""`/`None`. No validan negocio: un monto
+    inválido llega al servicio, que responde con su mensaje de validación. Los campos
+    `i64`/`f64`/`bool` NO llevan el atributo (allí el número es el tipo correcto).
+    **Guardrail de desarrollo:** `invokeCmd` ejecuta `devTypeCheckArgs`
+    (`src/lib/api/devGuard.ts`, solo `import.meta.env.DEV`), que advierte en consola
+    (`[devGuard]`) en **ambas direcciones**: un campo string que viaja como `number`
+    (tolerado por `decimal_string`) o un campo `i64`/`f64` que viaja como `string`
+    (serde lo rechaza: `invalid type: string, expected i64`); nunca lanza ni muta
+    el payload. El mapa de contratos NO se mantiene a mano: lo genera el binario
+    `gen_devguard` (`bun run gen:devguard`; clasifica cada campo con sondas serde:
+    ¿el DTO acepta `999`? ¿acepta `"1"`?) en `src/lib/api/devGuard.generated.ts`, y
+    el test `devGuard.sync.test.ts` rompe la suite si el generado queda obsoleto
+    (fuente Rust más nueva que el generado → regenerar). Al añadir un campo
+    monetario/numérico nuevo basta anotarlo en el DTO Rust y correr `bun run gen:devguard`.
 
 ---
 
@@ -972,6 +996,30 @@ y el resto de suites). Nota (14-08): el flake de
 `services::simit::consulta_401_clasifica_como_unauthorized` (mock HTTP bajo paralelismo) se
 arregló con agente propio por test + `#[serial]` + mock con timeouts — estresado en verde
 (27 corridas consecutivas + carga real con builds en paralelo).
+
+### 6.4 Smoke E2E en dev con BD aislada — `npm run smoke:dev` (2026-09-17)
+
+Mientras que `npm run smoke:app` corre contra la BD que haya (y omite la extensión si la
+renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
+`smoke:dev` garantiza el escenario completo de cobro de punta a punta:
+
+1. Crea `scripts/.tmp-smoke-data/` (ignorado por git) y lo siembra con
+   `cargo run --features dev --bin seed_ci -- <dir>`: admin/autos/clientes pero **sin
+   rentas** → `/rentas` arranca vacía y el smoke entra al branch de renta de prueba
+   (5 días × $150.000, sin IVA — la única base conocida que permite asertar totales).
+2. Lanza `tauri dev` con **`DINAMO_DATA_DIR`** apuntando al dir temporal (override
+   solo-debug en `lib.rs` — aísla BD/config del humo sin tocar la BD dev) y CDP en 9222.
+3. Corre `smoke-test-app.mjs`: renta de prueba → pago → **extensión decimal** (+2 h ×
+   $25.000,5 = $50.001 → total $800.001 SIN doble cobro; segunda extensión acumulativa
+   $850.001) → orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier
+   aviso del guardrail).
+4. Limpia: `taskkill /T` al árbol npm→cargo→app y borrado del data_dir (`--mantener`
+   lo conserva para inspección; Windows puede retener el `.fdb` unos segundos).
+
+Mantenimiento: si cambian labels/placeholders del modal de nueva renta o del modal de
+extensión, actualizar el branch de renta de prueba de `scripts/smoke-test-app.mjs`
+(los dos inputs de fecha comparten `type="date"` — seleccionar por índice, no por
+selector único; la placa es un `SearchSelect`: combobox + `li[role="option"]`).
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 

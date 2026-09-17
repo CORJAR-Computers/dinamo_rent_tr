@@ -126,6 +126,8 @@ Dinamo_Rent_tr/
 | **[RESUMEN_EJECUTIVO.md](RESUMEN_EJECUTIVO.md)**                 | 📊 Resumen ejecutivo del estado del proyecto: releases, CI y herramientas de operación                            |
 | **[ANUNCIO_RELEASE_TEMPLATE.md](ANUNCIO_RELEASE_TEMPLATE.md)**   | 📣 Plantilla de anuncio de release para Slack/Teams (reutilizable)                                                |
 
+> 💰 **Convención de inputs monetarios (§4.12 de [Handsoff.md](Handsoff.md))**: los montos viajan como `String` end-to-end — en la UI, `inputmode="decimal"` (nunca `type="number"` contra campos string, Svelte 5 coerciona) y en el backend, la red de seguridad `decimal_string` más el guardrail `[devGuard]` en desarrollo.
+
 _(Para documentación histórica sobre la lógica de negocio subyacente, consultar el repositorio original de la versión Python+PySide6)._
 
 ---

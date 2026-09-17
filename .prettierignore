@@ -9,3 +9,4 @@ src-tauri/resources
 bun.lock
 package-lock.json
 src/lib/assets
+src/lib/api/devGuard.generated.ts
