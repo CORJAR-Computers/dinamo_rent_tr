@@ -177,8 +177,9 @@ jobs:
       # produciendo EPERM (-4048) espurios — corrida 4 del CI: vite murió al
       # abrir .svelte-kit/env.d.ts. La corrida 3 descartó a la degradación
       # runas como causa (allí vite corrió bien degradado): es una carrera
-      # con el antivirus. Excluir el workspace y los procesos del build la
-      # elimina. Los steps corren elevados, así que Add-MpPreference aplica.
+      # con el antivirus. Excluir el workspace ANTES de bun install para que
+      # el proceso de vite/svelte-kit sync nunca compita con el escaneo.
+      # Los steps corren elevados, así que Add-MpPreference aplica.
       - name: Excluir el workspace de Windows Defender
         shell: powershell
         run: |
@@ -189,6 +190,14 @@ jobs:
 
       - name: Install dependencies (bun)
         run: bun install --frozen-lockfile
+
+      # Limpieza defensiva: si la cache de Cargo restauró target/ con el
+      # .cargo-build-lock de una corrida anterior que falló a mitad de
+      # compilación, cargo check/build falla con "Access is denied" (os error 5).
+      # Remove-Item con -ErrorAction SilentlyContinue es no-op si no existe.
+      - name: Limpiar cargo-build-lock si existe (cache corrupta)
+        shell: pwsh
+        run: Remove-Item -Force "src-tauri/target/debug/.cargo-build-lock" -ErrorAction SilentlyContinue
 
       # Orquesta: seed_ci en dir temporal → tauri dev (DINAMO_DATA_DIR aislado
       # + CDP 9222) → smoke completo → limpieza de procesos y BD temporal.
