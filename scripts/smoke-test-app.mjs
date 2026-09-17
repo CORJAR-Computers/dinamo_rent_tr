@@ -269,8 +269,10 @@ async function main(opts) {
 		.eval(`(() => { localStorage.clear(); sessionStorage.clear(); return true; })()`)
 		.catch(() => {});
 	// En dev el primer salto a /login dispara la compilación on-demand de la ruta
-	// (Vite recién arrancado): reintentamos hasta que la ruta y el form existan.
-	const finLogin = Date.now() + 45000;
+	// (Vite recién arrancado y, tras borrar .svelte-kit, el grafo entero): puede
+	// tardar más de un minuto en una máquina fría — la página queda montada a
+	// medias (body vacío) mientras compila. Reintentamos hasta 2 min.
+	const finLogin = Date.now() + 120000;
 	let ultimoErrLogin;
 	while (Date.now() < finLogin) {
 		await c.eval(`if (location.pathname !== '/login') location.href = '/login'; true`);
@@ -278,7 +280,7 @@ async function main(opts) {
 			await esperar(
 				c,
 				`location.pathname === '/login' && !!document.querySelector('#username')`,
-				8000,
+				12000,
 				'form login'
 			);
 			ultimoErrLogin = null;
@@ -287,7 +289,26 @@ async function main(opts) {
 			ultimoErrLogin = e;
 		}
 	}
-	if (ultimoErrLogin) throw ultimoErrLogin;
+	if (ultimoErrLogin) {
+		// Diagnóstico: ¿en qué quedó la página? (overlay de vite, error 500, otra ruta…)
+		try {
+			const d = await c.eval(
+				`({ href: location.href, titulo: document.title, cuerpo: (document.body?.innerText || '').slice(0, 300) })`
+			);
+			console.error(
+				'   diagnóstico login:',
+				JSON.stringify({ href: d.href, titulo: d.titulo }),
+				'\n   cuerpo:',
+				d.cuerpo.replace(/\n/g, ' | '),
+				'\n   consola (últimas):',
+				c.eventos.slice(-5).join(' || ') || '(vacía)'
+			);
+			await capturaFallo(c, 'fallo-login');
+		} catch {
+			/* sin diagnóstico */
+		}
+		throw ultimoErrLogin;
+	}
 	const intentarLogin = async (pass) => {
 		await c.eval(`(() => {
       const set = ${Rellenar};

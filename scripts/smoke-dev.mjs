@@ -76,17 +76,32 @@ async function esperarPuertoLibre(puerto, ms) {
 	return false;
 }
 
-async function esperarPuertoOcupado(puerto, ms) {
+/** Espera a que el puerto suba; si `logPath` se vigila (lanzamiento runas),
+ *  aborta temprano en cuanto el log muestra que el dev server murió — evita
+ *  quemar el timeout completo (7 min) ante un EPERM/panico evidente. */
+async function esperarCdp(puerto, ms, logPath, vigilar) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
 		const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
 		const ok = (r.stdout || '')
 			.split('\n')
 			.some((l) => l.includes(`:${puerto} `) && l.includes('LISTENING'));
-		if (ok) return true;
-		await sleep(500);
+		if (ok) return null;
+		if (vigilar) {
+			try {
+				if (
+					/terminated with a non-zero status code|EPERM|panicked at/.test(
+						readFileSync(logPath, 'utf8')
+					)
+				)
+					return 'el dev server murió durante el arranque';
+			} catch {
+				/* el log aún no existe */
+			}
+		}
+		await sleep(1000);
 	}
-	return false;
+	return 'timeout';
 }
 
 async function main() {
@@ -106,6 +121,14 @@ async function main() {
 	if (existsSync(FDB)) console.log('   BD aislada:', FDB);
 
 	console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
+	// Vite regenera .svelte-kit en el arranque (sync). Cuando el lanzamiento va
+	// degradado (runas, runners de CI), el árbol existente fue creado por el
+	// proceso elevado del checkout: escribirlo desde el proceso de baja
+	// integridad produce EPERM (-4048) espurios en .svelte-kit/env.d.ts
+	// (corridas 4 y 5 del CI; write_if_changed solo escribe si el contenido
+	// difiere, por eso era intermitente). Borrarlo obliga a vite a recrearlo
+	// con su propia propiedad; en local es un directorio generado, sin costo.
+	rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
 	// Node moderno rechaza spawn de .cmd sin shell (EINVAL, mitigación CVE): en
 	// Windows pasamos por cmd.exe explícito. Si el proceso corre ELEVADO (los
 	// runners de CI), el lanzamiento va por runas /trustlevel:0x20000: Chromium
@@ -165,7 +188,8 @@ async function main() {
 
 	try {
 		// CDP arriba = la ventana WebView2 de la app ya existe (tras compilar).
-		if (!(await esperarPuertoOcupado(PUERTO_CDP, 420000))) {
+		const causa = await esperarCdp(PUERTO_CDP, 420000, LOG, elevado);
+		if (causa) {
 			let detalle = salida.slice(-1500);
 			if (elevado) {
 				try {
@@ -174,7 +198,7 @@ async function main() {
 					detalle += '\n(sin log del proceso degradado)';
 				}
 			}
-			throw new Error('CDP 9222 no subió en 7 min (fallo de compilación?):\n' + detalle);
+			throw new Error(`CDP ${PUERTO_CDP} no subió en 7 min (${causa}):\n` + detalle);
 		}
 		await sleep(2000); // margen para que el target page esté servido
 
@@ -184,7 +208,20 @@ async function main() {
 			stdio: 'inherit',
 			env: { ...process.env, CDP_PORT: PUERTO_CDP }
 		});
-		if (r.status !== 0) throw new Error(`smoke falló (exit ${r.status})`);
+		if (r.status !== 0) {
+			// La salida de vite ayuda a distinguir crash (EPERM/overlay) de una
+			// carrera de compilación on-demand: incluirla siempre en el error.
+			let cola = salida.slice(-1000);
+			if (elevado) {
+				try {
+					cola = readFileSync(LOG, 'utf8').slice(-1000);
+				} catch {
+					cola += '\n(sin log del proceso degradado)';
+				}
+			}
+			throw new Error(`smoke falló (exit ${r.status}):
+--- cola del dev server ---\n${cola}`);
+		}
 	} finally {
 		console.log('— cerrando la app y el dev server…');
 		fin();

@@ -1027,7 +1027,16 @@ el diagnóstico de fallos va como `smoke-diagnostico`, 7 días). El job excluye 
 workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar:
 los runners ejecutan Defender en tiempo real y la carrera con vite/cargo produce
 `EPERM (-4048)` espurios (causa real del fallo de la corrida 4; la degradación `runas`
-quedó descartada porque en la corrida 3 vite corrió bien ya degradado).
+quedó descartada porque en la corrida 3 vite corrió bien ya degradado). Causa raíz
+confirmada en la corrida 5 (con exclusiones activas): con lanzamiento degradado, el
+árbol `.svelte-kit` fue creado por el proceso elevado del checkout y vite intenta
+escribirlo desde el proceso de baja integridad → `EPERM` en `env.d.ts`, intermitente
+porque `write_if_changed` solo escribe si el contenido difiere. El orquestador borra
+`.svelte-kit` antes de lanzar (vite lo recrea con su propia propiedad) y el smoke
+tolera el arranque frío: ventana de login de 2 min con diagnóstico (URL, cuerpo y
+consola de la página + captura). El orquestador además aborta temprano si el log del
+dev server muestra muerte (`terminated`/`EPERM`/`panicked`) y adjunta su cola al
+fallo del smoke.
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
