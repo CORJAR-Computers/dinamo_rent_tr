@@ -57,7 +57,14 @@
 //      node scripts/smoke-dev.mjs [--mantener]  (conserva el data_dir para inspección)
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const MANTENER = process.argv.includes('--mantener');
@@ -73,8 +80,16 @@ const FIREBIRD_RES = join(RAIZ, 'src-tauri', 'resources', 'firebird');
 // Firebird mapea su tabla de locks (respaldada en ARCHIVO) en el directorio
 // de locks; fuera del data_dir concedido fallaría el mapeo en CI (run
 // #291). FIREBIRD_LOCK/FIREBIRD_TMP la reubican dentro del data_dir.
-const FB_LOCK_DIR = join(DATA_DIR, 'fblock');
-const FB_TMP_DIR = join(DATA_DIR, 'fbtmp');
+// ÚNICO POR INVOCACIÓN (runs #291-#292): Firebird en Windows compara las
+// rutas de los mapeos como STRINGS y una misma ruta física puede aparecer
+// como `D:\a\...` (forma de unidad) o `\Device\HarddiskVolume6\a\...`
+// (forma de kernel) — con un directorio FIJO, un fb50_trace ya mapeado por
+// otro proceso con la otra forma produce "Wrong file for memory mapping:
+// expected ... already mapped ...". Con directorio propio por corrida, el
+// archivo de locks es físicamente nuevo y no existe mapeo previo posible.
+const FB_RUN_ID = `${Date.now()}_${process.pid}`;
+const FB_LOCK_DIR = join(DATA_DIR, `fblock_${FB_RUN_ID}`);
+const FB_TMP_DIR = join(DATA_DIR, `fbtmp_${FB_RUN_ID}`);
 const FIREBIRD_LOG = join(FIREBIRD_RES, 'firebird.log');
 // SID de Todos/Everyone (S-1-1-0): independiente del idioma del SO.
 const GRANT_TODOS = '*S-1-1-0:(OI)(CI)F';
@@ -153,6 +168,23 @@ function colaLog(ruta, n = 1500) {
 		return readFileSync(ruta, 'utf8').slice(-n);
 	} catch {
 		return '(sin log en ' + ruta + ')';
+	}
+}
+
+/** Borra los directorios de locks/temp de corridas anteriores (si un
+ *  proceso fue matado a lo bruto pueden quedar residuos con mapeos
+ *  conflictivos). Se llama antes de endurecerAcls, con el data_dir ya
+ *  creado. */
+function limpiarLocksStale() {
+	for (const entry of readdirSync(DATA_DIR)) {
+		if (entry.startsWith('fblock_') || entry.startsWith('fbtmp_')) {
+			try {
+				rmSync(join(DATA_DIR, entry), { recursive: true, force: true });
+			} catch {
+				/* noop: si quedó mapeado por un zombie, el run id nuevo evita el
+				   conflicto de todos modos. */
+			}
+		}
 	}
 }
 
@@ -352,8 +384,10 @@ async function main() {
 		rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
 
 		// El data_dir debe existir ANTES del icacls para que la ACE con
-		// herencia cubra todo lo que seed/app creen dentro.
+		// herencia cubra todo lo que seed/app creen dentro (incluidos los
+		// fblock_*/fbtmp_* únicos por corrida que crea el batch).
 		mkdirSync(DATA_DIR, { recursive: true });
+		limpiarLocksStale();
 		endurecerAcls();
 
 		// ── Semilla (degradada: MISMO token que la app — Firebird embedded
