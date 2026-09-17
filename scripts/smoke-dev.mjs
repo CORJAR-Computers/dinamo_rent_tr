@@ -5,10 +5,11 @@
 // orquestador garantiza el escenario completo del flujo de cobro:
 //
 //   1. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por git).
-//   2. Lo siembra con `seed_ci <dir>`: config.ini + BD con admin/autos/
-//      clientes, pero SIN rentas → la tabla de /rentas arranca vacía y el
-//      smoke entra al branch de "renta de prueba" (el único que conoce la
-//      base monetaria y puede asertar los totales de la extensión).
+//   2. Lo siembra con `seed_ci <dir>` (compilado antes con `cargo build
+//      --features dev` cuando el seed corre degradado en CI): config.ini +
+//      BD con admin/autos/clientes, pero SIN rentas → la tabla de /rentas
+//      arranca vacía y el smoke entra al branch de "renta de prueba" (el
+//      único que conoce la base monetaria y puede asertar los totales).
 //   3. Compila la app (`cargo build`), levanta vite (dev server) y lanza el
 //      EXE ya compilado con DINAMO_DATA_DIR apuntando al dir temporal y CDP
 //      en 9222 (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS).
@@ -172,12 +173,20 @@ async function main() {
 	// Compilar ANTES de sembrar cuando el seed irá degradado (CI): necesita
 	// seed_ci.exe ya compilado — el token restringido no puede escribir en
 	// target/. (Sin elevar, el `cargo run` del seed compila por su cuenta.)
+	// seed_ci tiene required-features=["dev"] (feature vacío, solo gate del
+	// binario para excluirlo del bundle de release): sin --features dev el
+	// build lo salta y el exe no existe (fallo de la corrida 287). --bins
+	// evita compilar los demás binarios dev que el humo no usa.
 	if (esWin && elevado) {
-		console.log('— compilando binarios (cargo build, elevado)…');
-		const rc = spawnSync('cargo', ['build'], {
-			cwd: join(RAIZ, 'src-tauri'),
-			stdio: 'inherit'
-		});
+		console.log('— compilando app + seed_ci (cargo build --features dev, elevado)…');
+		const rc = spawnSync(
+			'cargo',
+			['build', '--features', 'dev', '--bin', 'dinamo-rent', '--bin', 'seed_ci'],
+			{
+				cwd: join(RAIZ, 'src-tauri'),
+				stdio: 'inherit'
+			}
+		);
 		if (rc.status !== 0) throw new Error(`cargo build falló (exit ${rc.status})`);
 	}
 
