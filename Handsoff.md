@@ -1006,19 +1006,21 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
 1. Compila app + seed_ci (`cargo build --features dev --bins`; el feature
    `dev` es vacío y solo excluye esos binarios del bundle de release — sin él
    `cargo build` no produce `seed_ci.exe`, corrida 287).
-2. Crea `scripts/.tmp-smoke-data/` (ignorado por git) y lo siembra con
-   `seed_ci <dir>` (en Windows, vía runas con ACLs endurecidas — ver el
-   motivo más abajo): admin/autos/clientes pero **sin rentas** → `/rentas`
-   arranca vacía y el smoke entra al branch de renta de prueba (5 días ×
-   $150.000, sin IVA — la única base conocida que permite asertar totales).
+2. Crea un data_dir temporal único (`%TEMP%\dinamo-smoke-<ts>_<pid>`; en
+   Windows el temp de C: — volumen real, fuera del VHD del workspace — y
+   lo siembra con `seed_ci <dir>` (elevado en CI; ver el motivo más
+   abajo): admin/autos/clientes pero **sin rentas** → `/rentas` arranca
+   vacía y el smoke entra al branch de renta de prueba (5 días ×
+   $150.000, sin IVA — la única base conocida que permite asertar
+   totales).
 3. Corre `smoke-test-app.mjs`: renta de prueba → pago → **extensión decimal** (+2 h ×
    $25.000,5 = $50.001 → total $800.001 SIN doble cobro; segunda extensión acumulativa
    $850.001) → orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier
    aviso del guardrail).
-4. Limpia: la app y el seed por nombre de imagen (la tarea suelta el PID del
-   orquestador), CDP y vite por puerto, la tarea programada, y borrado del
-   data_dir (`--mantener` lo conserva para inspección; Windows puede retener
-   el `.fdb` unos segundos).
+4. Limpia: la app por nombre de imagen (el runas suelta el PID del
+   orquestador), CDP y vite por puerto, y borrado del data_dir del temp
+   (`--mantener` lo conserva para inspección; Windows puede retener el
+   `.fdb` unos segundos).
 
 Mantenimiento: si cambian labels/placeholders del modal de nueva renta o del modal de
 extensión, actualizar el branch de renta de prueba de `scripts/smoke-test-app.mjs`
@@ -1037,27 +1039,30 @@ en el entorno). Degradar TODO el árbol con `runas /trustlevel:0x20000` rompió 
 compilación (CI #273-#277): el token restringido pierde los ACE del grupo
 Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre `.svelte-kit`
 (el árbol fue creado por el proceso elevado del checkout; `write_if_changed` lo hace
-intermitente). Historia de la degradación con `runas /trustlevel:0x20000`: degradar
-TODO el árbol rompió la compilación (CI #273-#277: el token restringido pierde los
-ACE de Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre
-`.svelte-kit`); sembrar la BD ELEVADO y abrirla degradada produce "Wrong file for
-memory mapping" (run #286 — Firebird embedded mapea la BD y sus locks en memoria
-compartida que el otro token no puede abrir); sembrar TAMBIÉN degradado falla igual
-(runs #287-#288): la DACL de los archivos del checkout (creados elevado) no concede
-nada a los SIDs restringidos del runas; y ni schtasks /RL LIMITED /IT ni
-explorer.exe sirven en runners (runs #289-#290): GitHub deshabilita UAC y NO existe
-token medio que heredar — whoami mostró High Mandatory Level incluso bajo la tarea y
-el shell. SOLUCIÓN (validada en local con el humo íntegro vía runas): compilar y
-servir ELEVADOS (vite borra `.svelte-kit` y lo recrea) y correr el humo (seed + app)
-SIEMPRE vía runas con las ACLs endurecidas: `icacls <ruta> /grant
-*S-1-1-0:(OI)(CI)F /t /c /q` sobre el data_dir y `src-tauri/resources/firebird`
-(Firebird mapea firebird.msg/ICU/BD en memoria compartida; con Everyone en la DACL,
-el intersect con cualquier conjunto de SIDs restringidos es no vacío y el mapeo
-procede). El batch degradado fija el env del humo (runas NO hereda entorno),
-registra `whoami /groups` de la fase y deja marcas de corte (`SEED-EXIT:<code>` /
-`APP-EXIT`) que el orquestador sondea porque runas retorna de inmediato; los logs
-van a archivo para el diagnóstico. El smoke además tolera el arranque frío: ventana
-de login de 2 min con diagnóstico (URL, cuerpo y consola de la página + captura).
+intermitente). Historia de la degradación: degradar TODO el árbol con `runas
+/trustlevel:0x20000` rompió la compilación (CI #273-#277: el token restringido
+pierde los ACE de Administrators → `.cargo-build-lock` denegado y `EPERM` de vite
+sobre `.svelte-kit`); ni schtasks /RL LIMITED /IT ni explorer.exe sirven en runners
+(runs #289-#290: GitHub deshabilita UAC y NO existe token medio que heredar —
+whoami mostró High Mandatory Level incluso bajo la tarea y el shell). Y la serie de
+"Wrong file for memory mapping" de Firebird (runs #286, #288, #291-#293) no era de
+ACLs: el workspace de los runners vive en un VHD montado en D:\a, la MISMA ruta
+física se resuelve con dos formas (D:\a\... y \Device\HarddiskVolume6\a\...) y
+Firebird compara las rutas de sus mapeos como STRINGS — con el seed degradado el
+propio fb50_trace queda mapeado con ambas formas dentro del VHD (falló incluso con
+locks únicos por corrida, run #293). En un volumen REAL ambas formas coinciden: por
+eso el humo siempre pasó en dev. SOLUCIÓN (cada fase con el token/ruta donde ya se
+probó que funciona): seed_ci ELEVADO directo sobre un data_dir en el TEMP de C:
+(volumen real, una sola forma de ruta; los runs #286/#289 sembraron así sin
+problema), y la app vía runas (integridad media: WebView2 honra la bandera CDP)
+con Everyone concedido (icacls *S-1-1-0:(OI)(CI)F) en resources/firebird y la raíz
+del repo (#286 falló porque sembraba elevado sin conceder nada para la app
+restringida); FIREBIRD_LOCK/FIREBIRD_TMP viven dentro del data_dir del temp. El
+batch degradado fija el env del humo (runas NO hereda entorno), registra una huella
+compacta de `whoami /groups` y deja la marca `APP-EXIT` que el orquestador sondea
+porque runas retorna de inmediato; los logs van a archivo para el diagnóstico. El
+smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico
+(URL, cuerpo y consola de la página + captura).
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
