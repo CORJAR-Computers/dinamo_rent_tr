@@ -70,6 +70,12 @@ const EXE_SEED = join(RAIZ, 'src-tauri', 'target', 'debug', 'seed_ci.exe');
 const BAT_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.cmd');
 const LOG_HUMO = join(RAIZ, 'scripts', '.tmp-smoke-humo.log');
 const FIREBIRD_RES = join(RAIZ, 'src-tauri', 'resources', 'firebird');
+// Firebird mapea su tabla de locks (respaldada en ARCHIVO) en el directorio
+// de locks; fuera del data_dir concedido fallaría el mapeo en CI (run
+// #291). FIREBIRD_LOCK/FIREBIRD_TMP la reubican dentro del data_dir.
+const FB_LOCK_DIR = join(DATA_DIR, 'fblock');
+const FB_TMP_DIR = join(DATA_DIR, 'fbtmp');
+const FIREBIRD_LOG = join(FIREBIRD_RES, 'firebird.log');
 // SID de Todos/Everyone (S-1-1-0): independiente del idioma del SO.
 const GRANT_TODOS = '*S-1-1-0:(OI)(CI)F';
 
@@ -151,15 +157,16 @@ function colaLog(ruta, n = 1500) {
 }
 
 /** Concede Full Control a Everyone (con herencia a lo nuevo) sobre las
- *  rutas que Firebird mapea en memoria: el data_dir y los recursos
- *  embebidos (firebird.msg, ICU, tzdata, y el firebird.log que pueda
- *  crearse allí). Sin esto, el token restringido del runas no puede mapear
- *  archivos creados por el checkout elevado → "Wrong file for memory
- *  mapping" (runs #286/#288). Best-effort: si icacls falla en algún
- *  archivo puntual se continúa (el fallo real aparecería al mapear). */
+ *  rutas que Firebird mapea en memoria: el data_dir (con sus subdirs de
+ *  locks y temp), los recursos embebidos (firebird.msg, ICU, tzdata y el
+ *  firebird.log que pueda crearse allí) y la raíz del repo (CWD del humo).
+ *  Sin esto, el token restringido del runas no puede mapear archivos
+ *  creados por el checkout elevado → "Wrong file for memory mapping"
+ *  (runs #286/#288). Best-effort: si icacls falla en algún archivo
+ *  puntual se continúa (el fallo real aparecería al mapear). */
 function endurecerAcls() {
-	console.log('— concediendo Full Control a Everyone en data_dir y recursos Firebird…');
-	for (const ruta of [DATA_DIR, FIREBIRD_RES]) {
+	console.log('— concediendo Full Control a Everyone en data_dir, recursos Firebird y raíz…');
+	for (const ruta of [DATA_DIR, FIREBIRD_RES, RAIZ]) {
 		const r = spawnSync(
 			'icacls',
 			[ruta, '/grant', GRANT_TODOS, '/t', '/c', '/q'],
@@ -180,9 +187,20 @@ function escribirBatchHumo(fase) {
 		'@echo off',
 		`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
 		`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
+		// Locks/temp/mensajes de Firebird dentro del árbol con Everyone en la
+		// DACL: la tabla de locks es un mapeo respaldado en ARCHIVO y su
+		// ubicación por defecto (bajo el root de Firebird) no está concedida
+		// a los SIDs restringidos del runas en CI (run #291).
+		`set "FIREBIRD_LOCK=${FB_LOCK_DIR}"`,
+		`set "FIREBIRD_TMP=${FB_TMP_DIR}"`,
+		`set "FIREBIRD_MSG=${join(FIREBIRD_RES, 'firebird.msg')}"`,
+		`if not exist "${FB_LOCK_DIR}" md "${FB_LOCK_DIR}"`,
+		`if not exist "${FB_TMP_DIR}" md "${FB_TMP_DIR}"`,
 		`cd /d "${RAIZ}"`,
+		// Huella compacta del token: etiqueta de integridad y cómo quedaron
+		// Administrators/Usuarios (CSV filtra sin depender del idioma).
 		`echo === TOKEN-DE-LA-FASE === >> "${LOG_HUMO}" 2>&1`,
-		`whoami /groups >> "${LOG_HUMO}" 2>&1`
+		`powershell -NoProfile -Command "whoami /groups /fo csv | Select-String 'S-1-16-,|S-1-5-32-544|S-1-5-32-545' >> '${LOG_HUMO}'"`
 	];
 	if (fase === 'seed') {
 		lineas.push(
@@ -346,7 +364,12 @@ async function main() {
 		escribirBatchHumo('seed');
 		lanzarDegradado();
 		const code = await esperarMarcaSeed(300000);
-		if (code !== 0) throw new Error(`seed_ci falló (exit ${code}):\n` + colaLog(LOG_HUMO));
+		if (code !== 0) {
+			throw new Error(
+				`seed_ci falló (exit ${code}):\n${colaLog(LOG_HUMO)}\n` +
+					`--- firebird.log ---\n${colaLog(FIREBIRD_LOG, 2000)}`
+			);
+		}
 		if (!existsSync(FDB)) throw new Error('seed_ci no produjo la BD: ' + FDB);
 		console.log('   BD aislada:', FDB);
 
