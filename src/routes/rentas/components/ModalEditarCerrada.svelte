@@ -51,14 +51,22 @@
 
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
 			<FormField label="Valor día" required>
-				<input class="input" type="number" step="0.01" min="0" bind:value={editCerrada.valorDia} />
+				<input
+					class="input"
+					inputmode="decimal"
+					step="0.01"
+					min="0"
+					placeholder="150000"
+					bind:value={editCerrada.valorDia}
+				/>
 			</FormField>
 			<FormField label="Valor hora extra">
 				<input
 					class="input"
-					type="number"
+					inputmode="decimal"
 					step="0.01"
 					min="0"
+					placeholder="10000"
 					bind:value={editCerrada.valorHoraExtra}
 				/>
 			</FormField>
@@ -71,14 +79,22 @@
 			<FormField label="Valor día extra">
 				<input
 					class="input"
-					type="number"
+					inputmode="decimal"
 					step="0.01"
 					min="0"
+					placeholder="50000"
 					bind:value={editCerrada.valorDiaExtra}
 				/>
 			</FormField>
 			<FormField label="Descuento">
-				<input class="input" type="number" step="0.01" min="0" bind:value={editCerrada.descuento} />
+				<input
+					class="input"
+					inputmode="decimal"
+					step="0.01"
+					min="0"
+					placeholder="5000"
+					bind:value={editCerrada.descuento}
+				/>
 			</FormField>
 			<div class="col-span-full mb-2">
 				<label

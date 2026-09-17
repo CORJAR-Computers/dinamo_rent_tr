@@ -7,8 +7,10 @@ import type {
 	Renta,
 	RentaDatos,
 	RentaCierreDatos,
+	RentaCierreEditDatos,
 	PagoDatos,
 	InspeccionDatos,
+	ExtensionDatos,
 	Auto,
 	BusinessLists,
 	Reserva
@@ -420,6 +422,98 @@ describe('página de Rentas', () => {
 		const args = pagar.mock.calls[0][0] as { sessionId: string; idRenta: number; datos: PagoDatos };
 		expect(args.idRenta).toBe(5);
 		expect(args.datos.monto).toBe('200000');
+	});
+
+	it('extiende una renta enviando el valor como string (regresión: el backend espera String)', async () => {
+		tauri.register('listar_rentas', () => [renta({ id: 5 })]);
+		tauri.register('listar_extensiones', () => []);
+		const extender = vi.fn((_args: { sessionId: string; id: number; datos: ExtensionDatos }) =>
+			renta({ id: 5 })
+		);
+		tauri.register('extender_renta', extender);
+
+		render(RentasPage);
+		await screen.findByText('Cliente de Prueba');
+
+		await fireEvent.click(screen.getByTitle('Extender renta (agregar horas/días)'));
+		const dialogo = await screen.findByRole('dialog');
+		expect(dialogo).toHaveTextContent('Extender renta #0005');
+
+		await fireEvent.input(screen.getByPlaceholderText('$0'), {
+			target: { value: '20000' }
+		});
+
+		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Aplicar extensión' }));
+
+		await waitFor(() => expect(extender).toHaveBeenCalledTimes(1));
+		const args = extender.mock.calls[0][0] as {
+			sessionId: string;
+			id: number;
+			datos: ExtensionDatos;
+		};
+		expect(args.id).toBe(5);
+		expect(args.datos.tipo).toBe('horas');
+		expect(args.datos.cantidad).toBe(1);
+		// Si `valor` llegara como number, el backend falla con
+		// «invalid type: integer, expected a string» y la extensión no se aplica
+		expect(args.datos.valor).toBe('20000');
+		expect(typeof args.datos.valor).toBe('string');
+	});
+
+	it('corrige una renta cerrada enviando los montos como string (regresión H2)', async () => {
+		tauri.register('listar_rentas', () => [
+			renta({
+				id: 7,
+				estado: 'Cerrada',
+				valorDia: '150000.00',
+				valorHoraExtra: '10000.00',
+				valorDiaExtra: '0.00',
+				descuento: '0.00',
+				diasCalculados: 3,
+				horasExtras: 0
+			})
+		]);
+		const editar = vi.fn((_args: { sessionId: string; id: number; datos: RentaCierreEditDatos }) =>
+			renta({ id: 7, estado: 'Cerrada', valorDia: '180000.00' })
+		);
+		tauri.register('editar_renta_cerrada', editar);
+
+		render(RentasPage);
+		await screen.findByText('Cliente de Prueba');
+
+		await fireEvent.click(screen.getByTitle('Editar renta cerrada (corregir digitación)'));
+		const dialogo = await screen.findByRole('dialog');
+		expect(dialogo).toHaveTextContent('Corregir renta cerrada #0007');
+
+		// Corregir el valor día: el input es inputmode="decimal" (string), y el
+		// submit convierte con String() — nunca debe salir un number del modal
+		await fireEvent.input(screen.getByPlaceholderText('150000'), {
+			target: { value: '180000' }
+		});
+		await fireEvent.input(
+			screen.getByPlaceholderText('Describe el error de digitación que se corrige...'),
+			{ target: { value: 'Corrección de la tarifa pactada' } }
+		);
+
+		await fireEvent.click(within(dialogo).getByRole('button', { name: 'Aplicar corrección' }));
+
+		await waitFor(() => expect(editar).toHaveBeenCalledTimes(1));
+		const args = editar.mock.calls[0][0] as {
+			sessionId: string;
+			id: number;
+			datos: RentaCierreEditDatos;
+		};
+		expect(args.id).toBe(7);
+		// Montos como string, nunca number (el backend espera Option<String>)
+		expect(args.datos.valorDia).toBe('180000');
+		expect(typeof args.datos.valorDia).toBe('string');
+		// Los campos no tocados conservan el string del prefill de la BD
+		expect(args.datos.valorHoraExtra).toBe('10000.00');
+		expect(typeof args.datos.valorHoraExtra).toBe('string');
+		expect(typeof args.datos.descuento).toBe('string');
+		// Controles enteros sin cambios y motivo de auditoría
+		expect(args.datos.diasCalculados).toBe(3);
+		expect(args.datos.observaciones).toBe('Corrección de la tarifa pactada');
 	});
 
 	it('registra una inspección de salida', async () => {
