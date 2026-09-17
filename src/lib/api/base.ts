@@ -1,5 +1,6 @@
 // base.ts — Invocación IPC tipada base y manejo de errores
 import { invoke } from '@tauri-apps/api/core';
+import { devTypeCheckArgs } from './devGuard';
 
 /** Formato de error devuelto por el backend (core/error.rs ErrorPayload) */
 export interface ApiErrorPayload {
@@ -31,6 +32,7 @@ export class ApiError extends Error {
  * Si el backend devuelve Err(payload), lanza ApiError con el mensaje de usuario.
  */
 export async function invokeCmd<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+	devTypeCheckArgs(command, args);
 	try {
 		return await invoke<T>(command, args);
 	} catch (err) {

@@ -60,6 +60,15 @@ path = "src/bin/updater_e2e.rs"
 # detrás de #[cfg(debug_assertions)] como defense-in-depth.
 required-features = ["dev"]
 
+[[bin]]
+name = "gen_devguard"
+path = "src/bin/gen_devguard.rs"
+# Generador del mapa de contratos del guardrail devGuard
+# (src/lib/api/devGuard.generated.ts) a partir de los DTOs de entrada reales,
+# clasificando cada campo con sondas serde (acepta número/string). Solo se
+# construye con `--features dev` para no llegar al bundle de release.
+required-features = ["dev"]
+
 [features]
 default = []
 # Feature de desarrollo: habilita el binario `dev_reset_admin`.
