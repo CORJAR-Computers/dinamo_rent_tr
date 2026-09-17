@@ -34,16 +34,18 @@
 //         propio seed mapea fb50_trace con ambas formas dentro del VHD).
 //         En un volumen REAL ambas formas coinciden: por eso el humo
 //         siempre pasó en dev.
-//      c) SOLUCIÓN (semilla y app por caminos separados, cada uno con el
-//         token donde ya se probó que funciona): seed_ci ELEVADO directo
-//         (los runs #286/#289 sembraron sin problema así) sobre un
-//         data_dir en el TEMP de C: — volumen real, una sola forma de
-//         ruta, y con DACLs heredadas del perfil del mismo usuario que
-//         después abre la app. La app corre vía `runas
-//         /trustlevel:0x20000` (integridad media: WebView2 honra la
-//         bandera CDP) y necesita Everyone en resources/firebird y la
-//         raíz del repo (#286 falló porque sembraba elevado sin conceder
-//         nada para la app restringida).
+//      c) SOLUCIÓN: TODO el humo (seed_ci + app) vía `runas
+//         /trustlevel:0x20000` — MISMO token de integridad media con SIDs
+//         restringidos para ambos (el mapeo de locks de Firebird embedded
+//         no sobrevive a tokens distintos en ninguna dirección: #286
+//         sembró elevado y la app degradada no pudo abrir la BD; #294 al
+//         revés) — y TODO lo que Firebird mapea FUERA del VHD de D:\a, en
+//         el temp de C: (volumen real: una sola forma de ruta; en el VHD
+//         la misma ruta se resuelve como D:\a\... y
+//         \Device\HarddiskVolume6\a\... y Firebird, que compara strings,
+//         chocaba consigo mismo incluso con locks únicos, #293). Everyone
+//         concedido (icacls *S-1-1-0:(OI)(CI)F) en resources/firebird y
+//         la raíz del repo: los abre la app restringida.
 //      d) runas retorna de inmediato: no se puede esperar al hijo por PID;
 //         el batch deja marcas de fase (APP-EXIT) al final de su log y el
 //         orquestador las sondea. Cada fase registra además una huella
@@ -207,7 +209,7 @@ function limpiarLocksStale() {
  *  algún archivo puntual se continúa (el fallo real aparecería al
  *  abrirlo). */
 function endurecerAcls() {
-	console.log('— concediendo Full Control a Everyone en recursos Firebird y raíz…');
+	console.log('— concediendo Full Control a Everyone en recursos Firebird y raíz del repo…');
 	for (const ruta of [FIREBIRD_RES, RAIZ]) {
 		const r = spawnSync(
 			'icacls',
@@ -398,19 +400,23 @@ async function main() {
 		// degradada (el seed elevado no lo necesita).
 		endurecerAcls();
 
-		// ── Semilla (ELEVADA, con el token del orquestador): los runs #286 y
-		// #289 sembraron sin problema en CI con este token, mientras que el
-		// token restringido del runas NO logró mapear los locks de Firebird
-		// ni con ACLs endurecidas (#288, #291-#293) — en el VHD de D:\a la
-		// misma ruta se resuelve con dos formas (unidad vs kernel) y Firebird
-		// compara strings. El data_dir vive ahora en el temp de C: (volumen
-		// real, una sola forma de ruta) y con locks únicos por corrida.
-		console.log('— sembrando BD aislada (seed_ci elevado, data_dir en temp de C:)…');
+		// ── Semilla (vía runas: MISMO token restringido que la app — el
+		// mapeo de locks de Firebird embedded no sobrevive a tokens distintos
+		// en ninguna dirección, runs #286 y #294) sobre el data_dir del temp
+		// de C: — volumen REAL, fuera del VHD de D:\a donde la misma ruta se
+		// resuelve con dos formas (unidad vs kernel) y Firebird, que compara
+		// strings, chocaba consigo mismo (#291-#293, incluso con locks
+		// únicos). El run id único por corrida evita además choques con
+		// mapeos de corridas abortadas.
+		console.log('— sembrando BD aislada (seed_ci vía runas, data_dir en temp de C:)…');
 		mkdirSync(DATA_DIR, { recursive: true });
-		const rs = spawnSync(EXE_SEED, [DATA_DIR], { stdio: 'inherit' });
-		if (rs.status !== 0) {
+		rmSync(LOG_HUMO, { force: true });
+		escribirBatchHumo('seed');
+		lanzarDegradado();
+		const code = await esperarMarcaSeed(300000);
+		if (code !== 0) {
 			throw new Error(
-				'seed_ci falló:\n' + colaLog(LOG_HUMO) +
+				`seed_ci falló (exit ${code}):\n${colaLog(LOG_HUMO)}\n` +
 					`\n--- firebird.log ---\n${colaLog(FIREBIRD_LOG, 2000)}`
 			);
 		}

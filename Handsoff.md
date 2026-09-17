@@ -1006,11 +1006,11 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
 1. Compila app + seed_ci (`cargo build --features dev --bins`; el feature
    `dev` es vacío y solo excluye esos binarios del bundle de release — sin él
    `cargo build` no produce `seed_ci.exe`, corrida 287).
-2. Crea un data_dir temporal único (`%TEMP%\dinamo-smoke-<ts>_<pid>`; en
-   Windows el temp de C: — volumen real, fuera del VHD del workspace — y
-   lo siembra con `seed_ci <dir>` (elevado en CI; ver el motivo más
-   abajo): admin/autos/clientes pero **sin rentas** → `/rentas` arranca
-   vacía y el smoke entra al branch de renta de prueba (5 días ×
+2. Crea un data_dir temporal único (`%TEMP%\dinamo-smoke-<ts>_<pid>`, en
+   el temp de C: — volumen real, fuera del VHD del workspace) y lo siembra
+   con `seed_ci <dir>` (vía runas: el MISMO token que la app — ver el
+   motivo más abajo): admin/autos/clientes pero **sin rentas** → `/rentas`
+   arranca vacía y el smoke entra al branch de renta de prueba (5 días ×
    $150.000, sin IVA — la única base conocida que permite asertar
    totales).
 3. Corre `smoke-test-app.mjs`: renta de prueba → pago → **extensión decimal** (+2 h ×
@@ -1050,14 +1050,15 @@ ACLs: el workspace de los runners vive en un VHD montado en D:\a, la MISMA ruta
 física se resuelve con dos formas (D:\a\... y \Device\HarddiskVolume6\a\...) y
 Firebird compara las rutas de sus mapeos como STRINGS — con el seed degradado el
 propio fb50_trace queda mapeado con ambas formas dentro del VHD (falló incluso con
-locks únicos por corrida, run #293). En un volumen REAL ambas formas coinciden: por
-eso el humo siempre pasó en dev. SOLUCIÓN (cada fase con el token/ruta donde ya se
-probó que funciona): seed_ci ELEVADO directo sobre un data_dir en el TEMP de C:
-(volumen real, una sola forma de ruta; los runs #286/#289 sembraron así sin
-problema), y la app vía runas (integridad media: WebView2 honra la bandera CDP)
-con Everyone concedido (icacls *S-1-1-0:(OI)(CI)F) en resources/firebird y la raíz
-del repo (#286 falló porque sembraba elevado sin conceder nada para la app
-restringida); FIREBIRD_LOCK/FIREBIRD_TMP viven dentro del data_dir del temp. El
+locks únicos por corrida, run #293). En un volumen REAL ambas formas coinciden:por eso el humo siempre pasó en dev. SOLUCIÓN: TODO el humo (seed_ci + app) vía
+`runas /trustlevel:0x20000` — MISMO token de integridad media con SIDs restringidos
+(el mapeo de locks no sobrevive a tokens distintos en ninguna dirección: #286 sembró
+elevado y la app degradada no pudo abrir la BD; #294 al revés, seed elevado en temp
+de C: OK pero la app degradada tampoco) — y TODO lo que Firebird mapea FUERA del VHD,
+en el temp de C: (volumen real, una sola forma de ruta), con FIREBIRD_LOCK y
+FIREBIRD_TMP dentro del data_dir del temp. Everyone concedido
+(icacls *S-1-1-0:(OI)(CI)F) en resources/firebird y la raíz del repo: los abre la
+app restringida. El
 batch degradado fija el env del humo (runas NO hereda entorno), registra una huella
 compacta de `whoami /groups` y deja la marca `APP-EXIT` que el orquestador sondea
 porque runas retorna de inmediato; los logs van a archivo para el diagnóstico. El

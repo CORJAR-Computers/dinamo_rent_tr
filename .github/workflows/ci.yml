@@ -201,12 +201,13 @@ jobs:
           Remove-Item -Force "src-tauri\target\debug\.cargo-build-lock" -ErrorAction SilentlyContinue
           Remove-Item -Force "src-tauri\target\release\.cargo-build-lock" -ErrorAction SilentlyContinue
 
-      # Orquesta: cargo build + vite ELEVADOS; seed_ci ELEVADO sobre un
-      # data_dir en el temp de C: (el workspace vive en un VHD y Firebird
-      # rompe sus mapeos por doble forma de ruta); app vía runas
-      # /trustlevel:0x20000 (WebView2 solo honra la bandera CDP con
-      # integridad media) con Everyone en resources/firebird y la raíz →
-      # smoke completo → limpieza.
+      # Orquesta: cargo build + vite ELEVADOS; TODO el humo (seed_ci + app)
+      # vía runas /trustlevel:0x20000 — mismo token para ambos, pues el
+      # mapeo de locks de Firebird embedded no sobrevive a tokens distintos
+      # — y data_dir/FIREBIRD_LOCK/FIREBIRD_TMP en el temp de C: (el
+      # workspace vive en un VHD y Firebird rompe sus mapeos por doble
+      # forma de ruta); Everyone en resources/firebird y la raíz → smoke
+      # completo → limpieza.
       - name: Smoke E2E del flujo de cobro (smoke:dev)
         run: npm run smoke:dev
 
