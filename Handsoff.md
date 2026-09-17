@@ -1039,25 +1039,19 @@ el diagnóstico de fallos va como `smoke-diagnostico`, 7 días). El job excluye 
 workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar:
 los runners ejecutan Defender en tiempo real y la carrera con vite/cargo produce
 `EPERM (-4048)` espurios (causa real del fallo de la corrida 4). En runners ELEVADOS,
-WebView2 **ignora** `--remote-debugging-port` (probado con UAC en local y CI #285: el
-mismo exe sin elevar abre el 9222 en 1 s y elevado nunca lo abre, con y sin la variable
-en el entorno). Degradar TODO el árbol con `runas /trustlevel:0x20000` rompió la
-compilación (CI #273-#277): el token restringido pierde los ACE del grupo
-Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre `.svelte-kit`
-(el árbol fue creado por el proceso elevado del checkout; `write_if_changed` lo hace
-intermitente). SOLUCIÓN IMPLEMENTADA (arquitectura de dos fases y tokens diferenciados):
-- **Fase Seed**: `seed_ci` corre elevado con el token del orquestador (sin runas). Al no
-  necesitar CDP, genera el .fdb y aplica las 28 migraciones sin interferencia del kernel
-  de memoria mapeada de LUA.
-- **Fase ACLs**: Inmediatamente tras crear el .fdb, se re-endurecen las ACLs con
-  `icacls /grant *S-1-1-0:(OI)(CI)F` en el data_dir y recursos de Firebird para que
-  cualquier usuario (incluido el token restringido) tenga Full Control.
-- **Fase App**: La app corre degradada vía `runas /trustlevel:0x20000` (necesario para
-  que WebView2 active CDP 9222), usando directorios de locks y temporales únicos por
-  invocación (`fblock_<ts>_<pid>`), evitando choques de mapeo previo con Firebird.
-El batch degradado fija el env del humo (runas NO hereda entorno), registra una huella
-compacta de `whoami /groups` y deja la marca `APP-EXIT` que el orquestador sondea
-porque runas retorna de inmediato; los logs van a archivo para el diagnóstico. El
+WebView2 150+ **ignora** `--remote-debugging-port` vía variables de entorno por endurecimiento
+de seguridad de Microsoft. Intentar degradar con `runas /trustlevel:0x20000` causa que
+el token restringido (LUA) sea incapaz de mapear la memoria compartida del motor embebido
+de Firebird ("Wrong file for memory mapping").
+SOLUCIÓN DEFINITIVA (Política oficial de Microsoft WebView2 en HKLM):
+- Se configura la directiva del sistema en `HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`
+  con valor `*` -> `--remote-debugging-port=9222 --remote-allow-origins=*`.
+- Tanto `seed_ci` como la app `dinamo-rent.exe` corren **directamente con privilegios normales de CI**,
+  sin `runas` ni tokens restringidos.
+- Firebird Embedded opera en su entorno de memoria compartida nativo sin bloqueos ni errores
+  de asignación, mientras que WebView2 lee la política del registro y abre el puerto CDP 9222
+  inmediatamente para las pruebas E2E.
+- Limpieza determinista por PID del proceso y restauración de la clave de registro al finalizar.
 smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico
 (URL, cuerpo y consola de la página + captura).
 

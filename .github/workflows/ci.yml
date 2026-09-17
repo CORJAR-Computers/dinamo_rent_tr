@@ -201,11 +201,20 @@ jobs:
           Remove-Item -Force "src-tauri\target\debug\.cargo-build-lock" -ErrorAction SilentlyContinue
           Remove-Item -Force "src-tauri\target\release\.cargo-build-lock" -ErrorAction SilentlyContinue
 
-      # Orquesta: cargo build + vite + seed_ci ELEVADOS (seed_ci no necesita
-      # CDP y crea el .fdb sin interferencias del kernel de memoria mapeada);
-      # Everyone concedido en data_dir y Firebird; app vía runas /trustlevel:0x20000
-      # con directorios de lock únicos por invocación (CDP 9222 activo) →
-      # smoke completo → limpieza defensiva.
+      # En runners de GitHub (elevados), WebView2 150+ ignora variables de entorno
+      # de CDP por seguridad; la política oficial de Microsoft en HKLM permite habilitar
+      # --remote-debugging-port sin necesidad de tokens degradados ni runas (que rompen
+      # la memoria compartida de Firebird Embedded).
+      - name: Habilitar política de CDP de WebView2 en HKLM
+        shell: pwsh
+        run: |
+          New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" -Name "*" -Value "--remote-debugging-port=9222 --remote-allow-origins=*" -Force -ErrorAction SilentlyContinue
+
+      # Orquesta: cargo build + vite + seed_ci + app ELEVADOS directos
+      # (sin runas ni tokens degradados, Firebird Embedded funciona con
+      # memoria compartida estándar y WebView2 honra el puerto CDP 9222
+      # vía la política de HKLM).
       - name: Smoke E2E del flujo de cobro (smoke:dev)
         run: npm run smoke:dev
 
