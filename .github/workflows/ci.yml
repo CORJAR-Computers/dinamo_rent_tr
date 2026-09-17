@@ -201,8 +201,10 @@ jobs:
           Remove-Item -Force "src-tauri\target\debug\.cargo-build-lock" -ErrorAction SilentlyContinue
           Remove-Item -Force "src-tauri\target\release\.cargo-build-lock" -ErrorAction SilentlyContinue
 
-      # Orquesta: seed_ci en dir temporal → tauri dev (DINAMO_DATA_DIR aislado
-      # + CDP 9222) → smoke completo → limpieza de procesos y BD temporal.
+      # Orquesta: seed_ci en dir temporal → cargo build + vite ELEVADOS y SOLO
+      # el exe de la app degradado vía runas (WebView2 ignora la bandera CDP en
+      # procesos elevados; el env del humo va dentro del batch degradado) →
+      # smoke completo → limpieza de procesos y BD temporal.
       - name: Smoke E2E del flujo de cobro (smoke:dev)
         run: npm run smoke:dev
 

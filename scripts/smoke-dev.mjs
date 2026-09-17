@@ -9,21 +9,38 @@
 //      clientes, pero SIN rentas → la tabla de /rentas arranca vacía y el
 //      smoke entra al branch de "renta de prueba" (el único que conoce la
 //      base monetaria y puede asertar los totales de la extensión).
-//   3. Lanza `tauri dev` con DINAMO_DATA_DIR apuntando al dir temporal y CDP
+//   3. Compila la app (`cargo build`), levanta vite (dev server) y lanza el
+//      EXE ya compilado con DINAMO_DATA_DIR apuntando al dir temporal y CDP
 //      en 9222 (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS).
+//
+//      ⚠️ POR QUÉ TRES PROCESOS SEPARADOS (en vez de `tauri dev`): en un
+//      proceso ELEVADO (los runners de CI), Chromium/WebView2 IGNORA la
+//      bandera --remote-debugging-port y el puerto CDP nunca abre — probado
+//      localmente con UAC: el mismo exe sin elevar abre 9222 en 1 s y elevado
+//      nunca lo abre, con y sin la variable en el entorno (CI #285). Pero
+//      degradar TODO el árbol con `runas /trustlevel:0x20000` (CI #273-#277)
+//      rompió la compilación: el token restringido pierde los ACE del grupo
+//      Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre
+//      `.svelte-kit`. Solución: compilar y servir ELEVADOS, y degradar SOLO
+//      el proceso de la app (lo único que debe aceptar la bandera CDP).
+//      Detalle clave: runas NO hereda el entorno del orquestador, así que el
+//      env del humo (BD aislada + bandera CDP) se fija DENTRO del batch que
+//      se ejecuta ya degradado, y el log de la app va a un archivo que este
+//      orquestador lee para el diagnóstico de fallo.
+//
 //   4. Corre `smoke-test-app.mjs`: login → renta de prueba (5 días ×
 //      $150.000, sin IVA) → pago → extensión decimal (+2 h × $25.000,5 =
 //      $50.001 → total $800.001) → segunda extensión acumulativa (+1 día ×
 //      $50.000 → total $850.001) → orden → contrato → gate anti-[devGuard].
-//   5. Limpia procesos (node/npm/tauri/dinamo-rent) y reporta si quedaron
-//      residuos del data_dir (Windows puede sostener el .fdb unos segundos
-//      tras matar el proceso).
+//   5. Limpia procesos (vite/app por árbol e imagen, CDP por puerto) y
+//      reporta si quedaron residuos del data_dir (Windows puede sostener el
+//      .fdb unos segundos tras matar el proceso).
 //
 // Uso: npm run smoke:dev
 //      node scripts/smoke-dev.mjs [--mantener]  (conserva el data_dir para inspección)
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const MANTENER = process.argv.includes('--mantener');
@@ -31,16 +48,27 @@ const RAIZ = resolve(import.meta.dirname, '..');
 const DATA_DIR = join(RAIZ, 'scripts', '.tmp-smoke-data');
 const FDB = join(DATA_DIR, 'dinamo_rent_v3.fdb');
 const PUERTO_CDP = process.env.CDP_PORT || '9222';
+const EXE_APP = join(RAIZ, 'src-tauri', 'target', 'debug', 'dinamo-rent.exe');
+const BAT_APP = join(RAIZ, 'scripts', '.tmp-smoke-app.cmd');
+const LOG_APP = join(RAIZ, 'scripts', '.tmp-smoke-app.log');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** true si el proceso actual corre con integridad alta (elevado). Los runners
+ *  de CI de Windows ejecutan elevados y ahí WebView2 ignora --remote-debugging-port. */
+function esElevado() {
+	if (process.platform !== 'win32') return false;
+	const r = spawnSync('whoami', ['/groups'], { encoding: 'utf8' });
+	return /S-1-16-12288/.test(r.stdout || '');
+}
+
 function matarArbol(pid) {
-	// taskkill /T mata el árbol (cargo → tauri → vite/app), /F forzado.
+	// taskkill /T mata el árbol (npm → vite, etc.), /F forzado.
 	spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
 }
 
-/** Mata los procesos que escuchan en el puerto dado (limpieza defensiva
- *  por si dinamo-rent.exe sobrevive al taskkill /T del árbol principal). */
+/** Mata los procesos que escuchan en el puerto dado (limpieza defensiva:
+ *  la app lanzada vía runas escapa al PID del orquestador). */
 async function matarPuerto(puerto) {
 	const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
 	const pids = new Set();
@@ -66,23 +94,35 @@ async function esperarPuertoLibre(puerto, ms) {
 	return false;
 }
 
-/** Espera a que el puerto CDP suba (polling 1 s). Retorna null si subió,
- *  'timeout' si expiró el tiempo de espera. */
-async function esperarCdp(puerto, ms) {
+/** Espera a que el puerto dado esté en LISTENING (polling 1 s). */
+async function esperarPuertoOcupado(puerto, ms) {
 	const fin = Date.now() + ms;
 	while (Date.now() < fin) {
 		const r = spawnSync('netstat', ['-ano'], { encoding: 'utf8' });
 		const ok = (r.stdout || '')
 			.split('\n')
 			.some((l) => l.includes(`:${puerto} `) && l.includes('LISTENING'));
-		if (ok) return null;
+		if (ok) return true;
 		await sleep(1000);
 	}
-	return 'timeout';
+	return false;
+}
+
+/** Cola de un archivo de log para adjuntar al diagnóstico de fallo. */
+function colaLog(ruta, n = 1500) {
+	try {
+		return readFileSync(ruta, 'utf8').slice(-n);
+	} catch {
+		return '(sin log en ' + ruta + ')';
+	}
 }
 
 async function main() {
 	console.log('== smoke:dev — flujo completo con BD aislada y vacía ==');
+	// Temporales de corridas abortadas fuera del camino.
+	rmSync(BAT_APP, { force: true });
+	rmSync(LOG_APP, { force: true });
+
 	if (!existsSync(FDB)) {
 		console.log('— sembrando BD aislada (seed_ci)…');
 		const r = spawnSync('cargo', ['run', '--features', 'dev', '--bin', 'seed_ci', '--', DATA_DIR], {
@@ -97,84 +137,137 @@ async function main() {
 	}
 	if (existsSync(FDB)) console.log('   BD aislada:', FDB);
 
-	console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
 	// Vite regenera .svelte-kit en el arranque (sync). Borrarlo obliga a vite
 	// a recrearlo con su propia propiedad; en local es un directorio generado,
 	// sin costo.
 	rmSync(join(RAIZ, '.svelte-kit'), { recursive: true, force: true });
-	// Node moderno rechaza spawn de .cmd sin shell (EINVAL, mitigación CVE): en
-	// Windows pasamos por cmd.exe explícito con shell:true.
-	// NOTA: la estrategia anterior de degradar con runas /trustlevel:0x20000
-	// (para que Chromium/WebView2 acepte --remote-debugging-port en runners
-	// elevados) fue descartada porque runas retorna inmediatamente sin esperar
-	// al proceso hijo, haciendo que el PID del orquestador sea inútil para
-	// taskkill /T y el árbol quede huérfano. En la práctica, los runners de CI
-	// heredan WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS al proceso cargo→tauri→app
-	// incluso corriendo elevados, porque la variable llega por herencia de
-	// entorno del proceso padre (no por la línea de comandos, que sí bloquea
-	// Chromium con integridad alta). El lanzamiento directo funciona en CI.
+
 	const esWin = process.platform === 'win32';
-	let ejecutable, argv;
-	if (!esWin) {
-		ejecutable = 'npm';
-		argv = ['run', 'tauri', 'dev'];
-	} else {
-		ejecutable = 'cmd.exe';
-		argv = ['/d', '/s', '/c', 'npm run tauri dev'];
-	}
-	console.log('   lanzamiento: directo (env heredado)');
-	const app = spawn(ejecutable, argv, {
-		cwd: RAIZ,
-		stdio: ['ignore', 'pipe', 'pipe'],
-		env: {
-			...process.env,
-			DINAMO_DATA_DIR: DATA_DIR,
-			WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
-		}
-	});
-	let salida = '';
-	app.stdout.on('data', (d) => (salida += d));
-	app.stderr.on('data', (d) => (salida += d));
-	const fin = () => {
-		try {
-			if (app.pid) matarArbol(app.pid);
-		} catch {
-			/* noop */
-		}
+	const finApp = () => {
+		// La app puede sobrevivir a su árbol (runas suelta el PID): matarla por
+		// nombre (target/debug solo existe en desarrollo).
+		if (esWin) spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
 	};
 
-	try {
-		// CDP arriba = la ventana WebView2 de la app ya existe (tras compilar).
-		const causa = await esperarCdp(PUERTO_CDP, 420000);
-		if (causa) {
-			const detalle = salida.slice(-1500);
-			throw new Error(`CDP ${PUERTO_CDP} no subió en 7 min (${causa}):\n` + detalle);
-		}
-		await sleep(2000); // margen para que el target page esté servido
-
-		console.log('— corriendo smoke-test-app.mjs…');
-		const r = spawnSync('node', [join(RAIZ, 'scripts', 'smoke-test-app.mjs')], {
+	// ── Rama no-Windows: sin concepto de elevación, `tauri dev` completo. ──
+	if (!esWin) {
+		console.log('— lanzando tauri dev (BD aislada + CDP ' + PUERTO_CDP + ')…');
+		const dev = spawn('npm', ['run', 'tauri', 'dev'], {
 			cwd: RAIZ,
-			stdio: 'inherit',
-			env: { ...process.env, CDP_PORT: PUERTO_CDP }
+			stdio: ['ignore', 'pipe', 'pipe'],
+			env: {
+				...process.env,
+				DINAMO_DATA_DIR: DATA_DIR,
+				WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PUERTO_CDP}`
+			}
 		});
-		if (r.status !== 0) {
-			// La salida de vite/cargo ayuda a distinguir crash de una carrera
-			// de compilación on-demand: incluirla siempre en el error.
-			throw new Error(`smoke falló (exit ${r.status}):
---- cola del dev server ---\n${salida.slice(-1000)}`);
+		let salida = '';
+		dev.stdout.on('data', (d) => (salida += d));
+		dev.stderr.on('data', (d) => (salida += d));
+
+		try {
+			if (!(await esperarPuertoOcupado(PUERTO_CDP, 420000))) {
+				throw new Error(`CDP ${PUERTO_CDP} no subió en 7 min (timeout):\n` + salida.slice(-1500));
+			}
+			await sleep(2000); // margen para que el target page esté servido
+			await correrSmoke();
+		} finally {
+			try {
+				if (dev.pid) matarArbol(dev.pid);
+			} catch {
+				/* noop */
+			}
 		}
-	} finally {
-		console.log('— cerrando la app y el dev server…');
-		fin();
-		// El binario de la app puede sobrevivir al árbol npm→cargo: matarlo por
-		// nombre si sigue vivo (target/debug solo existe en desarrollo).
-		spawnSync('taskkill', ['/IM', 'dinamo-rent.exe', '/F'], { stdio: 'ignore' });
-		await matarPuerto(PUERTO_CDP);
-		await matarPuerto('5173');
-		await esperarPuertoLibre(PUERTO_CDP, 10000);
-		await esperarPuertoLibre('5173', 10000);
+	} else {
+		// ── Rama Windows (CI elevado y dev local): tres procesos separados. ──
+		const elevado = esElevado();
+
+		// 1) Compilar ANTES (proceso elevado): el runas sólo lanza el exe ya
+		//    compilado — el token restringido no puede escribir en target/.
+		console.log('— compilando la app (cargo build, elevado)…');
+		const rb = spawnSync('cargo', ['build'], {
+			cwd: join(RAIZ, 'src-tauri'),
+			stdio: 'inherit'
+		});
+		if (rb.status !== 0) throw new Error(`cargo build falló (exit ${rb.status})`);
+		if (!existsSync(EXE_APP)) throw new Error('no existe el binario compilado: ' + EXE_APP);
+
+		// 2) Vite elevado, hijo del orquestador: su salida sirve de diagnóstico
+		//    y muere con taskkill /T. (Elevado NO tiene el EPERM de antes: ese
+		//    lo causaba escribir .svelte-kit desde el proceso DEGRADADO.)
+		console.log('— lanzando vite (dev server)…');
+		const vite = spawn('cmd.exe', ['/d', '/s', '/c', 'npm run dev'], {
+			cwd: RAIZ,
+			stdio: ['ignore', 'pipe', 'pipe'],
+			env: { ...process.env }
+		});
+		let salidaVite = '';
+		vite.stdout.on('data', (d) => (salidaVite += d));
+		vite.stderr.on('data', (d) => (salidaVite += d));
+		const finVite = () => {
+			try {
+				if (vite.pid) matarArbol(vite.pid);
+			} catch {
+				/* noop */
+			}
+		};
+		if (!(await esperarPuertoOcupado('5173', 120000))) {
+			finVite();
+			throw new Error('vite (5173) no subió en 2 min:\n' + salidaVite.slice(-1500));
+		}
+
+		// 3) Batch con el env del humo (runas no hereda entorno) + lanzamiento
+		//    degradado SOLO de la app: es el proceso que debe aceptar la bandera
+		//    CDP; compilación y dev server siguen elevados.
+		writeFileSync(
+			BAT_APP,
+			[
+				'@echo off',
+				`set "DINAMO_DATA_DIR=${DATA_DIR}"`,
+				`set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PUERTO_CDP}"`,
+				`cd /d "${RAIZ}"`,
+				`"${EXE_APP}" > "${LOG_APP}" 2>&1`
+			].join('\r\n')
+		);
+		console.log(
+			'— lanzando la app (' +
+				(elevado ? 'degradada vía runas: solo el proceso de la app' : 'directa') +
+				', CDP ' +
+				PUERTO_CDP +
+				')…'
+		);
+		if (elevado) {
+			// runas retorna de inmediato: el batch queda vivo por su cuenta y el
+			// log de la app se captura en archivo (no por pipe).
+			spawn('runas', ['/trustlevel:0x20000', `cmd.exe /c "${BAT_APP}"`], {
+				cwd: RAIZ,
+				stdio: 'ignore'
+			});
+		} else {
+			spawn('cmd.exe', ['/d', '/s', '/c', BAT_APP], { cwd: RAIZ, stdio: 'ignore' });
+		}
+
+		try {
+			// CDP arriba = la ventana WebView2 de la app ya existe.
+			if (!(await esperarPuertoOcupado(PUERTO_CDP, 420000))) {
+				throw new Error(
+					`CDP ${PUERTO_CDP} no subió en 7 min (timeout):\n` +
+						`--- log de la app ---\n${colaLog(LOG_APP)}\n` +
+						`--- cola del dev server ---\n${salidaVite.slice(-1000)}`
+				);
+			}
+			await sleep(2000); // margen para que el target page esté servido
+			await correrSmoke();
+		} finally {
+			finApp();
+			await matarPuerto(PUERTO_CDP);
+			await matarPuerto('5173');
+			await esperarPuertoLibre(PUERTO_CDP, 10000);
+			await esperarPuertoLibre('5173', 10000);
+			finVite();
+		}
 	}
+
 	if (MANTENER) {
 		console.log('--mantener: data_dir conservado en ' + DATA_DIR);
 	} else {
@@ -182,7 +275,22 @@ async function main() {
 		if (!existsSync(DATA_DIR)) console.log('✓ limpieza: data_dir aislado eliminado');
 		else console.log('⚠ el data_dir quedó bloqueado (BORRAR A MANO): ' + DATA_DIR);
 	}
+	rmSync(BAT_APP, { force: true });
+	rmSync(LOG_APP, { force: true });
 	console.log('LISTO — smoke:dev OK');
+}
+
+/** Ejecuta smoke-test-app.mjs contra el CDP ya arriba. */
+function correrSmoke() {
+	return new Promise((resolveP, rejectP) => {
+		const r = spawnSync('node', [join(RAIZ, 'scripts', 'smoke-test-app.mjs')], {
+			cwd: RAIZ,
+			stdio: 'inherit',
+			env: { ...process.env, CDP_PORT: PUERTO_CDP }
+		});
+		if (r.status !== 0) rejectP(new Error(`smoke falló (exit ${r.status})`));
+		else resolveP();
+	});
 }
 
 main()

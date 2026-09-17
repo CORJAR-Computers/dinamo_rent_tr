@@ -1007,14 +1007,16 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
    `cargo run --features dev --bin seed_ci -- <dir>`: admin/autos/clientes pero **sin
    rentas** → `/rentas` arranca vacía y el smoke entra al branch de renta de prueba
    (5 días × $150.000, sin IVA — la única base conocida que permite asertar totales).
-2. Lanza `tauri dev` con **`DINAMO_DATA_DIR`** apuntando al dir temporal (override
-   solo-debug en `lib.rs` — aísla BD/config del humo sin tocar la BD dev) y CDP en 9222.
+2. Compila la app (`cargo build`) y levanta vite; lanza el EXE ya compilado con
+   **`DINAMO_DATA_DIR`** apuntando al dir temporal (override solo-debug en `lib.rs` —
+   aísla BD/config del humo sin tocar la BD dev) y CDP en 9222.
 3. Corre `smoke-test-app.mjs`: renta de prueba → pago → **extensión decimal** (+2 h ×
    $25.000,5 = $50.001 → total $800.001 SIN doble cobro; segunda extensión acumulativa
    $850.001) → orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier
    aviso del guardrail).
-4. Limpia: `taskkill /T` al árbol npm→cargo→app y borrado del data_dir (`--mantener`
-   lo conserva para inspección; Windows puede retener el `.fdb` unos segundos).
+4. Limpia: la app por nombre de imagen (`dinamo-rent.exe`, el runas suelta el PID del
+   orquestador), CDP y vite por puerto, y borrado del data_dir (`--mantener` lo
+   conserva para inspección; Windows puede retener el `.fdb` unos segundos).
 
 Mantenimiento: si cambian labels/placeholders del modal de nueva renta o del modal de
 extensión, actualizar el branch de renta de prueba de `scripts/smoke-test-app.mjs`
@@ -1026,17 +1028,21 @@ publican como artefacto `smoke-artefactos` en corridas **exitosas** (retención 
 el diagnóstico de fallos va como `smoke-diagnostico`, 7 días). El job excluye el
 workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar:
 los runners ejecutan Defender en tiempo real y la carrera con vite/cargo produce
-`EPERM (-4048)` espurios (causa real del fallo de la corrida 4; la degradación `runas`
-quedó descartada porque en la corrida 3 vite corrió bien ya degradado). Causa raíz
-confirmada en la corrida 5 (con exclusiones activas): con lanzamiento degradado, el
-árbol `.svelte-kit` fue creado por el proceso elevado del checkout y vite intenta
-escribirlo desde el proceso de baja integridad → `EPERM` en `env.d.ts`, intermitente
-porque `write_if_changed` solo escribe si el contenido difiere. El orquestador borra
-`.svelte-kit` antes de lanzar (vite lo recrea con su propia propiedad) y el smoke
-tolera el arranque frío: ventana de login de 2 min con diagnóstico (URL, cuerpo y
-consola de la página + captura). El orquestador además aborta temprano si el log del
-dev server muestra muerte (`terminated`/`EPERM`/`panicked`) y adjunta su cola al
-fallo del smoke.
+`EPERM (-4048)` espurios (causa real del fallo de la corrida 4). En runners ELEVADOS,
+WebView2 **ignora** `--remote-debugging-port` (probado con UAC en local y CI #285: el
+mismo exe sin elevar abre el 9222 en 1 s y elevado nunca lo abre, con y sin la variable
+en el entorno). Degradar TODO el árbol con `runas /trustlevel:0x20000` rompió la
+compilación (CI #273-#277): el token restringido pierde los ACE del grupo
+Administrators → `.cargo-build-lock` denegado y `EPERM` de vite sobre `.svelte-kit`
+(el árbol fue creado por el proceso elevado del checkout; `write_if_changed` lo hace
+intermitente). Solución final: compilar y servir ELEVADOS, y degradar SOLO el proceso
+de la app (lo único que debe aceptar la bandera CDP) — vite corre elevado y borra
+`.svelte-kit` antes de arrancar para recrearlo con su propia propiedad. Detalle clave:
+runas NO hereda el entorno del orquestador, así que el env del humo (BD aislada +
+bandera CDP) se fija DENTRO del batch degradado, y el log de la app va a un archivo
+(`scripts/.tmp-smoke-app.log`) que el orquestador adjunta al diagnóstico de fallo. El
+smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico (URL,
+cuerpo y consola de la página + captura).
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
