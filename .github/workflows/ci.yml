@@ -132,3 +132,58 @@ jobs:
           # termina con `exit $LASTEXITCODE`, y tras -SimularFallo (exit 1) el paso saldría
           # con exit 1 aunque ambos casos hayan validado.
           exit 0
+
+  # Smoke E2E del flujo de cobro real contra la app en dev (tauri dev + WebView2),
+  # con BD aislada y vacía sembrada por seed_ci. Es el gate E2E del guardrail:
+  # el smoke falla si [devGuard] emite cualquier aviso de contrato IPC (payload
+  # mal tipado) en los flujos reales, y valida la regresión del incidente
+  # extender_renta de punta a punta (extensión decimal con asserts de totales
+  # sin doble cobro). Requiere WebView2 Runtime, preinstalado en los runners
+  # de Windows. Ver Handsoff.md §6.4.
+  smoke-e2e:
+    name: Smoke E2E (gate del guardrail)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Node 24 (mismo runtime que validate): el orquestador usa
+      # import.meta.dirname y el smoke corre sobre node + npm del runner.
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      # Swatinem scopea la cache por job: la primera corrida de este job
+      # compila los deps debug (~3-4 min) y las siguientes los reutilizan.
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies (bun)
+        run: bun install --frozen-lockfile
+
+      # Orquesta: seed_ci en dir temporal → tauri dev (DINAMO_DATA_DIR aislado
+      # + CDP 9222) → smoke completo → limpieza de procesos y BD temporal.
+      - name: Smoke E2E del flujo de cobro (smoke:dev)
+        run: npm run smoke:dev
+
+      - name: Subir capturas de diagnóstico (solo en fallo)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-diagnostico
+          path: .tmp-print/
+          retention-days: 7
