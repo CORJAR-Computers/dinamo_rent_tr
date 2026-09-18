@@ -309,6 +309,12 @@ async function main(opts) {
 		}
 		throw ultimoErrLogin;
 	}
+	// Época de la página: si vite hace full-reload (optimización de deps en
+	// arranque frío), `window.__smokeEpoca` se regenera y detectamos que el
+	// formulario que rellenamos fue arrasado (fallo del run #300).
+	const epocaLogin = await c
+		.eval(`(window.__smokeEpoca = window.__smokeEpoca || Date.now())`)
+		.catch(() => 0);
 	let passUsada = pwd;
 	const intentarLogin = async (pass) => {
 		await c.eval(`(() => {
@@ -320,6 +326,23 @@ async function main(opts) {
       return true;
     })()`);
 		await sleep(500);
+		const verif = await c
+			.eval(
+				`(() => ({ epoca: window.__smokeEpoca, u: document.querySelector('#username')?.value, p: !!document.querySelector('#password')?.value }))()`
+			)
+			.catch(() => ({}));
+		if (verif.epoca !== epocaLogin || !verif.u || !verif.p) {
+			console.log('   la página se recargó a mitad del llenado; rellenando de nuevo…');
+			await c.eval(`(() => {
+      const set = ${Rellenar};
+      set('#username', 'admin');
+      set('#password', '${pass}');
+      document.querySelector('#username')?.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#password')?.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+			await sleep(500);
+		}
 		await c.eval(`document.querySelector('form button[type=submit]')?.click()`);
 		try {
 			await esperar(c, `location.pathname !== '/login'`, 15000, 'post-login');
@@ -346,11 +369,16 @@ async function main(opts) {
 	if (!(await intentarLogin(pwd))) {
 		console.log('— contraseña por defecto rechazada; probando inicial de fábrica (admin123)…');
 		if (!(await intentarLogin('admin123'))) {
-			console.log('— admin123 rechazada; probando la del cambio forzado (Admin123!x)…');
-			if (!(await intentarLogin('Admin123!x')))
-				throw new Error('login fallido con todas las contraseñas conocidas');
+			console.log('— admin123 rechazada; probando la del cambio forzado (Admin123!x)…');				if (!(await intentarLogin('Admin123!x'))) {
+					// Última carta: los intentos previos pueden haberse perdido por un
+					// reload de vite en arranque frío (run #300); repetir la contraseña
+					// sembrada ya con la página estable.
+					console.log('— reintentando la contraseña sembrada (posible reload de vite)…');
+					if (!(await intentarLogin(pwd)))
+						throw new Error('login fallido con todas las contraseñas conocidas');
+				}
+			}
 		}
-	}
 	let ruta = await c.eval(`location.pathname`);
 	console.log('ruta tras login:', ruta);
 
