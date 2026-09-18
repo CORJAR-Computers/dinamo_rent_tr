@@ -3,6 +3,8 @@
 > Sistema de gestión de flota para renta de vehículos. Administración integral: flota, clientes, rentas, reservas, finanzas, taller y más.
 > **Nueva versión reescrita** utilizando Tauri V2, Rust, SvelteKit y Tailwind CSS.
 
+[![CI](https://github.com/CORJAR-Computers/dinamo_rent_tr/actions/workflows/ci.yml/badge.svg)](https://github.com/CORJAR-Computers/dinamo_rent_tr/actions/workflows/ci.yml) [![Smoke nocturno](https://github.com/CORJAR-Computers/dinamo_rent_tr/actions/workflows/smoke-nocturno.yml/badge.svg)](https://github.com/CORJAR-Computers/dinamo_rent_tr/actions/workflows/smoke-nocturno.yml)
+
 ---
 
 ## ⬇️ Descarga e instalación (usuarios finales)

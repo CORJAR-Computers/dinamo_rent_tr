@@ -1,0 +1,25 @@
+name: Smoke nocturno
+
+on:
+  schedule:
+    # 03:00 UTC diario ≈ 21:00-22:00 hora Colombia (UTC-5, sin DST):
+    # ventana desatendida, lejos de los pushes del día. Si el humo falla aquí
+    # sin cambios de código en medio, es señal de flake de entorno (ver
+    # Handsoff.md §6.6 para depurarlo).
+    - cron: '0 3 * * *'
+  # Disparo manual: valida el pipeline nocturno sin esperar el cron.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# El job real vive en ci.yml (fuente única de verdad): cualquier fix del humo
+# aplica por igual a push/PR y a esta corrida nocturna. Se ejecuta SOLO el
+# job smoke-e2e (solo_smoke=true omite la validación, que ya cubrió el
+# último push a main).
+jobs:
+  smoke:
+    name: Smoke E2E nocturno (detección de flakes)
+    uses: ./.github/workflows/ci.yml
+    with:
+      solo_smoke: true

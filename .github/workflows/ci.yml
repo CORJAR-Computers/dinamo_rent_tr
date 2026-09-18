@@ -5,6 +5,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Reutilizable: el smoke nocturno (smoke-nocturno.yml) llama este workflow
+  # con solo_smoke=true para ejecutar ÚNICAMENTE el job smoke-e2e en horario
+  # desatendido (detección temprana de flakes de entorno). Fuente única de
+  # verdad: cualquier fix del humo aplica a push/PR y al nocturno por igual.
+  workflow_call:
+    inputs:
+      solo_smoke:
+        description: 'Ejecutar solo el job smoke-e2e (omitir validación)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,6 +33,9 @@ concurrency:
 jobs:
   validate:
     name: Validación (lint + check + tests)
+    # En push/PR `inputs` está vacío → corre siempre; con solo_smoke=true
+    # (llamada del nocturno) se omite: lint/tests ya cubrieron el último push.
+    if: ${{ !inputs.solo_smoke }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:

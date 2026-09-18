@@ -1047,7 +1047,10 @@ El smoke tolera el arranque frío: ventana de login de 2 min con fallback de
 contraseñas, eventos `change` en los inputs, verificación de época de página (el
 full-reload de vite en arranque frío puede arrasar el formulario a mitad del
 llenado — flake del run #300) y diagnóstico si falla (URL, cuerpo y consola de
-la página + captura).
+la página + captura). Además del run por push/PR, un workflow nocturno
+(`smoke-nocturno.yml`, 03:00 UTC) ejecuta el mismo job vía `workflow_call` con
+`solo_smoke=true` para detectar flakes de entorno en horario desatendido; los
+badges de ambos workflows están en el README.
 
 ### 6.5 Postmortem — saga del smoke E2E en CI (17→18-09-2026)
 
@@ -1055,18 +1058,18 @@ Más de una decena de corridas rojas entre los runs #273 y #296, con dos síntom
 parecían independientes: WebView2 no abría el puerto CDP 9222 y Firebird Embedded
 abortaba con `Wrong file for memory mapping` (SQLCODE -901). Cronología condensada:
 
-| Runs | Estrategia probada | Resultado |
-|---|---|---|
-| #273-#277 | degradar todo el árbol (`tauri dev` vía runas) | `EPERM` en `.svelte-kit` (creado por el checkout elevado) |
-| #285 | degradar solo la app (`runas /trustlevel:0x20000`) | la app arranca, pero WebView2 elevado ignora CDP |
-| #286 | seed elevado + app degradada | seed OK; Firebird falla al mapear en la app |
-| #288, #291-#293 | seed degradado (+ ACLs Everyone, locks únicos en el VHD) | seed muere siempre al crear la BD |
-| #289 | tarea programada `schtasks /RL LIMITED /IT` | seed OK; app viva pero muda, sin CDP |
-| #290 | delegar el lanzamiento a `explorer.exe` | runners sin UAC: todo corre elevado; no hay token medio que heredar |
-| #292-#293 | locks únicos por corrida | `expected D:\…fb50_trace already mapped \Device\HarddiskVolume6\…` |
-| #294-#296 | locks/temp en volumen real C:, seed elevado, app degradada | el mapeo cross-token sigue fallando en ambas direcciones |
-| **#297-#299** | **política HKLM de WebView2 + seed y app directos** | ✅ verde estable |
-| #300 | *post-saga:* flake de login — full-reload de vite (optimización de deps en arranque frío) arrasó el formulario a mitad del intento con la contraseña correcta | fix de tolerancia al reload → **#301 verde** |
+| Runs            | Estrategia probada                                                                                                                                            | Resultado                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| #273-#277       | degradar todo el árbol (`tauri dev` vía runas)                                                                                                                | `EPERM` en `.svelte-kit` (creado por el checkout elevado)           |
+| #285            | degradar solo la app (`runas /trustlevel:0x20000`)                                                                                                            | la app arranca, pero WebView2 elevado ignora CDP                    |
+| #286            | seed elevado + app degradada                                                                                                                                  | seed OK; Firebird falla al mapear en la app                         |
+| #288, #291-#293 | seed degradado (+ ACLs Everyone, locks únicos en el VHD)                                                                                                      | seed muere siempre al crear la BD                                   |
+| #289            | tarea programada `schtasks /RL LIMITED /IT`                                                                                                                   | seed OK; app viva pero muda, sin CDP                                |
+| #290            | delegar el lanzamiento a `explorer.exe`                                                                                                                       | runners sin UAC: todo corre elevado; no hay token medio que heredar |
+| #292-#293       | locks únicos por corrida                                                                                                                                      | `expected D:\…fb50_trace already mapped \Device\HarddiskVolume6\…`  |
+| #294-#296       | locks/temp en volumen real C:, seed elevado, app degradada                                                                                                    | el mapeo cross-token sigue fallando en ambas direcciones            |
+| **#297-#299**   | **política HKLM de WebView2 + seed y app directos**                                                                                                           | ✅ verde estable                                                    |
+| #300            | _post-saga:_ flake de login — full-reload de vite (optimización de deps en arranque frío) arrasó el formulario a mitad del intento con la contraseña correcta | fix de tolerancia al reload → **#301 verde**                        |
 
 **Causa raíz 1 — WebView2 ignora CDP en procesos elevados.** Los runners de GitHub
 Actions corren con UAC deshabilitado: no existe token de integridad media en la
@@ -1108,6 +1111,7 @@ corrida, grants `icacls Everyone`, reubicación de locks/temp a C:. Ninguno reso
 los dos problemas a la vez; la política HKLM + ejecución directa sí.
 
 **Lecciones transversales:**
+
 - Cada iteración costaba 7-13 min de CI más build local: **validar hipótesis en local
   antes de quemar corridas** (probar en vivo el token real que produce
   `explorer.exe` ahorró al menos una corrida; aun así se subieron varias con la misma
@@ -1138,6 +1142,7 @@ Para cualquier fallo de CI que no sea un test rojo obvio. Recorrer las fases en
 orden; no saltar a la "solución obvia" sin completar la fase de evidencia.
 
 **Fase 1 — Evidencia antes que hipótesis**
+
 - [ ] Leer el log COMPLETO del paso fallido (`gh run view <run> --log-failed`),
       no el resumen: el mensaje exacto y su contexto mandan. Si el grep trunca,
       extraer por ventanas de líneas.
@@ -1153,6 +1158,7 @@ orden; no saltar a la "solución obvia" sin completar la fase de evidencia.
       corridas anteriores.
 
 **Fase 2 — Hipótesis y diseño del experimento**
+
 - [ ] Un solo cambio por corrida, con cuadro run → estrategia → resultado. Fue
       lo único que permitió separar las dos causas apiladas del postmortem.
 - [ ] Sospechar causas apiladas: un error críptico puede tener 2+ causas
@@ -1167,6 +1173,7 @@ orden; no saltar a la "solución obvia" sin completar la fase de evidencia.
       MISMO token y que las rutas se comparen de forma canónica.
 
 **Fase 3 — Validar en local antes de quemar la corrida**
+
 - [ ] Cada iteración cuesta 7-13 min de CI + build local: si la hipótesis no
       está validada con una prueba mínima EN VIVO en local, no subir.
 - [ ] Ejercitar en local el camino exacto que correrá CI (mismo token, mismas
@@ -1176,6 +1183,7 @@ orden; no saltar a la "solución obvia" sin completar la fase de evidencia.
       capturas) para que cada fallo traiga su propia evidencia.
 
 **Fase 4 — Cierre**
+
 - [ ] Documentar en Handsoff: cronología, causa raíz, lista de "descartado con
       evidencia — no reintentar" y lección (ver §6.5 como plantilla).
 - [ ] Actualizar comentarios desactualizados en scripts y workflows: las
@@ -1184,13 +1192,14 @@ orden; no saltar a la "solución obvia" sin completar la fase de evidencia.
       (restaurar), directorios `.tmp-*`.
 
 **Señales de alarma (síntoma → sospecha primero)**
-| Síntoma | Sospechar de |
-|---|---|
-| Pasa en local, falla en CI | entorno: token, UAC, VHD, antivirus |
+
+| Síntoma                                                         | Sospechar de                                                                                              |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Pasa en local, falla en CI                                      | entorno: token, UAC, VHD, antivirus                                                                       |
 | `Wrong file for memory mapping` / errores de recurso compartido | tokens distintos tocando el mismo recurso, o rutas no canónicas (`D:\...` vs `\Device\HarddiskVolume...`) |
-| Proceso vivo pero mudo (sin output, sin puerto) | contexto de sesión o política del runtime (p. ej. WebView2 ignora CDP elevado) |
-| Fallo intermitente al compilar | antivirus en tiempo real (EPERM espurios) |
-| "Antes funcionaba" | residuos de una corrida anterior tapando el error real |
+| Proceso vivo pero mudo (sin output, sin puerto)                 | contexto de sesión o política del runtime (p. ej. WebView2 ignora CDP elevado)                            |
+| Fallo intermitente al compilar                                  | antivirus en tiempo real (EPERM espurios)                                                                 |
+| "Antes funcionaba"                                              | residuos de una corrida anterior tapando el error real                                                    |
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
