@@ -283,6 +283,13 @@ async function main() {
 
 			await sleep(2000); // margen para que el target page esté servido
 			await correrSmoke();
+		} catch (err) {
+			if (salidaApp) {
+				console.error('--- Salida reciente de la app (dinamo-rent.exe) ---');
+				console.error(salidaApp.slice(-3000));
+				console.error('---------------------------------------------------');
+			}
+			throw err;
 		} finally {
 			try {
 				if (app.pid) matarArbol(app.pid);

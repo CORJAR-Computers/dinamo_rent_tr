@@ -309,26 +309,47 @@ async function main(opts) {
 		}
 		throw ultimoErrLogin;
 	}
+	let passUsada = pwd;
 	const intentarLogin = async (pass) => {
 		await c.eval(`(() => {
       const set = ${Rellenar};
       set('#username', 'admin');
       set('#password', '${pass}');
+      document.querySelector('#username')?.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#password')?.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     })()`);
-		await sleep(300);
+		await sleep(500);
 		await c.eval(`document.querySelector('form button[type=submit]')?.click()`);
 		try {
-			await esperar(c, `location.pathname !== '/login'`, 30000, 'post-login');
+			await esperar(c, `location.pathname !== '/login'`, 15000, 'post-login');
+			passUsada = pass;
 			return true;
 		} catch {
+			const diag = await c.eval(`(() => {
+				const alertEl = document.querySelector('[role=alert]') || document.querySelector('.text-peligro') || document.querySelector('.text-alerta');
+				return {
+					uVal: document.querySelector('#username')?.value,
+					pVal: !!document.querySelector('#password')?.value,
+					alerta: alertEl?.innerText || '(sin alerta)',
+					btnDisabled: document.querySelector('form button[type=submit]')?.disabled,
+					body: (document.body?.innerText || '').slice(0, 300)
+				};
+			})()`).catch(() => ({}));
+			console.log(`   diagnóstico intento login (${pass}):`, JSON.stringify(diag));
+			if (c.eventos.length > 0) {
+				console.log('   consola reciente:', c.eventos.slice(-5).join(' || '));
+			}
 			return false;
 		}
 	};
 	if (!(await intentarLogin(pwd))) {
-		console.log('— contraseña por defecto rechazada; probando la del cambio forzado…');
-		if (!(await intentarLogin('Admin123!x')))
-			throw new Error('login fallido con ambas contraseñas');
+		console.log('— contraseña por defecto rechazada; probando inicial de fábrica (admin123)…');
+		if (!(await intentarLogin('admin123'))) {
+			console.log('— admin123 rechazada; probando la del cambio forzado (Admin123!x)…');
+			if (!(await intentarLogin('Admin123!x')))
+				throw new Error('login fallido con todas las contraseñas conocidas');
+		}
 	}
 	let ruta = await c.eval(`location.pathname`);
 	console.log('ruta tras login:', ruta);
@@ -338,11 +359,15 @@ async function main(opts) {
 		await esperar(c, `!!document.querySelector('#new')`, 10000, 'form-cambio');
 		await c.eval(`(() => {
       const set = ${Rellenar};
-      set('#current', '${pwd}');
+      set('#current', '${passUsada}');
       set('#new', 'Admin123!x');
       set('#confirm', 'Admin123!x');
+      document.querySelector('#current')?.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#new')?.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#confirm')?.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     })()`);
+		await sleep(300);
 		await c.eval(`document.querySelector('form button[type=submit]')?.click()`);
 		await esperar(c, `location.pathname !== '/cambiar-password'`, 15000, 'post-cambio');
 		console.log('ruta:', await c.eval(`location.pathname`));
