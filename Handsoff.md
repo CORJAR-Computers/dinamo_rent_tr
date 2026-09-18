@@ -1044,8 +1044,10 @@ publican como artefacto `smoke-artefactos` en corridas **exitosas** (retención 
 el diagnóstico de fallos va como `smoke-diagnostico`, 7 días). El job excluye el
 workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar.
 El smoke tolera el arranque frío: ventana de login de 2 min con fallback de
-contraseñas, eventos `change` en los inputs y diagnóstico si falla (URL, cuerpo y
-consola de la página + captura).
+contraseñas, eventos `change` en los inputs, verificación de época de página (el
+full-reload de vite en arranque frío puede arrasar el formulario a mitad del
+llenado — flake del run #300) y diagnóstico si falla (URL, cuerpo y consola de
+la página + captura).
 
 ### 6.5 Postmortem — saga del smoke E2E en CI (17→18-09-2026)
 
@@ -1064,6 +1066,7 @@ abortaba con `Wrong file for memory mapping` (SQLCODE -901). Cronología condens
 | #292-#293 | locks únicos por corrida | `expected D:\…fb50_trace already mapped \Device\HarddiskVolume6\…` |
 | #294-#296 | locks/temp en volumen real C:, seed elevado, app degradada | el mapeo cross-token sigue fallando en ambas direcciones |
 | **#297-#299** | **política HKLM de WebView2 + seed y app directos** | ✅ verde estable |
+| #300 | *post-saga:* flake de login — full-reload de vite (optimización de deps en arranque frío) arrasó el formulario a mitad del intento con la contraseña correcta | fix de tolerancia al reload → **#301 verde** |
 
 **Causa raíz 1 — WebView2 ignora CDP en procesos elevados.** Los runners de GitHub
 Actions corren con UAC deshabilitado: no existe token de integridad media en la
@@ -1092,7 +1095,12 @@ de los runners produce `EPERM (-4048)` espurios en la carrera con vite/cargo →
 excluir el workspace y los procesos `node`/`cargo`/`rustc` antes de compilar. El
 árbol `.svelte-kit` heredado del checkout elevado rompía vite degradado → borrarlo
 antes de lanzar. El login era intermitente por timing → fallback de contraseñas +
-eventos `change` (#299).
+eventos `change` (#299); y en arranque frío vite puede optimizar dependencias y
+hacer un **full-reload** que arrasa el formulario a mitad del llenado (run #300:
+el único intento con la contraseña correcta quedó con el campo usuario vacío y
+los siguientes probaron contraseñas de fábrica inválidas) → época de página
+(`window.__smokeEpoca`) + verificación de valores tras rellenar, re-relleno si la
+página cambió y reintento final con la contraseña sembrada (#301).
 
 **Descartado con evidencia (no reintentar):** degradación vía `runas`, tarea
 programada `schtasks /RL LIMITED /IT`, delegación a `explorer.exe`, locks únicos por
@@ -1113,6 +1121,12 @@ los dos problemas a la vez; la política HKLM + ejecución directa sí.
 - Un error críptico puede tener **dos causas apiladas** (rutas no canónicas + tokens
   cruzados): cambiar una sola variable por corrida y llevar el cuadro completo por
   run fue lo que permitió separarlas.
+- Un fallo tras estabilizar merece el mismo tratamiento de evidencia: el run #300
+  falló con un commit **solo de documentación** y la tentación era buscar la causa
+  en lo último tocado; era un flake residual del login (reload de vite). Diagnóstico
+  primero, culpar después. Cuidado extra con flakes de dev servers: la optimización
+  de dependencias de vite recarga la página y destruye cualquier estado de UI que
+  el test acababa de preparar (mitigar con epoch/versionado de página, no con sleeps).
 - El análisis detallado de la fase final vive en `soluciones smoke E2E.md`
   (documento local, NO versionado en el repo); esta sección es la referencia
   operativa autosuficiente. La checklist reutilizable derivada de estas

@@ -188,6 +188,30 @@ async function clickConReintento(c, title, selectorModal, ms, etiqueta) {
 	return false;
 }
 
+/** Rellena un formulario y verifica que la página no se recargó a mitad del
+ *  llenado: en arranque frío vite puede optimizar dependencias y hacer un
+ *  full-reload que arrasa el estado recién escrito (flake del run #300 en el
+ *  login). Compara la época de página (window.__smokeEpoca) antes y después
+ *  del relleno; si cambió, re-rellena. Devuelve false si la página siguió
+ *  inestable (el paso caller fallará con su propio diagnóstico). */
+async function rellenarVerificado(c, cuerpoJs) {
+	for (let i = 0; i < 2; i++) {
+		const epoca0 = await c
+			.eval(`(window.__smokeEpoca = window.__smokeEpoca || Date.now())`)
+			.catch(() => 0);
+		try {
+			await c.eval(cuerpoJs);
+		} catch {
+			/* la página está en reload: lo detecta el chequeo de época */
+		}
+		await sleep(250);
+		const epoca1 = await c.eval(`window.__smokeEpoca`).catch(() => 0);
+		if (epoca0 !== 0 && epoca1 === epoca0) return true;
+		console.log('   la página se recargó durante el relleno; re-rellenando…');
+	}
+	return false;
+}
+
 /** Captura de pantalla de diagnóstico ante un fallo (queda en .tmp-print). */
 async function capturaFallo(c, nombre) {
 	try {
@@ -385,7 +409,9 @@ async function main(opts) {
 	if (ruta === '/cambiar-password') {
 		console.log('— cambio de contraseña forzado…');
 		await esperar(c, `!!document.querySelector('#new')`, 10000, 'form-cambio');
-		await c.eval(`(() => {
+		await rellenarVerificado(
+			c,
+			`(() => {
       const set = ${Rellenar};
       set('#current', '${passUsada}');
       set('#new', 'Admin123!x');
@@ -394,7 +420,8 @@ async function main(opts) {
       document.querySelector('#new')?.dispatchEvent(new Event('change', { bubbles: true }));
       document.querySelector('#confirm')?.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
-    })()`);
+    })()`
+		);
 		await sleep(300);
 		await c.eval(`document.querySelector('form button[type=submit]')?.click()`);
 		await esperar(c, `location.pathname !== '/cambiar-password'`, 15000, 'post-cambio');
@@ -479,7 +506,9 @@ async function main(opts) {
 			await capturaFallo(c, 'fallo-placa');
 			throw new Error('no se pudo seleccionar la placa en el combobox (dropdown sin opciones)');
 		}
-		await c.eval(`(() => {
+		await rellenarVerificado(
+			c,
+			`(() => {
       const set = ${Rellenar};
       set('[role="dialog"] input[placeholder="Nombre para la renta"]', 'Cliente Prueba Final');
       // Itinerario: los DOS inputs de fecha comparten type; seleccionar por índice.
@@ -503,7 +532,8 @@ async function main(opts) {
       tanque.value = 'Lleno';
       tanque.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
-    })()`);
+    })()`
+		);
 		await sleep(400);
 		await c.eval(
 			`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Crear renta'))?.click()`
@@ -550,7 +580,8 @@ async function main(opts) {
 			console.error('   consola de la app (últimos):', c.eventos.slice(-8).join(' | '));
 		throw new Error('el modal de pago no abrió tras los reintentos');
 	}
-	await c.eval(
+	await rellenarVerificado(
+		c,
 		`(() => { const set = ${Rellenar}; set('input[placeholder="Ej: 200000"]', '100000'); return true; })()`
 	);
 	await sleep(200);
@@ -593,14 +624,17 @@ async function main(opts) {
 			await capturaFallo(c, 'fallo-modal-extender');
 			throw new Error('el modal de extensión no abrió tras los reintentos');
 		}
-		await c.eval(`(() => {
+		await rellenarVerificado(
+			c,
+			`(() => {
     const set = ${Rellenar};
     // Cantidad: 2 horas (input number → bind:number del modal)
     set('[role="dialog"] input[type="number"][min="1"]', '2');
     // Valor unitario DECIMAL (el caso del incidente extender_renta)
     set('input[placeholder="$0"]', '25000.5');
     return true;
-  })()`);
+  })()`
+		);
 		await sleep(200);
 		await c.eval(
 			`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Aplicar extensión'))?.click()`
@@ -654,14 +688,17 @@ async function main(opts) {
 		writeFileSync(join(dir, '3-modal-extender.png'), Buffer.from(shotExt.result.data, 'base64'));
 
 		// Segunda extensión (+1 día × $50.000): debe ACUMULAR en valor_dia_extra
-		await c.eval(`(() => {
+		await rellenarVerificado(
+			c,
+			`(() => {
     const sel = document.querySelector('[role="dialog"] select');
     sel.value = 'dias';
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     const set = ${Rellenar};
     set('input[placeholder="$0"]', '50000');
     return true;
-  })()`);
+  })()`
+		);
 		await sleep(200);
 		await c.eval(
 			`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Aplicar extensión'))?.click()`
