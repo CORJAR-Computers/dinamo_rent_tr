@@ -1006,27 +1006,33 @@ renta en pantalla no fue creada por el smoke, por base monetaria desconocida),
 1. Compila app + seed_ci (`cargo build --features dev --bins`; el feature
    `dev` es vacío y solo excluye esos binarios del bundle de release — sin él
    `cargo build` no produce `seed_ci.exe`, corrida 287).
-   `cargo build` no produce `seed_ci.exe`, corrida 287).
-2. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por git)
-   y lo siembra con `seed_ci <dir>` de forma ELEVADA (con el token del
-   orquestador: no necesita CDP y evita la discrepancia de nombres de ruta de
-   memoria mapeada del token restringido de runas). Tras la creación del .fdb,
-   se concede Full Control a Everyone (`*S-1-1-0:(OI)(CI)F`) sobre `DATA_DIR`,
-   los recursos de Firebird y la raíz del repo. La BD arranca con
+2. Configura la política HKLM de WebView2
+   (`HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`,
+   valor `*` → `--remote-debugging-port=<CDP_PORT> --remote-allow-origins=*`):
+   en procesos elevados WebView2 150+ ignora las variables de entorno de CDP
+   y la política de registro es lo único que honra (postmortem §6.5).
+3. Crea un data_dir temporal (`scripts/.tmp-smoke-data`, ignorado por git),
+   borra `.svelte-kit` heredado (vite lo recrea con permisos del proceso
+   actual) y lo siembra con `seed_ci <dir>` DIRECTO — mismo token del
+   orquestador que la app: la memoria compartida de Firebird Embedded falla
+   ("Wrong file for memory mapping") si los procesos que tocan la BD corren
+   con tokens distintos (postmortem §6.5). La BD arranca con
    admin/autos/clientes pero **sin rentas** → `/rentas` arranca vacía y el
    smoke entra al branch de renta de prueba (5 días × $150.000, sin IVA — la
    única base conocida que permite asertar totales).
-3. Corre `smoke-test-app.mjs`: la app se lanza vía `runas /trustlevel:0x20000`
-   (integridad media para que WebView2 honre la bandera CDP 9222) con su
-   propio directorio de locks único por corrida (`FIREBIRD_LOCK=fblock_<ts>_<pid>`).
+4. Levanta vite (dev server), lanza el EXE compilado con `DINAMO_DATA_DIR`
+   apuntando al data_dir, espera el puerto CDP (7 min de margen, fail-fast
+   si la app muere antes) y corre `smoke-test-app.mjs`.
    Flujo: renta de prueba → pago → **extensión decimal** (+2 h × $25.000,5 = $50.001
    → total $800.001 SIN doble cobro; segunda extensión acumulativa $850.001) →
    orden y contrato (PDFs) → gate anti-`[devGuard]` (falla ante cualquier aviso
    del guardrail).
-4. Limpia: la app por nombre de imagen (el runas suelta el PID del
-   orquestador), CDP y vite por puerto, y borrado del data_dir
-   (`--mantener` lo conserva para inspección; Windows puede retener el
-   `.fdb` unos segundos).
+5. Limpia: app/seed por árbol de PID y nombre de imagen, CDP y vite por
+   puerto (esperando que queden libres), restauración de la clave HKLM de
+   WebView2 y borrado del data_dir (`--mantener` lo conserva para
+   inspección; Windows puede retener el `.fdb` unos segundos). En no-Windows
+   hay una rama simple: seed + `tauri dev` con el CDP por variable de
+   entorno.
 
 Mantenimiento: si cambian labels/placeholders del modal de nueva renta o del modal de
 extensión, actualizar el branch de renta de prueba de `scripts/smoke-test-app.mjs`
@@ -1036,24 +1042,141 @@ selector único; la placa es un `SearchSelect`: combobox + `li[role="option"]`).
 En CI (job `smoke-e2e`): los PDFs de orden/contrato y las capturas de los modales se
 publican como artefacto `smoke-artefactos` en corridas **exitosas** (retención 3 días;
 el diagnóstico de fallos va como `smoke-diagnostico`, 7 días). El job excluye el
-workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar:
-los runners ejecutan Defender en tiempo real y la carrera con vite/cargo produce
-`EPERM (-4048)` espurios (causa real del fallo de la corrida 4). En runners ELEVADOS,
-WebView2 150+ **ignora** `--remote-debugging-port` vía variables de entorno por endurecimiento
-de seguridad de Microsoft. Intentar degradar con `runas /trustlevel:0x20000` causa que
-el token restringido (LUA) sea incapaz de mapear la memoria compartida del motor embebido
-de Firebird ("Wrong file for memory mapping").
-SOLUCIÓN DEFINITIVA (Política oficial de Microsoft WebView2 en HKLM):
-- Se configura la directiva del sistema en `HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`
-  con valor `*` -> `--remote-debugging-port=9222 --remote-allow-origins=*`.
-- Tanto `seed_ci` como la app `dinamo-rent.exe` corren **directamente con privilegios normales de CI**,
-  sin `runas` ni tokens restringidos.
-- Firebird Embedded opera en su entorno de memoria compartida nativo sin bloqueos ni errores
-  de asignación, mientras que WebView2 lee la política del registro y abre el puerto CDP 9222
-  inmediatamente para las pruebas E2E.
-- Limpieza determinista por PID del proceso y restauración de la clave de registro al finalizar.
-smoke además tolera el arranque frío: ventana de login de 2 min con diagnóstico
-(URL, cuerpo y consola de la página + captura).
+workspace y los procesos `node`/`cargo`/`rustc` de Windows Defender antes de compilar.
+El smoke tolera el arranque frío: ventana de login de 2 min con fallback de
+contraseñas, eventos `change` en los inputs y diagnóstico si falla (URL, cuerpo y
+consola de la página + captura).
+
+### 6.5 Postmortem — saga del smoke E2E en CI (17→18-09-2026)
+
+Más de una decena de corridas rojas entre los runs #273 y #296, con dos síntomas que
+parecían independientes: WebView2 no abría el puerto CDP 9222 y Firebird Embedded
+abortaba con `Wrong file for memory mapping` (SQLCODE -901). Cronología condensada:
+
+| Runs | Estrategia probada | Resultado |
+|---|---|---|
+| #273-#277 | degradar todo el árbol (`tauri dev` vía runas) | `EPERM` en `.svelte-kit` (creado por el checkout elevado) |
+| #285 | degradar solo la app (`runas /trustlevel:0x20000`) | la app arranca, pero WebView2 elevado ignora CDP |
+| #286 | seed elevado + app degradada | seed OK; Firebird falla al mapear en la app |
+| #288, #291-#293 | seed degradado (+ ACLs Everyone, locks únicos en el VHD) | seed muere siempre al crear la BD |
+| #289 | tarea programada `schtasks /RL LIMITED /IT` | seed OK; app viva pero muda, sin CDP |
+| #290 | delegar el lanzamiento a `explorer.exe` | runners sin UAC: todo corre elevado; no hay token medio que heredar |
+| #292-#293 | locks únicos por corrida | `expected D:\…fb50_trace already mapped \Device\HarddiskVolume6\…` |
+| #294-#296 | locks/temp en volumen real C:, seed elevado, app degradada | el mapeo cross-token sigue fallando en ambas direcciones |
+| **#297-#299** | **política HKLM de WebView2 + seed y app directos** | ✅ verde estable |
+
+**Causa raíz 1 — WebView2 ignora CDP en procesos elevados.** Los runners de GitHub
+Actions corren con UAC deshabilitado: no existe token de integridad media en la
+máquina. Desde WebView2 150+, por endurecimiento de Microsoft, el runtime descarta
+`--remote-debugging-port` llegado por variable de entorno cuando el proceso es
+elevado. **Lección:** en CI elevado, inyectar los argumentos CDP por la **política
+oficial** (`HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`,
+valor `*` → `--remote-debugging-port=9222 --remote-allow-origins=*`) y restaurar la
+clave al finalizar. Es lo único que el runtime honra en esa situación.
+
+**Causa raíz 2 — degradar el token rompe Firebird, no lo arregla.** Firebird Embedded
+mapea en memoria compartida la BD y su tabla de locks (`FIREBIRD_LOCK`) y **compara
+las rutas mapeadas como strings**. En los runners `D:\a` es un VHD: la misma ruta
+física se resuelve a veces como `D:\a\...` y a veces como
+`\Device\HarddiskVolume6\a\...`, y el mismatch dispara el error. Ni locks únicos
+(#292-#293) ni mover locks/temp al volumen real C: (#294-#296) bastaron: con tokens
+cruzados (recurso creado por un token, mapeado por otro) o con el token restringido
+de `runas`, el mapeo falla siempre. Además, en runner sin UAC `runas` ni siquiera
+baja la integridad (solo restringe SIDs), así que tampoco servía para WebView2.
+**Lección:** no pelear la memoria compartida de un motor embebido entre tokens
+distintos; correr todo el humo con el token del orquestador y resolver el CDP por
+registro.
+
+**Causa raíz 3 — ruido ambiental (histórico, ya mitigado).** Defender en tiempo real
+de los runners produce `EPERM (-4048)` espurios en la carrera con vite/cargo →
+excluir el workspace y los procesos `node`/`cargo`/`rustc` antes de compilar. El
+árbol `.svelte-kit` heredado del checkout elevado rompía vite degradado → borrarlo
+antes de lanzar. El login era intermitente por timing → fallback de contraseñas +
+eventos `change` (#299).
+
+**Descartado con evidencia (no reintentar):** degradación vía `runas`, tarea
+programada `schtasks /RL LIMITED /IT`, delegación a `explorer.exe`, locks únicos por
+corrida, grants `icacls Everyone`, reubicación de locks/temp a C:. Ninguno resolvió
+los dos problemas a la vez; la política HKLM + ejecución directa sí.
+
+**Lecciones transversales:**
+- Cada iteración costaba 7-13 min de CI más build local: **validar hipótesis en local
+  antes de quemar corridas** (probar en vivo el token real que produce
+  `explorer.exe` ahorró al menos una corrida; aun así se subieron varias con la misma
+  premisa equivocada).
+- Diagnosticar con evidencia del entorno (`whoami /groups` dentro del batch) en vez
+  de asumir: "elevado vs medio" no significa lo mismo en un runner sin UAC que en una
+  máquina dev.
+- El humo pasó en local durante TODA la saga: la brecha local/CI era el dato
+  constante. Cuando local y CI divergen, sospechar del entorno (UAC, VHD, Defender)
+  antes que del código.
+- Un error críptico puede tener **dos causas apiladas** (rutas no canónicas + tokens
+  cruzados): cambiar una sola variable por corrida y llevar el cuadro completo por
+  run fue lo que permitió separarlas.
+- El análisis detallado de la fase final vive en `soluciones smoke E2E.md`
+  (documento local, NO versionado en el repo); esta sección es la referencia
+  operativa autosuficiente. La checklist reutilizable derivada de estas
+  lecciones está en §6.6.
+
+### 6.6 Checklist de depuración de CI (extraída del postmortem §6.5)
+
+Para cualquier fallo de CI que no sea un test rojo obvio. Recorrer las fases en
+orden; no saltar a la "solución obvia" sin completar la fase de evidencia.
+
+**Fase 1 — Evidencia antes que hipótesis**
+- [ ] Leer el log COMPLETO del paso fallido (`gh run view <run> --log-failed`),
+      no el resumen: el mensaje exacto y su contexto mandan. Si el grep trunca,
+      extraer por ventanas de líneas.
+- [ ] Determinar el entorno REAL del runner donde corre el proceso afectado:
+      token (elevado / medio / restringido), ¿UAC habilitado?, volumen del
+      workspace (¿VHD?), antivirus activo. `whoami /groups` DENTRO del proceso
+      afectado — no del orquestador ni por asumir.
+- [ ] Inventario de diferencias local vs CI: filesystem, tokens, antivirus,
+      variables de entorno, versiones de runtime.
+- [ ] Descartar ruido ambiental barato: EPERM intermitente → antivirus en
+      tiempo real; archivos creados por un paso elevado y usados por uno
+      degradado (p. ej. `.svelte-kit`); puertos ocupados / procesos zombie de
+      corridas anteriores.
+
+**Fase 2 — Hipótesis y diseño del experimento**
+- [ ] Un solo cambio por corrida, con cuadro run → estrategia → resultado. Fue
+      lo único que permitió separar las dos causas apiladas del postmortem.
+- [ ] Sospechar causas apiladas: un error críptico puede tener 2+ causas
+      independientes (rutas no canónicas + tokens cruzados, en este caso).
+- [ ] Preferir el mecanismo oficial/soportado (política de registro,
+      configuración documentada del runtime) antes que trucos de token
+      (`runas`, `schtasks`, `explorer`): los trucos dependen de supuestos del
+      entorno que en CI suelen ser falsos (p. ej. runner sin UAC no tiene
+      token medio que heredar).
+- [ ] Para recursos compartidos entre procesos (memoria mapeada, locks,
+      sockets): verificar que TODOS los procesos que los tocan corran con el
+      MISMO token y que las rutas se comparen de forma canónica.
+
+**Fase 3 — Validar en local antes de quemar la corrida**
+- [ ] Cada iteración cuesta 7-13 min de CI + build local: si la hipótesis no
+      está validada con una prueba mínima EN VIVO en local, no subir.
+- [ ] Ejercitar en local el camino exacto que correrá CI (mismo token, mismas
+      rutas, mismas banderas), no el camino cómodo de siempre.
+- [ ] Instrumentar antes de lanzar: logs a archivo, marcadores de fase,
+      diagnóstico del entorno (whoami, firebird.log, consola del navegador,
+      capturas) para que cada fallo traiga su propia evidencia.
+
+**Fase 4 — Cierre**
+- [ ] Documentar en Handsoff: cronología, causa raíz, lista de "descartado con
+      evidencia — no reintentar" y lección (ver §6.5 como plantilla).
+- [ ] Actualizar comentarios desactualizados en scripts y workflows: las
+      referencias a estrategias viejas confunden la próxima depuración.
+- [ ] Limpiar residuos: procesos, puertos, claves de registro temporales
+      (restaurar), directorios `.tmp-*`.
+
+**Señales de alarma (síntoma → sospecha primero)**
+| Síntoma | Sospechar de |
+|---|---|
+| Pasa en local, falla en CI | entorno: token, UAC, VHD, antivirus |
+| `Wrong file for memory mapping` / errores de recurso compartido | tokens distintos tocando el mismo recurso, o rutas no canónicas (`D:\...` vs `\Device\HarddiskVolume...`) |
+| Proceso vivo pero mudo (sin output, sin puerto) | contexto de sesión o política del runtime (p. ej. WebView2 ignora CDP elevado) |
+| Fallo intermitente al compilar | antivirus en tiempo real (EPERM espurios) |
+| "Antes funcionaba" | residuos de una corrida anterior tapando el error real |
 
 ## 7. Setup inicial de la empresa (white-label / branding dinámico)
 
