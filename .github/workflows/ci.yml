@@ -239,7 +239,7 @@ jobs:
       # siguiente, con 7 días).
       - name: Subir artefactos del smoke (PDFs y capturas, solo en éxito)
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-artefactos
           path: .tmp-print/
@@ -247,7 +247,7 @@ jobs:
 
       - name: Subir capturas de diagnóstico (solo en fallo)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-diagnostico
           path: .tmp-print/
