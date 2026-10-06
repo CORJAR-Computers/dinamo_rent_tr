@@ -1,6 +1,6 @@
 # Handsoff — Dinamo Rent ERP (Tauri + SvelteKit + Firebird)
 
-> Última actualización: **2026-09-17** · Estado: **todos los módulos operativos, validación verde · release v1.2.3 (guardrail dev de contrato IPC con devGuard, red de seguridad decimal_string en DTOs, inputs monetarios en inputmode="decimal", suite E2E automatizada smoke:dev y CI 100% verde con política oficial WebView2 HKLM) · release v1.2.2 previa (ronda de QA: fechas locales en 8 pantallas, doble cobro en extensiones corregido, salvaguardas de restauración, gate de clippy, aes 0.9 + cbc 0.2 con formatos intactos) · auto-update activo · CI en Node 24**
+> Última actualización: **2026-10-05** · Estado: **todos los módulos operativos, validación verde · release v1.2.4 (asignación de vehículo en reservas por categoría o placa, guardrail dev de contrato IPC con devGuard, red de seguridad decimal_string en DTOs, suite E2E automatizada smoke:dev y CI 100% verde) · release v1.2.3 previa · auto-update activo · CI en Node 24**
 
 > **Instalación limpia validada de punta a punta (11-08, noche):** se cerró el hueco del
 > release v1.0.0 en equipos nuevos (la app se colgaba esperando una BD inexistente).

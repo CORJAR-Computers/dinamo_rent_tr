@@ -1,6 +1,6 @@
 # Resumen Ejecutivo — Dinamo Rent ERP
 
-> **Fecha:** 2026-09-17 · **Estado general:** listo para producción — release v1.2.3 (guardrail IPC decimal, red de seguridad decimal_string en DTOs, suite E2E automatizada smoke:dev y CI 100% verde; bumpeada, validada y publicada con el tag), firmada para el auto-update, con backups de la BD (Fase 8), la versión real de la app en el menú/login y la verificación de despliegue -DryRun en el CI.
+> **Fecha:** 2026-10-05 · **Estado general:** listo para producción — release v1.2.4 (asignación de vehículo en reservas por categoría o placa, guardrail IPC decimal, red de seguridad decimal_string en DTOs, suite E2E automatizada smoke:dev y CI 100% verde; bumpeada, validada y publicada con el tag), firmada para el auto-update, con backups de la BD (Fase 8), la versión real de la app en el menú/login y la verificación de despliegue -DryRun en el CI.
 
 ---
 
@@ -9,9 +9,9 @@
 | Área | Estado |
 |---|---|
 | **Aplicación** | Todos los módulos operativos (rentas, comparendos + agente SIMIT, alertas, calendario, informes, reservas, contratos) |
-| **Versión estable** | **v1.2.3** — la única release que se distribuye (con auto-update activo) |
+| **Versión estable** | **v1.2.4** — la única release que se distribuye (con auto-update activo) |
 | **Instalación limpia** | ✅ Validada E2E en Windows Sandbox (equipo sin nada): la app crea su BD, migra y arranca sin colgarse |
-| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 254 tests frontend, cargo 92 lib + integración con BD sembrada, smoke E2E automatizado, clippy -D warnings, importador 16 casos) |
+| **CI** | ✅ Verde en el tope de `main` (lint, svelte-check 0/0, 279 tests frontend, cargo 92 lib + integración con BD sembrada, smoke E2E automatizado, clippy -D warnings, importador 16 casos) |
 | **Repositorio** | Árbol limpio y sincronizado con `origin/main` |
 | **Auto-actualización** | ✅ Activa desde la **v1.0.14** — la app chequea `latest.json` al arrancar y ofrece instalar (firma minisign verificada) |
 
@@ -19,12 +19,13 @@
 
 | Release | Estado | Para quién |
 |---|---|---|
-| **v1.2.3** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
-| v1.2.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.3 (auto-update o a mano, una vez) |
-| v1.2.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.3 (auto-update o a mano, una vez) |
-| v1.2.0 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.3 (a mano, una vez) |
+| **v1.2.4** | ✅ **Latest / estable** — construida íntegramente por CI (GitHub Actions) | **Única descarga recomendada** |
+| v1.2.3 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.4 (auto-update o a mano, una vez) |
+| v1.2.2 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.4 (auto-update o a mano, una vez) |
+| v1.2.1 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.4 (auto-update o a mano, una vez) |
+| v1.2.0 | ✅ Estable anterior (sigue funcionando) | Actualizar a v1.2.4 (a mano, una vez) |
 
-**Assets de la v1.2.3:** [`DinamoRent_1.2.3_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.3/DinamoRent_1.2.3_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.2.3_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.3/DinamoRent_1.2.3_x64_en-US.msi) (~32 MB, despliegue GPO). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
+**Assets de la v1.2.4:** [`DinamoRent_1.2.4_x64-setup.exe`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.4/DinamoRent_1.2.4_x64-setup.exe) (NSIS, ~21 MB, recomendado) y [`DinamoRent_1.2.4_x64_en-US.msi`](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/download/v1.2.4/DinamoRent_1.2.4_x64_en-US.msi) (~32 MB, despliegue GPO). La release incluye además los `.sig` y el `latest.json` para el auto-update. Enlaces y credenciales iniciales en [`INSTALACION_OPERACIONES.md`](INSTALACION_OPERACIONES.md).
 
 **Auto-actualización (activa desde la v1.0.14):** la app chequea al arrancar el
 `latest.json` de GitHub Releases y ofrece instalar la versión nueva (firma minisign
@@ -40,7 +41,12 @@ embebida.
 2. **Las migraciones no viajaban en el instalador** → las migraciones van embebidas en el binario (fallback automático; hoy 20: 0001-0020).
 3. **Crash sin el runtime VC++** (`LoadLibraryExW failed`) → `SetDllDirectoryW(firebird/)` encuentra las DLLs que ya viajan en el instalador; no hace falta instalar redistribuibles.
 
-**Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). Cualquier versión anterior → **v1.2.2** (las ≤v1.0.13 se instalan a mano una vez; desde la v1.0.14 las siguientes son automáticas).
+**Actualizar con datos:** idempotente — cada versión abre la BD existente y solo aplica las migraciones pendientes (no hay que desinstalar ni se pierden datos). Cualquier versión anterior → **v1.2.4** (las ≤v1.0.13 se instalan a mano una vez; desde la v1.0.14 las siguientes son automáticas).
+
+**Qué añade la v1.2.4** (05-10):
+
+1. **Asignación de vehículo en Reservas**: posibilidad de asignar tanto categoría general como placa específica de la flota a reservas activas, con modal interactivo, autocompletado y validación de existencia en flota.
+2. **Hardening de CI y formateo**: tests de reservas cubiertos de extremo a extremo en backend Rust y frontend Svelte 5.
 
 **Qué añade la v1.2.3** (17-09):
 

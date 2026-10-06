@@ -9,18 +9,18 @@
 
 ## ⬇️ Descarga e instalación (usuarios finales)
 
-> **Última versión estable: [v1.2.3](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.3)** — guardrail IPC decimal, red de seguridad decimal_string en DTOs, suite E2E de cobro automatizada (smoke:dev) y estabilidad total de CI. Construida y validada por CI.
+> **Última versión estable: [v1.2.4](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases/tag/v1.2.4)** — asignación de vehículo en reservas, guardrail IPC decimal y estabilidad total de CI. Construida y validada por CI.
 
 ### 1. Descargar el instalador
 
-Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.2.3**:
+Ve a la página de [releases de GitHub](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases) y descarga de la **v1.2.4**:
 
 | Instalador                                      | Cuándo usarlo                                                       |
 | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `DinamoRent_1.2.3_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio      |
-| `DinamoRent_1.2.3_x64_en-US.msi` (MSI, ~32 MB)  | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
+| `DinamoRent_1.2.4_x64-setup.exe` (NSIS, ~21 MB) | **Recomendado** — instalación asistida con atajo de escritorio      |
+| `DinamoRent_1.2.4_x64_en-US.msi` (MSI, ~32 MB)  | Despliegue empresarial / GPO (instalación silenciosa con `msiexec`) |
 
-> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.2.3 abre tu BD actual tal cual.
+> ⚠️ **No uses la v1.0.0** (descontinuada): en equipos nuevos sin BD previa se colgaba antes de llegar al Login. Si ya la tienes instalada **con datos**, no necesitas desinstalar — la v1.2.4 abre tu BD actual tal cual.
 
 ### 2. Instalar
 
@@ -121,7 +121,7 @@ Dinamo_Rent_tr/
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **[PLAN_IMPLEMENTACION_TAURI.md](PLAN_IMPLEMENTACION_TAURI.md)** | 📋 Plan completo de arquitectura y migración técnica desde Python a Tauri                                         |
 | **[Handsoff.md](Handsoff.md)**                                   | 🤖 Registro de decisiones, automatizaciones y guías de desarrollo                                                 |
-| **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)**     | 🚀 Guía de instalación de la v1.2.3 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
+| **[INSTALACION_OPERACIONES.md](INSTALACION_OPERACIONES.md)**     | 🚀 Guía de instalación de la v1.2.4 para operaciones: enlaces a los assets, credenciales iniciales y verificación |
 | **[DEPLOYMENT_CLIENTES.md](DEPLOYMENT_CLIENTES.md)**             | 🖥️ Plan de despliegue en equipos de clientes: instalación silenciosa, verificación post-instalación y rollback    |
 | **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)**                 | 🚢 Checklist para publicar una release: bump de versión, tag, verificación de assets y anuncio                    |
 | **[SECURITY.md](SECURITY.md)**                                   | 🔐 Manejo de secretos, rotación de clave PII y reporte de vulnerabilidades                                        |
@@ -143,7 +143,7 @@ _(Para documentación histórica sobre la lógica de negocio subyacente, consult
 
 ---
 
-**Versión estable**: 1.2.3 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.x.x).
+**Versión estable**: 1.2.4 (construida y validada por CI — ver [releases](https://github.com/CORJAR-Computers/dinamo_rent_tr/releases)). La versión legacy de la migración Tauri V2 era 4.0.0-beta; desde la **v1.0.0** el versionado sigue el semver del proyecto (1.x.x).
 
 ---
 
