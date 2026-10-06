@@ -105,7 +105,7 @@
 		</div>
 		<div class="flex items-center gap-2">
 			<button
-				class="btn-ghost !px-3 !py-1.5 text-xs inline-flex items-center gap-1.5"
+				class="btn-ghost px-3! py-1.5! text-xs inline-flex items-center gap-1.5"
 				onclick={cargar}
 				title="Actualizar indicadores"
 				aria-label="Actualizar indicadores"
@@ -250,7 +250,7 @@
 						icon="check"
 					/>
 				{:else}
-					<div class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+					<div class="space-y-2 max-h-105 overflow-y-auto pr-1">
 						{#each data.alertas as a}
 							<div
 								class="rounded-lg border px-3 py-2.5 text-sm flex items-start gap-2.5 transition-transform hover:scale-[1.01] {a.critica
@@ -285,7 +285,7 @@
 							versiones anteriores cifrados (Fernet) que no se muestran.</span
 						>
 						<button
-							class="btn-outline !px-2.5 !py-1 text-[11px] shrink-0"
+							class="btn-outline px-2.5! py-1! text-[11px] shrink-0"
 							onclick={() => (piiDialogOpen = true)}
 						>
 							<span class="inline-flex items-center gap-1.5"
@@ -301,7 +301,7 @@
 							><Icon name="lock" class="w-3.5 h-3.5" />Clave PII configurada.</span
 						>
 						<button
-							class="btn-ghost !px-2.5 !py-1 text-[11px] shrink-0"
+							class="btn-ghost px-2.5! py-1! text-[11px] shrink-0"
 							onclick={() => (piiDialogOpen = true)}
 						>
 							Gestionar clave
