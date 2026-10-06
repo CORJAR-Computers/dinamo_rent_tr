@@ -79,6 +79,27 @@ pub fn actualizar_reserva(
         .map_err(|e| e.to_payload())
 }
 
+/// Asigna vehículo (categoría general y/o placa específica) a una reserva
+#[tauri::command]
+pub fn asignar_vehiculo_reserva(
+    state: State<'_, AppState>,
+    session_id: String,
+    id: i64,
+    categoria_vehiculo: Option<String>,
+    placa_asignada: Option<String>,
+) -> Cmd<Reserva> {
+    let session = require_session(&state, &session_id)?;
+    let mut c = conn(&state)?;
+    ReservaService::asignar_vehiculo(
+        &mut c,
+        &session.username,
+        id,
+        categoria_vehiculo,
+        placa_asignada,
+    )
+    .map_err(|e| e.to_payload())
+}
+
 /// Cancela una reserva (no se puede cancelar una ya completada)
 #[tauri::command]
 pub fn cancelar_reserva(

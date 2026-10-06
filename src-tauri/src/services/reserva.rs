@@ -122,6 +122,64 @@ impl ReservaService {
         })
     }
 
+    /// Asigna o actualiza el vehículo de una reserva (categoría general y/o placa específica)
+    pub fn asignar_vehiculo(
+        conn: &mut PooledConnection,
+        usuario: &str,
+        id: i64,
+        categoria_vehiculo: Option<String>,
+        placa_asignada: Option<String>,
+    ) -> Result<Reserva, AppError> {
+        let actual = Self::obtener(conn, id)?;
+        if actual.estado == "Cancelada" || actual.estado == "Completada" {
+            return Err(AppError::Business(format!(
+                "No se puede asignar vehículo a una reserva con estado '{}'.",
+                actual.estado
+            )));
+        }
+
+        let cat_norm = categoria_vehiculo
+            .as_deref()
+            .map(mayusculas)
+            .filter(|s| !s.is_empty());
+
+        let placa_norm = placa_asignada
+            .as_deref()
+            .map(mayusculas)
+            .filter(|s| !s.is_empty());
+
+        // Si se asigna una placa específica, verificar que el auto exista en la flota
+        if let Some(ref p) = placa_norm {
+            let auto_existe =
+                crate::repositories::auto::AutoRepository::obtener_por_placa(conn, p)?;
+            if auto_existe.is_none() {
+                return Err(AppError::Validation(format!(
+                    "El vehículo con placa '{p}' no existe en la flota."
+                )));
+            }
+        }
+
+        // Validar XSS en categoría si existe
+        if let Some(ref cat) = cat_norm {
+            validate_no_xss(cat, 50).map_err(|_| {
+                AppError::Validation("La categoría contiene caracteres no permitidos.".into())
+            })?;
+        }
+
+        ReservaRepository::asignar_vehiculo(conn, id, cat_norm.as_deref(), placa_norm.as_deref())?;
+
+        let detalle = format!("reserva={id} cat={:?} placa={:?}", cat_norm, placa_norm);
+        crate::core::audit::log_audit(
+            conn,
+            usuario,
+            "ASIGNAR VEHICULO RESERVA",
+            &detalle,
+            "local",
+        )?;
+
+        Self::obtener(conn, id)
+    }
+
     /// Elimina una reserva (las rentas asociadas quedan con id_reserva NULL)
     pub fn eliminar(conn: &mut PooledConnection, usuario: &str, id: i64) -> Result<(), AppError> {
         Self::obtener(conn, id)?;

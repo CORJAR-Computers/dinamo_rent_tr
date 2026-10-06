@@ -365,6 +365,7 @@ pub fn run() {
             commands::reserva::obtener_reserva,
             commands::reserva::crear_reserva,
             commands::reserva::actualizar_reserva,
+            commands::reserva::asignar_vehiculo_reserva,
             commands::reserva::cancelar_reserva,
             commands::reserva::eliminar_reserva,
             commands::renta::listar_rentas,

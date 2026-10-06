@@ -140,4 +140,71 @@ describe('página de Reservas', () => {
 
 		expect(screen.queryByTitle(/Crear renta desde esta reserva/)).not.toBeInTheDocument();
 	});
+
+	it('muestra botón "Por asignar" cuando la reserva no tiene placa asignada y abre modal de asignación', async () => {
+		tauri.register('listar_reservas', () => [
+			reserva({
+				id: 5,
+				nombreCliente: 'Carlos Ruiz',
+				categoriaVehiculo: 'Auto Económico',
+				placaAsignada: null
+			})
+		]);
+		tauri.register('listar_autos', () => [
+			{
+				placa: 'XYZ123',
+				marca: 'Kia',
+				modelo: 'Picanto',
+				tipo: 'Auto Económico',
+				transmision: 'Automática',
+				estado: 'Disponible',
+				kilometraje: 15000
+			}
+		]);
+
+		render(ReservasPage);
+		await screen.findByText('Carlos Ruiz');
+
+		const botonPorAsignar = screen.getByTitle(/Sin placa asignada. Clic para asignar vehículo/i);
+		expect(botonPorAsignar).toBeInTheDocument();
+		expect(botonPorAsignar).toHaveTextContent(/Por asignar/i);
+
+		await fireEvent.click(botonPorAsignar);
+		expect(await screen.findByText(/Asignar vehículo a Reserva #5/i)).toBeInTheDocument();
+	});
+
+	it('permite asignar vehículo por placa o categoría y guarda con asignar_vehiculo_reserva', async () => {
+		tauri.register('listar_reservas', () => [
+			reserva({
+				id: 8,
+				nombreCliente: 'Ana Gomez',
+				categoriaVehiculo: 'Auto Económico',
+				placaAsignada: null
+			})
+		]);
+		let asignarLlamado = false;
+		tauri.register('asignar_vehiculo_reserva', (payload: any) => {
+			asignarLlamado = true;
+			expect(payload.id).toBe(8);
+			expect(payload.categoriaVehiculo).toBe('Auto Automático');
+			return reserva({ id: 8, categoriaVehiculo: 'Auto Automático' });
+		});
+
+		render(ReservasPage);
+		await screen.findByText('Ana Gomez');
+
+		const botonAsignar = screen.getByTitle(/Asignar o cambiar vehículo/i);
+		await fireEvent.click(botonAsignar);
+
+		expect(await screen.findByText(/Asignar vehículo a Reserva #8/i)).toBeInTheDocument();
+
+		// Cambiar categoría rápida con chip
+		const chipAutomatico = screen.getByRole('button', { name: 'Auto Automático' });
+		await fireEvent.click(chipAutomatico);
+
+		const botonGuardar = screen.getByRole('button', { name: /Guardar asignación/i });
+		await fireEvent.click(botonGuardar);
+
+		await waitFor(() => expect(asignarLlamado).toBe(true));
+	});
 });

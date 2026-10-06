@@ -81,6 +81,18 @@ export const reservaApi = {
 		invokeCmd<Reserva>('crear_reserva', { sessionId, datos }),
 	actualizar: (sessionId: string, id: number, datos: ReservaDatos) =>
 		invokeCmd<Reserva>('actualizar_reserva', { sessionId, id, datos }),
+	asignarVehiculo: (
+		sessionId: string,
+		id: number,
+		categoriaVehiculo?: string | null,
+		placaAsignada?: string | null
+	) =>
+		invokeCmd<Reserva>('asignar_vehiculo_reserva', {
+			sessionId,
+			id,
+			categoriaVehiculo: categoriaVehiculo || null,
+			placaAsignada: placaAsignada || null
+		}),
 	cancelar: (sessionId: string, id: number) =>
 		invokeCmd<ReservaCancelada>('cancelar_reserva', { sessionId, id }),
 	eliminar: (sessionId: string, id: number) =>

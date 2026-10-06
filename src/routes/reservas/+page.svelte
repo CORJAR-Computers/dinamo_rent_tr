@@ -86,7 +86,7 @@
 			idCliente: null,
 			nombreCliente: '',
 			nacionalidad: '',
-			categoriaVehiculo: 'Automóvil',
+			categoriaVehiculo: 'Auto Económico',
 			placaAsignada: '',
 			fechaRecogida: iso(hoy),
 			horaRecogida: '',
@@ -158,18 +158,123 @@
 		}
 	}
 
-	const autosCategoria = $derived(
-		form.categoriaVehiculo ? autos.filter((a) => a.tipo === form.categoriaVehiculo) : autos
+	// ── Categorías y Vehículos ──
+	const CATEGORIAS_FRECUENTES = [
+		'Auto Económico',
+		'Auto Automático',
+		'Auto Mecánico',
+		'Auto Sedán / Intermedio',
+		'Camioneta / SUV',
+		'Camioneta Automática',
+		'Camioneta 4x4',
+		'Van',
+		'Lujo',
+		'Moto'
+	];
+
+	const categoriasDisponibles = $derived.by(() => {
+		const set = new Set<string>();
+		CATEGORIAS_FRECUENTES.forEach((c) => set.add(c));
+		(lists?.tiposAuto ?? []).forEach((t) => set.add(t));
+		autos.forEach((a) => {
+			if (a.tipo) set.add(a.tipo);
+		});
+		return Array.from(set);
+	});
+
+	// Opciones para el combo de vehículo (TODOS los vehículos de la flota, no restringidos)
+	const opcionesAutos = $derived<SearchSelectOpcion[]>(
+		autos.map((a) => {
+			const info = [
+				a.tipo,
+				a.transmision ? `Trans. ${a.transmision}` : null,
+				a.color,
+				a.estado ? `[${a.estado}]` : null
+			]
+				.filter(Boolean)
+				.join(' · ');
+			return {
+				value: a.placa,
+				label: `${a.placa} · ${a.marca} ${a.modelo}`,
+				sub: info
+			};
+		})
 	);
 
-	// Opciones para el combo de vehículo (filtra por placa, marca, modelo, tipo o color).
-	const opcionesAutos = $derived<SearchSelectOpcion[]>(
-		autosCategoria.map((a) => ({
-			value: a.placa,
-			label: `${a.placa} · ${a.marca} ${a.modelo}`,
-			sub: [a.tipo ?? '', a.color ?? ''].filter(Boolean).join(' ').trim()
-		}))
+	const autoSeleccionado = $derived(
+		form.placaAsignada ? autos.find((a) => a.placa === form.placaAsignada) : null
 	);
+
+	function onAutoChange(placa: string) {
+		form.placaAsignada = placa;
+		if (placa) {
+			const a = autos.find((x) => x.placa === placa);
+			if (a) {
+				if (
+					!form.categoriaVehiculo ||
+					form.categoriaVehiculo === 'Automóvil' ||
+					form.categoriaVehiculo === 'Auto Económico'
+				) {
+					form.categoriaVehiculo = a.tipo || `${a.marca} ${a.modelo}`;
+				}
+			}
+		}
+	}
+
+	// Modal asignación rápida de vehículo
+	let asignarModalOpen = $state(false);
+	let asignarReserva = $state<Reserva | null>(null);
+	let asignarCategoria = $state('');
+	let asignarPlaca = $state('');
+	let asignandoVehiculo = $state(false);
+	let asignarError = $state('');
+
+	const autoAsignarSeleccionado = $derived(
+		asignarPlaca ? autos.find((a) => a.placa === asignarPlaca) : null
+	);
+
+	function abrirAsignarVehiculo(r: Reserva) {
+		asignarReserva = r;
+		asignarCategoria = r.categoriaVehiculo ?? '';
+		asignarPlaca = r.placaAsignada ?? '';
+		asignarError = '';
+		asignarModalOpen = true;
+	}
+
+	function onAsignarAutoChange(placa: string) {
+		asignarPlaca = placa;
+		if (placa) {
+			const a = autos.find((x) => x.placa === placa);
+			if (
+				a &&
+				(!asignarCategoria || asignarCategoria === '—' || asignarCategoria === 'Por definir')
+			) {
+				asignarCategoria = a.tipo || `${a.marca} ${a.modelo}`;
+			}
+		}
+	}
+
+	async function guardarAsignacionVehiculo() {
+		if (!asignarReserva) return;
+		asignandoVehiculo = true;
+		asignarError = '';
+		try {
+			const cat = asignarCategoria.trim() || null;
+			const placa = asignarPlaca.trim() || null;
+			await reservaApi.asignarVehiculo(sid(), asignarReserva.id, cat, placa);
+			toast.success(
+				placa
+					? `Vehículo ${placa} asignado a la reserva #${asignarReserva.id}.`
+					: `Categoría "${cat ?? 'General'}" asignada a la reserva #${asignarReserva.id}.`
+			);
+			asignarModalOpen = false;
+			await Promise.all([cargar(), cargarProximas()]);
+		} catch (e) {
+			asignarError = e instanceof ApiError ? e.message : 'No se pudo asignar el vehículo.';
+		} finally {
+			asignandoVehiculo = false;
+		}
+	}
 
 	// ── Carga de datos ──
 	async function cargar() {
@@ -283,7 +388,7 @@
 			idCliente: r.idCliente,
 			nombreCliente: r.nombreCliente,
 			nacionalidad: r.nacionalidad ?? '',
-			categoriaVehiculo: r.categoriaVehiculo ?? 'Automóvil',
+			categoriaVehiculo: r.categoriaVehiculo ?? 'Auto Económico',
 			placaAsignada: r.placaAsignada ?? '',
 			fechaRecogida: r.fechaRecogida,
 			horaRecogida: r.horaRecogida ?? '',
@@ -610,8 +715,28 @@
 					</div>
 				{:else if col.key === 'vehiculo'}
 					<div>
-						<p class="text-text-primary">{r.categoriaVehiculo || '—'}</p>
-						<p class="text-xs text-text-secondary font-mono">{r.placaAsignada || 'Sin asignar'}</p>
+						<p class="text-text-primary font-medium">{r.categoriaVehiculo || 'Por definir'}</p>
+						{#if r.placaAsignada}
+							<button
+								type="button"
+								class="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-xs font-mono font-semibold transition-colors cursor-pointer"
+								onclick={() => abrirAsignarVehiculo(r)}
+								title="Vehículo asignado. Clic para cambiar o reasignar."
+							>
+								<Icon name="car" class="w-3.5 h-3.5" />
+								{r.placaAsignada}
+							</button>
+						{:else}
+							<button
+								type="button"
+								class="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-md border border-dashed border-alerta/60 bg-alerta/5 hover:bg-alerta/15 text-alerta text-[11px] font-medium transition-colors cursor-pointer"
+								onclick={() => abrirAsignarVehiculo(r)}
+								title="Sin placa asignada. Clic para asignar vehículo."
+							>
+								<span>⚠️ Por asignar</span>
+								<span class="underline text-[10px]">Asignar</span>
+							</button>
+						{/if}
 					</div>
 				{:else if col.key === 'recogida'}
 					<div class="whitespace-nowrap">
@@ -670,6 +795,16 @@
 							>
 								<Icon name="plus" class="w-3.5 h-3.5" />
 								Crear renta
+							</button>
+						{/if}
+						{#if r.estado !== 'Cancelada' && r.estado !== 'Completada'}
+							<button
+								class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
+								title="Asignar o cambiar vehículo"
+								aria-label="Asignar vehículo a reserva #{r.id}"
+								onclick={() => abrirAsignarVehiculo(r)}
+							>
+								<Icon name="car" class="w-4 h-4" />
 							</button>
 						{/if}
 						<button
@@ -813,44 +948,140 @@
 					</FormField>
 				</div>
 
-				<!-- ── 2. Vehículo ── -->
-				<div class="flex items-center gap-2 mb-2.5 mt-2">
-					<span
-						class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold"
-						>2</span
-					>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="w-3.5 h-3.5 text-primary"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-						stroke-width="2"
-						><path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"
-						/></svg
-					>
-					<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">Vehículo</h3>
+				<!-- ── 2. Vehículo (General o por Placa) ── -->
+				<div class="flex items-center justify-between mb-2.5 mt-2">
+					<div class="flex items-center gap-2">
+						<span
+							class="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold"
+							>2</span
+						>
+						<Icon name="car" class="w-3.5 h-3.5 text-primary" />
+						<h3 class="text-[11px] font-bold uppercase tracking-wider text-primary">
+							Vehículo (General o por Placa Específica)
+						</h3>
+					</div>
+					<span class="text-[11px] text-text-secondary">
+						{form.placaAsignada ? 'Placa específica vinculada' : 'Reserva general por categoría'}
+					</span>
 				</div>
-				<div class="grid grid-cols-2 gap-x-3 mb-3">
-					<FormField label="Categoría" dense>
-						<select class="input" bind:value={form.categoriaVehiculo}>
-							{#each lists?.tiposAuto ?? ['Automóvil', 'Camioneta', 'Van', 'Lujo', 'Moto'] as t}
-								<option value={t}>{t}</option>
-							{/each}
-						</select>
-					</FormField>
-					<SearchSelect
-						label="Placa asignada"
-						dense
-						value={form.placaAsignada ?? ''}
-						opciones={opcionesAutos}
-						onchange={(v) => (form.placaAsignada = v)}
-						placeholder="Buscar placa, marca o modelo…"
-						vacioLabel="— Sin asignar —"
-					/>
+
+				<div class="p-3 rounded-xl border border-border/70 bg-surface-alt/40 space-y-3 mb-3">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+						<!-- Categoría general -->
+						<div>
+							<FormField
+								label="Categoría o Gama general"
+								hint="Auto Económico, Automático, Camioneta, etc."
+								dense
+							>
+								<div class="relative">
+									<input
+										class="input"
+										type="text"
+										list="lista-categorias-reserva"
+										placeholder="Ej: Auto Económico, Automático..."
+										bind:value={form.categoriaVehiculo}
+									/>
+									<datalist id="lista-categorias-reserva">
+										{#each categoriasDisponibles as cat}
+											<option value={cat}>{cat}</option>
+										{/each}
+									</datalist>
+								</div>
+							</FormField>
+
+							<!-- Chips de categorías rápidas -->
+							<div class="flex flex-wrap gap-1 mt-1.5">
+								{#each CATEGORIAS_FRECUENTES.slice(0, 6) as chip}
+									<button
+										type="button"
+										class="text-[10px] px-2 py-0.5 rounded-full border transition-all cursor-pointer {form.categoriaVehiculo ===
+										chip
+											? 'bg-primary text-white border-primary shadow-xs font-semibold'
+											: 'bg-surface text-text-secondary border-border hover:border-primary/40 hover:text-primary'}"
+										onclick={() => (form.categoriaVehiculo = chip)}
+									>
+										{chip}
+									</button>
+								{/each}
+							</div>
+						</div>
+
+						<!-- Placa asignada -->
+						<div>
+							<SearchSelect
+								label="Placa asignada (Opcional)"
+								hint="Seleccione un auto o deje vacío para reserva general"
+								dense
+								value={form.placaAsignada ?? ''}
+								opciones={opcionesAutos}
+								onchange={onAutoChange}
+								placeholder="Buscar placa, marca o modelo…"
+								vacioLabel="— Sin asignar (Reserva general) —"
+							/>
+						</div>
+					</div>
+
+					<!-- Tarjeta resumen del vehículo seleccionado o aviso general -->
+					{#if autoSeleccionado}
+						<div
+							class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-primary/5 border border-primary/20 text-xs"
+						>
+							<div class="flex items-center gap-2.5 min-w-0">
+								<span
+									class="px-2 py-1 rounded-md bg-primary text-white font-mono font-bold tracking-wider text-xs shadow-xs"
+								>
+									{autoSeleccionado.placa}
+								</span>
+								<div class="truncate">
+									<p class="font-semibold text-text-primary">
+										{autoSeleccionado.marca}
+										{autoSeleccionado.modelo}
+										{#if autoSeleccionado.version}
+											<span class="text-text-secondary font-normal"
+												>({autoSeleccionado.version})</span
+											>
+										{/if}
+									</p>
+									<p class="text-[11px] text-text-secondary">
+										{autoSeleccionado.tipo} · Transmisión {autoSeleccionado.transmision || 'N/A'} · Color
+										{autoSeleccionado.color || 'N/A'}
+										· {autoSeleccionado.kilometraje.toLocaleString('es-CO')} km
+									</p>
+								</div>
+							</div>
+							<div class="flex items-center gap-2 shrink-0">
+								<span
+									class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border {autoSeleccionado.estado ===
+									'Disponible'
+										? 'bg-estado-activo/10 text-estado-activo border-estado-activo/30'
+										: 'bg-alerta/10 text-alerta border-alerta/30'}"
+								>
+									{autoSeleccionado.estado}
+								</span>
+								<button
+									type="button"
+									class="px-2 py-1 rounded text-[11px] text-peligro hover:bg-peligro/10 transition-colors cursor-pointer"
+									onclick={() => onAutoChange('')}
+									title="Desvincular placa y mantener reserva general"
+								>
+									Desvincular placa
+								</button>
+							</div>
+						</div>
+					{:else}
+						<div
+							class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-dashed border-border text-[11px] text-text-secondary"
+						>
+							<Icon name="car" class="w-4 h-4 text-primary shrink-0" />
+							<span>
+								<strong>Reserva General:</strong> El cliente reservará bajo la categoría
+								<span class="text-primary font-semibold"
+									>"{form.categoriaVehiculo || 'General'}"</span
+								>. El vehículo específico podrá asignarse más adelante en mostrador.
+							</span>
+						</div>
+					{/if}
 				</div>
 
 				<!-- ── 3. Itinerario ── -->
@@ -1158,6 +1389,149 @@
 			>
 			Imprimir orden
 		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal Asignación Rápida de Vehículo -->
+<Modal
+	open={asignarModalOpen}
+	title={`Asignar vehículo a Reserva #${asignarReserva?.id ?? ''}`}
+	subtitle={`Cliente: ${asignarReserva?.nombreCliente ?? ''} · Recogida: ${formatDate(asignarReserva?.fechaRecogida ?? '')}`}
+	onClose={() => (asignarModalOpen = false)}
+	width="max-w-xl"
+>
+	{#snippet children()}
+		<div class="space-y-4 py-1">
+			{#if asignarError}
+				<div
+					class="rounded-lg bg-peligro/10 border border-peligro/30 px-3 py-2 text-sm text-peligro"
+					role="alert"
+				>
+					{asignarError}
+				</div>
+			{/if}
+
+			<div class="rounded-xl border border-border p-3.5 bg-surface-alt/30 space-y-3">
+				<!-- Modo 1: Categoría o Gama general -->
+				<div>
+					<FormField
+						label="Categoría o Gama general"
+						hint="Auto Económico, Automático, Camioneta, etc."
+						dense
+					>
+						<div class="relative">
+							<input
+								class="input"
+								type="text"
+								list="lista-categorias-reserva-modal"
+								placeholder="Ej: Auto Económico, Automático..."
+								bind:value={asignarCategoria}
+							/>
+							<datalist id="lista-categorias-reserva-modal">
+								{#each categoriasDisponibles as cat}
+									<option value={cat}>{cat}</option>
+								{/each}
+							</datalist>
+						</div>
+					</FormField>
+					<div class="flex flex-wrap gap-1 mt-1.5">
+						{#each CATEGORIAS_FRECUENTES.slice(0, 6) as chip}
+							<button
+								type="button"
+								class="text-[10px] px-2 py-0.5 rounded-full border transition-all cursor-pointer {asignarCategoria ===
+								chip
+									? 'bg-primary text-white border-primary font-semibold'
+									: 'bg-surface text-text-secondary border-border hover:border-primary/40 hover:text-primary'}"
+								onclick={() => (asignarCategoria = chip)}
+							>
+								{chip}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<!-- Modo 2: Vehículo específico de la flota -->
+				<div>
+					<SearchSelect
+						label="Vehículo específico (Placa)"
+						hint="Seleccione un auto o deje vacío para reserva general"
+						dense
+						value={asignarPlaca}
+						opciones={opcionesAutos}
+						onchange={onAsignarAutoChange}
+						placeholder="Buscar por placa, marca o modelo..."
+						vacioLabel="— Sin asignar (Reserva general) —"
+					/>
+				</div>
+
+				{#if autoAsignarSeleccionado}
+					<div
+						class="flex items-center justify-between gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs mt-2"
+					>
+						<div class="min-w-0">
+							<div class="flex items-center gap-2">
+								<span class="px-2 py-0.5 rounded bg-primary text-white font-mono font-bold text-xs">
+									{autoAsignarSeleccionado.placa}
+								</span>
+								<span class="font-bold text-text-primary truncate">
+									{autoAsignarSeleccionado.marca}
+									{autoAsignarSeleccionado.modelo}
+								</span>
+								<span
+									class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold border {autoAsignarSeleccionado.estado ===
+									'Disponible'
+										? 'bg-estado-activo/10 text-estado-activo border-estado-activo/30'
+										: 'bg-alerta/10 text-alerta border-alerta/30'}"
+								>
+									{autoAsignarSeleccionado.estado}
+								</span>
+							</div>
+							<p class="text-[11px] text-text-secondary mt-1">
+								{autoAsignarSeleccionado.tipo} · Transmisión {autoAsignarSeleccionado.transmision ||
+									'N/A'} · Color {autoAsignarSeleccionado.color || 'N/A'}
+								· {autoAsignarSeleccionado.kilometraje.toLocaleString('es-CO')} km
+							</p>
+						</div>
+						<button
+							type="button"
+							class="text-xs text-peligro hover:underline cursor-pointer shrink-0"
+							onclick={() => onAsignarAutoChange('')}
+						>
+							Quitar placa
+						</button>
+					</div>
+				{:else}
+					<div
+						class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-dashed border-border text-[11px] text-text-secondary"
+					>
+						<Icon name="car" class="w-4 h-4 text-primary shrink-0" />
+						<span>
+							<strong>Reserva General:</strong> Quedará registrada por categoría
+							<span class="text-primary font-semibold">"{asignarCategoria || 'General'}"</span>.
+						</span>
+					</div>
+				{/if}
+			</div>
+
+			<div class="flex justify-end gap-2 pt-2">
+				<button
+					type="button"
+					class="btn-secondary"
+					onclick={() => (asignarModalOpen = false)}
+					disabled={asignandoVehiculo}
+				>
+					Cancelar
+				</button>
+				<button
+					type="button"
+					class="btn-primary"
+					onclick={guardarAsignacionVehiculo}
+					disabled={asignandoVehiculo}
+				>
+					{asignandoVehiculo ? 'Guardando…' : 'Guardar asignación'}
+				</button>
+			</div>
+		</div>
 	{/snippet}
 </Modal>
 

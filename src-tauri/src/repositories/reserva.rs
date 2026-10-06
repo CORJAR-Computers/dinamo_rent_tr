@@ -377,6 +377,27 @@ impl ReservaRepository {
         Ok(())
     }
 
+    /// Asigna o actualiza el vehículo (categoría general y/o placa específica)
+    pub fn asignar_vehiculo(
+        conn: &mut PooledConnection,
+        id: i64,
+        categoria_vehiculo: Option<&str>,
+        placa_asignada: Option<&str>,
+    ) -> Result<(), AppError> {
+        conn.execute(
+            "UPDATE reservas SET \
+                categoria_vehiculo = ?, placa_asignada = ?, updated_at = CURRENT_TIMESTAMP \
+             WHERE id = ?",
+            params![
+                opt_str(&categoria_vehiculo.map(|s| s.to_string())),
+                opt_str(&placa_asignada.map(|s| s.to_string())),
+                id,
+            ],
+        )
+        .map_err(map_fb_error)?;
+        Ok(())
+    }
+
     /// Soft-delete de una reserva (las rentas asociadas quedan con id_reserva NULL por SET NULL)
     pub fn eliminar(conn: &mut PooledConnection, id: i64) -> Result<(), AppError> {
         conn.execute(

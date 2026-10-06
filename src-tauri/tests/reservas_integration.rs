@@ -232,3 +232,58 @@ fn reserva_proximas_y_contar() {
     // Limpieza
     ReservaService::eliminar(&mut conn, "test", id).expect("eliminar");
 }
+
+#[test]
+#[serial]
+fn reserva_asignar_vehiculo_general_y_por_placa() {
+    let state = dev_state();
+    let cfg = &state.config;
+    let mut conn = state.pool.get().expect("conn");
+    let (placa, _tipo) = auto_real(&state);
+
+    // Crear reserva general sin placa asignada
+    let mut datos = datos_reserva("Cliente Asignar Vehiculo", 2);
+    datos.categoria_vehiculo = Some("Auto Económico".into());
+    datos.placa_asignada = None;
+
+    let creada = ReservaService::crear(&mut conn, cfg, "test", datos).expect("crear reserva");
+    let id = creada.id;
+    assert_eq!(creada.categoria_vehiculo.as_deref(), Some("AUTO ECONÓMICO"));
+    assert!(creada.placa_asignada.is_none());
+
+    // 1. Asignar por placa específica
+    let asignada_placa = ReservaService::asignar_vehiculo(
+        &mut conn,
+        "test",
+        id,
+        Some("Auto Automático".into()),
+        Some(placa.clone()),
+    )
+    .expect("asignar placa");
+    assert_eq!(
+        asignada_placa.placa_asignada.as_deref(),
+        Some(placa.as_str())
+    );
+    assert_eq!(
+        asignada_placa.categoria_vehiculo.as_deref(),
+        Some("AUTO AUTOMÁTICO")
+    );
+
+    // 2. Reasignar de manera general sin placa
+    let asignada_general = ReservaService::asignar_vehiculo(
+        &mut conn,
+        "test",
+        id,
+        Some("Camioneta / SUV".into()),
+        None,
+    )
+    .expect("asignar general");
+    assert!(asignada_general.placa_asignada.is_none());
+    assert_eq!(
+        asignada_general.categoria_vehiculo.as_deref(),
+        Some("CAMIONETA / SUV")
+    );
+
+    // Limpieza
+    ReservaService::eliminar(&mut conn, "test", id).expect("eliminar");
+}
