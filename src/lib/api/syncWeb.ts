@@ -53,17 +53,42 @@ export interface SyncWebResult {
 	errores: string[];
 }
 
-export const DEFAULT_WEB_SYNC_URL = 'http://localhost:5174/api/sync';
+export const DEFAULT_WEB_SYNC_URL = 'https://dinamo-rent-a-car.vercel.app/api/sync';
+export const DEFAULT_WEB_SYNC_TOKEN = 'dinamo-desktop-sync-secret-2026';
+
+function getSyncConfig() {
+	if (typeof window !== 'undefined') {
+		const storedUrl = localStorage.getItem('dinamo.web.sync_url');
+		const storedToken = localStorage.getItem('dinamo.web.sync_token');
+		return {
+			url: storedUrl || DEFAULT_WEB_SYNC_URL,
+			token: storedToken || DEFAULT_WEB_SYNC_TOKEN
+		};
+	}
+	return {
+		url: DEFAULT_WEB_SYNC_URL,
+		token: DEFAULT_WEB_SYNC_TOKEN
+	};
+}
 
 export const syncWebApi = {
 	/**
 	 * Consulta cuántas reservas web están pendientes de importar en mostrador
 	 */
 	consultarPendientes: async (
-		syncUrl = DEFAULT_WEB_SYNC_URL
+		customUrl?: string,
+		customToken?: string
 	): Promise<{ ok: boolean; count: number; reservations: WebReservation[] }> => {
 		try {
-			const res = await fetch(`${syncUrl}?pending=true`);
+			const config = getSyncConfig();
+			const syncUrl = customUrl || config.url;
+			const syncToken = customToken || config.token;
+
+			const res = await fetch(`${syncUrl}?pending=true`, {
+				headers: {
+					'x-sync-token': syncToken
+				}
+			});
 			const data = await res.json();
 			if (data?.ok) {
 				return {
@@ -83,8 +108,13 @@ export const syncWebApi = {
 	 */
 	sincronizarReservas: async (
 		sessionId: string,
-		syncUrl = DEFAULT_WEB_SYNC_URL
+		customUrl?: string,
+		customToken?: string
 	): Promise<SyncWebResult> => {
+		const config = getSyncConfig();
+		const syncUrl = customUrl || config.url;
+		const syncToken = customToken || config.token;
+
 		const resultado: SyncWebResult = {
 			ok: true,
 			totalPendientes: 0,
@@ -95,7 +125,7 @@ export const syncWebApi = {
 		};
 
 		try {
-			const pendientesRes = await syncWebApi.consultarPendientes(syncUrl);
+			const pendientesRes = await syncWebApi.consultarPendientes(syncUrl, syncToken);
 			if (!pendientesRes.ok || pendientesRes.reservations.length === 0) {
 				return resultado;
 			}
@@ -172,7 +202,10 @@ export const syncWebApi = {
 					// ── PASO 3: Notificar a la Web la confirmación con IDs de mostrador ──
 					await fetch(syncUrl, {
 						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
+						headers: {
+							'Content-Type': 'application/json',
+							'x-sync-token': syncToken
+						},
 						body: JSON.stringify({
 							entity: 'RESERVATION',
 							entityId: webR.id,
