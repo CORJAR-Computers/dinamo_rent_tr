@@ -357,8 +357,7 @@
 							/>
 						</div>
 						<p class="text-[11px] text-center text-text-tertiary mt-2">
-							Firma estampada digitalmente por {docs.customer?.fullName} en aceptación de términos y
-							condiciones.
+							Firma estampada digitalmente por {docs.customer?.fullName} en aceptación de términos y condiciones.
 						</p>
 					</div>
 				{/if}
@@ -366,9 +365,7 @@
 				<!-- ── ÁREA IMPRIMIBLE OCULTA EN PANTALLA, ACTIVA AL IMPRIMIR (.print-area.anexo-carta) ── -->
 				<div class="print-area anexo-carta hidden bg-white text-slate-900 p-8">
 					<!-- Encabezado corporativo -->
-					<div
-						class="border-b-2 border-slate-800 pb-4 mb-6 flex items-start justify-between gap-5"
-					>
+					<div class="border-b-2 border-slate-800 pb-4 mb-6 flex items-start justify-between gap-5">
 						<div class="flex items-center gap-3">
 							<div
 								class="w-16 h-16 rounded-lg bg-blue-900 text-white flex items-center justify-center shrink-0 p-2"
@@ -380,7 +377,9 @@
 								/>
 							</div>
 							<div>
-								<p class="text-lg font-black tracking-tight">{empresa.nombreMostrar.toUpperCase()}</p>
+								<p class="text-lg font-black tracking-tight">
+									{empresa.nombreMostrar.toUpperCase()}
+								</p>
 								<p class="text-xs text-slate-600">
 									NIT: {empresa.nit || '901.812.836-1'} · Cartagena de Indias
 								</p>
@@ -388,9 +387,7 @@
 							</div>
 						</div>
 						<div class="text-right">
-							<p class="text-2xl font-black tracking-wide text-blue-900">
-								ANEXO DE DOCUMENTACIÓN
-							</p>
+							<p class="text-2xl font-black tracking-wide text-blue-900">ANEXO DE DOCUMENTACIÓN</p>
 							<p class="text-sm font-bold mt-1">
 								Reserva No. <span class="tabular-nums">{codigoReserva}</span>
 							</p>
@@ -418,9 +415,7 @@
 							<span class="text-slate-500 font-bold block uppercase text-[10px]"
 								>No. Licencia Conducción:</span
 							>
-							<span class="text-sm font-bold text-slate-900"
-								>{docs.customer?.license || '—'}</span
-							>
+							<span class="text-sm font-bold text-slate-900">{docs.customer?.license || '—'}</span>
 						</div>
 						<div>
 							<span class="text-slate-500 font-bold block uppercase text-[10px]">Teléfono:</span>
