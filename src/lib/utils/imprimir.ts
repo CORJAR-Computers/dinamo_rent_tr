@@ -45,6 +45,7 @@ export function imprimirDocumento(): void {
 	const tituloOriginal = document.title;
 	if (clon.classList.contains('contrato-carta')) document.title = 'Contrato de renta';
 	else if (clon.classList.contains('orden-carta')) document.title = 'Orden de renta';
+	else if (clon.classList.contains('anexo-carta')) document.title = 'Anexo de documentos';
 
 	function limpiar() {
 		document.body.classList.remove('printing', 'printing-clone');

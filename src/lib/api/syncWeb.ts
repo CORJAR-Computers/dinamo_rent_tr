@@ -18,6 +18,9 @@ export interface WebReservation {
 	insurancePlan: string;
 	synced: boolean;
 	desktopRef: string | null;
+	signatureDataUrl?: string | null;
+	docPhotoUrl?: string | null;
+	licensePhotoUrl?: string | null;
 	customer: {
 		id: string;
 		docNumber: string;
@@ -170,12 +173,17 @@ export const syncWebApi = {
 						? webR.returnDate.split('T')[0]
 						: webR.returnDate;
 
+					const tieneDoc = webR.docPhotoUrl ? 'SÍ (Digitalizado)' : 'NO';
+					const tieneLic = webR.licensePhotoUrl ? 'SÍ (Digitalizada)' : 'NO';
+					const tieneFirma = webR.signatureDataUrl ? 'SÍ (Firmado digitalmente)' : 'NO';
+
 					const obs =
 						`[ORIGEN: WEB - ${webR.code}]\n` +
 						`Pago: PAGADA ONLINE Place to Pay (${webR.payment?.cardBrand || 'Tarjeta'} •••• ${webR.payment?.cardLast4 || ''})\n` +
 						`Vehículo Solicitado: ${webR.vehicle.name}\n` +
 						`Cobertura: ${webR.insurancePlan === 'TOTAL' ? 'Total Cero Deducible' : 'Básica Legal'}\n` +
-						`Garantía a bloquear en mostrador: $${webR.blockingAmount.toLocaleString('es-CO')}`;
+						`Garantía a bloquear en mostrador: $${webR.blockingAmount.toLocaleString('es-CO')}\n` +
+						`Documento: ${tieneDoc} | Licencia: ${tieneLic} | Firma: ${tieneFirma}`;
 
 					const reservaCreada = await reservaApi.crear(sessionId, {
 						idCliente,
@@ -214,6 +222,31 @@ export const syncWebApi = {
 						})
 					});
 
+					// Guardar en caché local los documentos digitales para consulta inmediata en mostrador
+					if (typeof window !== 'undefined' && (webR.docPhotoUrl || webR.licensePhotoUrl || webR.signatureDataUrl)) {
+						try {
+							localStorage.setItem(
+								`dinamo.docs.${webR.code}`,
+								JSON.stringify({
+									code: webR.code,
+									docPhotoUrl: webR.docPhotoUrl,
+									licensePhotoUrl: webR.licensePhotoUrl,
+									signatureDataUrl: webR.signatureDataUrl,
+									customer: {
+										fullName: webR.customer.fullName,
+										docNumber: webR.customer.docNumber,
+										docType: webR.customer.docType,
+										license: webR.customer.license,
+										phone: webR.customer.phone,
+										email: webR.customer.email
+									}
+								})
+							);
+						} catch {
+							// Ignorar cuota de localStorage excedida
+						}
+					}
+
 					resultado.importadas++;
 				} catch (err) {
 					console.error(`Error importando reserva web ${webR.code}:`, err);
@@ -226,6 +259,87 @@ export const syncWebApi = {
 			resultado.ok = false;
 			resultado.errores.push((e as Error).message);
 			return resultado;
+		}
+	},
+
+	/**
+	 * Obtiene los documentos digitalizados (Cédula, Licencia, Firma) de una reserva web.
+	 * Primero busca en la caché local; si no están, los descarga bajo demanda desde la Web API.
+	 */
+	obtenerDocumentosReserva: async (
+		code: string,
+		customUrl?: string,
+		customToken?: string
+	): Promise<{
+		ok: boolean;
+		code?: string;
+		docPhotoUrl?: string | null;
+		licensePhotoUrl?: string | null;
+		signatureDataUrl?: string | null;
+		customer?: {
+			fullName: string;
+			docNumber: string;
+			docType?: string;
+			license?: string | null;
+			phone: string;
+			email: string;
+		};
+		error?: string;
+	}> => {
+		const cleanCode = code.trim();
+		if (!cleanCode) return { ok: false, error: 'Código de reserva no especificado' };
+
+		// 1. Revisar caché local
+		if (typeof window !== 'undefined') {
+			try {
+				const cache = localStorage.getItem(`dinamo.docs.${cleanCode}`);
+				if (cache) {
+					const parsed = JSON.parse(cache);
+					return { ok: true, ...parsed };
+				}
+			} catch {
+				// error leyendo cache, continuar con fetch
+			}
+		}
+
+		// 2. Consultar a la Web API
+		try {
+			const config = getSyncConfig();
+			const syncUrl = customUrl || config.url;
+			const syncToken = customToken || config.token;
+
+			const res = await fetch(`${syncUrl}?code=${encodeURIComponent(cleanCode)}`, {
+				headers: {
+					'x-sync-token': syncToken
+				}
+			});
+
+			const data = await res.json();
+			if (data?.ok && data.reservation) {
+				const r = data.reservation;
+				const resultado = {
+					ok: true,
+					code: r.code,
+					docPhotoUrl: r.docPhotoUrl,
+					licensePhotoUrl: r.licensePhotoUrl,
+					signatureDataUrl: r.signatureDataUrl,
+					customer: r.customer
+				};
+
+				// Guardar en caché local
+				if (typeof window !== 'undefined') {
+					try {
+						localStorage.setItem(`dinamo.docs.${cleanCode}`, JSON.stringify(resultado));
+					} catch {
+						// ignorar fallo de cuota
+					}
+				}
+
+				return resultado;
+			}
+			return { ok: false, error: data?.error || 'No se encontraron documentos para esta reserva' };
+		} catch (err) {
+			return { ok: false, error: (err as Error).message };
 		}
 	}
 };

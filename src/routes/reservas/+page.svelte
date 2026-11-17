@@ -24,6 +24,7 @@
 	import FormField from '$lib/components/FormField.svelte';
 	import SearchSelect, { type SearchSelectOpcion } from '$lib/components/SearchSelect.svelte';
 	import ClienteFormModal from '$lib/components/ClienteFormModal.svelte';
+	import DocumentosDigitalizadosModal from '$lib/components/DocumentosDigitalizadosModal.svelte';
 	import OrdenReserva from '$lib/components/reports/OrdenReserva.svelte';
 	import AvisoImpresion from '$lib/components/AvisoImpresion.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -75,6 +76,23 @@
 	// Sincronización con la plataforma Web (Neon PostgreSQL)
 	let sincronizandoWeb = $state(false);
 	let pendientesWebCount = $state(0);
+
+	// Modal de visualización e impresión de documentos digitalizados (Web)
+	let verDocsOpen = $state(false);
+	let docsReservaCode = $state('');
+	let docsClienteNombre = $state('');
+
+	function extraerCodigoWeb(r: Reserva): string | null {
+		if (!r.observaciones) return null;
+		const match = r.observaciones.match(/\[ORIGEN:\s*WEB\s*-\s*([^\]]+)\]/i);
+		return match ? match[1].trim() : null;
+	}
+
+	function abrirDocumentos(codigo: string, cliente: string) {
+		docsReservaCode = codigo;
+		docsClienteNombre = cliente;
+		verDocsOpen = true;
+	}
 
 	function defaultForm(): ReservaDatos {
 		const hoy = new Date();
@@ -778,6 +796,17 @@
 					</span>
 				{:else if col.key === 'acciones'}
 					<div class="flex items-center justify-end gap-1">
+						{#if extraerCodigoWeb(r)}
+							<button
+								class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+								title="Ver / Imprimir documentos digitalizados (Cédula y Licencia)"
+								aria-label="Ver documentos web de la reserva #{r.id}"
+								onclick={() => abrirDocumentos(extraerCodigoWeb(r)!, r.nombreCliente)}
+							>
+								<Icon name="id-card" class="w-3.5 h-3.5" />
+								<span class="hidden md:inline">Documentos</span>
+							</button>
+						{/if}
 						<button
 							class="p-2 rounded-lg text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
 							title="Imprimir orden de reserva"
@@ -1543,6 +1572,14 @@
 	{clientes}
 	onClose={() => (clienteModalOpen = false)}
 	onGuardado={onNuevoClienteGuardado}
+/>
+
+<!-- Modal de visualización e impresión de documentos digitalizados (Web) -->
+<DocumentosDigitalizadosModal
+	open={verDocsOpen}
+	codigoReserva={docsReservaCode}
+	nombreCliente={docsClienteNombre}
+	onClose={() => (verDocsOpen = false)}
 />
 
 <!-- Confirmación de cancelación -->
